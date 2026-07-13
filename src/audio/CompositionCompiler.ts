@@ -2,7 +2,9 @@ import type {
   Composition,
   PatternEvent,
   PatternState,
+  PlanetExpressionState,
 } from "../domain/composition/types";
+import { applyPlanetExpression } from "../domain/harmony/expression";
 import {
   isLoopBars,
   leastCommonMultipleIntegers,
@@ -37,6 +39,7 @@ interface TrackSource {
   loopTicks: number;
   phase: number;
   probability: number;
+  expression: PlanetExpressionState;
 }
 
 export interface CompiledLiveCycleEvent {
@@ -155,15 +158,19 @@ function gatherTrackSources(
         pan: planet.mix.pan,
         filter: planet.mix.filter,
       },
-      pattern: derivePerformancePattern(
-        planet.pattern,
-        planet.role,
-        planet.id,
-        composition.macros,
+      pattern: applyPlanetExpression(
+        derivePerformancePattern(
+          planet.pattern,
+          planet.role,
+          planet.id,
+          composition.macros,
+        ),
+        planet.expression,
       ),
       loopTicks,
       phase: planet.orbit.phase,
       probability: 1,
+      expression: planet.expression,
     });
 
     for (const moon of planet.moons) {
@@ -180,11 +187,14 @@ function gatherTrackSources(
           pan: planet.mix.pan,
           filter: planet.mix.filter,
         },
-        pattern: derivePerformancePattern(
-          moon.pattern,
-          planet.role,
-          moon.id,
-          composition.macros,
+        pattern: applyPlanetExpression(
+          derivePerformancePattern(
+            moon.pattern,
+            planet.role,
+            moon.id,
+            composition.macros,
+          ),
+          planet.expression,
         ),
         loopTicks: ticksForBars(
           resolveMoonLoopBars(planet.orbit.loopBars, moon.orbitRatio),
@@ -192,6 +202,7 @@ function gatherTrackSources(
         ),
         phase: normalizePhase(planet.orbit.phase + moon.phase),
         probability: moon.probability,
+        expression: planet.expression,
       });
     }
 
@@ -226,6 +237,7 @@ function gatherTrackSources(
           loopTicks,
           phase: normalizePhase(planet.orbit.phase + ring.phase),
           probability: 1,
+          expression: { kind: "default" },
         });
       }
     }
@@ -252,6 +264,7 @@ function gatherTrackSources(
       loopTicks: ticksForBars(composition.bars, composition.beatsPerBar),
       phase: 0,
       probability: 1,
+      expression: { kind: "default" },
     });
   }
 
@@ -364,6 +377,10 @@ function compileLiveCycle(
           startInTemplate,
           event.pitch,
           event.drumVoice,
+          {
+            expression: source.expression,
+            sourceKind: source.track.sourceKind,
+          },
         ),
         ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
       }),

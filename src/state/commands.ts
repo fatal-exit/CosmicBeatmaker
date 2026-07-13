@@ -6,11 +6,15 @@ import type {
   MacroState,
   MoonState,
   PatternState,
+  PlanetExpressionState,
   PlanetState,
   RingState,
   StarPresetId,
   TrackMixState,
 } from "../domain/composition/types";
+
+type ChordExpression = Extract<PlanetExpressionState, { kind: "chords" }>;
+type MelodyExpression = Extract<PlanetExpressionState, { kind: "melody" }>;
 
 export type CompositionCommand =
   | { type: "RegenerateSystem"; composition: Composition; timestamp?: string }
@@ -57,6 +61,18 @@ export type CompositionCommand =
       type: "SetPlanetMix";
       planetId: string;
       mix: Partial<TrackMixState>;
+      timestamp?: string;
+    }
+  | {
+      type: "SetChordExpression";
+      planetId: string;
+      expression: Partial<Omit<ChordExpression, "kind">>;
+      timestamp?: string;
+    }
+  | {
+      type: "SetMelodyExpression";
+      planetId: string;
+      expression: Partial<Omit<MelodyExpression, "kind">>;
       timestamp?: string;
     }
   | { type: "AddMoon"; planetId: string; moon: MoonState; timestamp?: string }
@@ -302,6 +318,66 @@ export function applyCompositionCommand(
           updatedAt: timestamp,
         },
         description: "Changed planet sound",
+      };
+    case "SetChordExpression":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId &&
+            planet.role === "chords" &&
+            planet.expression.kind === "chords"
+              ? {
+                  ...planet,
+                  expression: {
+                    ...planet.expression,
+                    voicingSpread: clamp(
+                      command.expression.voicingSpread ??
+                        planet.expression.voicingSpread,
+                      0,
+                      1,
+                    ),
+                    chordComplexity: clamp(
+                      command.expression.chordComplexity ??
+                        planet.expression.chordComplexity,
+                      0,
+                      1,
+                    ),
+                  },
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed chord expression",
+      };
+    case "SetMelodyExpression":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId &&
+            planet.role === "melody" &&
+            planet.expression.kind === "melody"
+              ? {
+                  ...planet,
+                  expression: {
+                    ...planet.expression,
+                    pitchVariety: clamp(
+                      command.expression.pitchVariety ??
+                        planet.expression.pitchVariety,
+                      0,
+                      1,
+                    ),
+                    contour:
+                      command.expression.contour ?? planet.expression.contour,
+                  },
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed melody expression",
       };
     case "AddMoon":
       return {

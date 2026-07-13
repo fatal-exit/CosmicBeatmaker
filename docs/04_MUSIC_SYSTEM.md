@@ -94,6 +94,10 @@ Safe Harmony is enabled by default.
 - Weak beats may use scale tones.
 - Bass favors roots, fifths, octaves, and rare diatonic approach notes.
 - Chord voicings use limited voice leading and avoid crowded low registers.
+- Chord planets expose Closed, Open, and Wide voicing positions. Wider positions separate the root, fifth, and upper chord tones across octaves rather than stacking them in the low-mid register.
+- Chord complexity moves continuously from a triad through a safely doubled layer to a separated color tone. Safe Harmony keeps every added tone diatonic and avoids adjacent clusters.
+- Melody pitch variety controls how many scale positions a motif may visit without changing its rhythm.
+- Melody contour deterministically projects the motif upward, downward, or in an alternating rise-and-fall shape.
 - Texture parts are pitch-constrained or atonal but low in prominence.
 - Notes are transposed rather than invalidated when harmony changes.
 - Safe mutation changes one musical dimension at a time where possible.
@@ -162,6 +166,7 @@ Rules:
 
 - Use chord changes from the global progression.
 - Avoid low-register mud.
+- Main chord-planet events resolve to the full selected voicing even when the stored pattern event carries a pitch intent; chord-ring arpeggios remain single-note events.
 - Preserve space for melody.
 
 ### Melody role
@@ -172,6 +177,7 @@ Rules:
 
 - Choose a short motif.
 - Repeat with limited variation.
+- Apply the selected pitch-variety range and contour at compile time so live playback and export share the same motif.
 - Prefer chord tones on strong beats.
 - Use contour limits to prevent extreme leaps.
 - Keep rests.

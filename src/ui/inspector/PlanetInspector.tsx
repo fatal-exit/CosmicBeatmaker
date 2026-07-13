@@ -1,6 +1,11 @@
 import { useId } from "react";
 
-import type { LoopBars, PlanetState } from "../../domain/composition";
+import type {
+  LoopBars,
+  MelodyContour,
+  PlanetExpressionState,
+  PlanetState,
+} from "../../domain/composition";
 import {
   GATE_RHYTHM_PRESETS,
   type GateRhythmPresetId,
@@ -21,6 +26,20 @@ export interface PlanetInspectorProps {
   onSolo: () => void;
   onLock: () => void;
   onOrbit: (loopBars: LoopBars) => void;
+  onExpressionBegin: (
+    control: "voicing" | "chord-complexity" | "pitch-variety",
+  ) => void;
+  onExpressionCommit: () => void;
+  onChordExpression: (
+    expression: Partial<
+      Omit<Extract<PlanetExpressionState, { kind: "chords" }>, "kind">
+    >,
+  ) => void;
+  onMelodyExpression: (
+    expression: Partial<
+      Omit<Extract<PlanetExpressionState, { kind: "melody" }>, "kind">
+    >,
+  ) => void;
   gateRhythmPreset: GateRhythmPresetId | "custom";
   onGateRhythmPreset: (presetId: GateRhythmPresetId) => void;
   onPattern: () => void;
@@ -31,9 +50,41 @@ export interface PlanetInspectorProps {
   headingId?: string;
 }
 
+const RANGE_KEYS = [
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+] as const;
+
+function voicingLabel(spread: number): string {
+  if (spread < 0.25) return "Closed";
+  if (spread < 0.75) return "Open";
+  return "Wide";
+}
+
+function complexityLabel(complexity: number): string {
+  if (complexity < 0.34) return "Simple";
+  if (complexity < 0.72) return "Layered";
+  return "Rich";
+}
+
+function varietyLabel(variety: number): string {
+  if (variety < 0.25) return "Focused";
+  if (variety < 0.7) return "Balanced";
+  return "Varied";
+}
+
 export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   const gateRhythmId = useId();
   const deleteHintId = useId();
+  const voicingId = useId();
+  const chordComplexityId = useId();
+  const pitchVarietyId = useId();
   const headingId = actions.headingId ?? "inspector-heading";
   if (!planet) {
     return (
@@ -49,6 +100,8 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   const gateRhythm = GATE_RHYTHM_PRESETS.find(
     ({ id }) => id === actions.gateRhythmPreset,
   );
+  const melodyExpression =
+    planet.expression.kind === "melody" ? planet.expression : undefined;
 
   return (
     <aside className="inspector" aria-labelledby={headingId}>
@@ -60,9 +113,12 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         <div>
           <p className="panel-label">Selected {planet.role}</p>
           <h2 id={headingId}>{planet.name}</h2>
-          <p>{planet.soundPresetId.replaceAll("-", " ")}</p>
+          <p className="selected-sound">
+            <span>Sound</span>
+            <strong>{planet.soundPresetId.replaceAll("-", " ")}</strong>
+          </p>
           <p className="selected-material">
-            <strong>{material.label}</strong>
+            <strong>Surface · {material.label}</strong>
             <span>{material.description}</span>
           </p>
         </div>
@@ -90,6 +146,152 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Lock
         </button>
       </div>
+      {planet.role === "chords" && planet.expression.kind === "chords" ? (
+        <fieldset className="role-expression-controls">
+          <legend>Chord shape</legend>
+          <p>Spread the notes apart, then choose how much color to add.</p>
+          <label className="expression-slider" htmlFor={voicingId}>
+            <span>
+              <strong>Voicing</strong>
+              <output htmlFor={voicingId}>
+                {voicingLabel(planet.expression.voicingSpread)}
+              </output>
+            </span>
+            <input
+              id={voicingId}
+              type="range"
+              min="0"
+              max="1"
+              step="0.5"
+              value={planet.expression.voicingSpread}
+              onPointerDown={() => actions.onExpressionBegin("voicing")}
+              onInput={(event) =>
+                actions.onChordExpression({
+                  voicingSpread: Number(event.currentTarget.value),
+                })
+              }
+              onPointerUp={actions.onExpressionCommit}
+              onPointerCancel={actions.onExpressionCommit}
+              onKeyDown={(event) => {
+                if (
+                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
+                )
+                  actions.onExpressionBegin("voicing");
+              }}
+              onKeyUp={actions.onExpressionCommit}
+              onBlur={actions.onExpressionCommit}
+            />
+            <small>
+              <span>Closed</span>
+              <span>Wide</span>
+            </small>
+          </label>
+          <label className="expression-slider" htmlFor={chordComplexityId}>
+            <span>
+              <strong>Chord complexity</strong>
+              <output htmlFor={chordComplexityId}>
+                {complexityLabel(planet.expression.chordComplexity)}
+              </output>
+            </span>
+            <input
+              id={chordComplexityId}
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={planet.expression.chordComplexity}
+              onPointerDown={() =>
+                actions.onExpressionBegin("chord-complexity")
+              }
+              onInput={(event) =>
+                actions.onChordExpression({
+                  chordComplexity: Number(event.currentTarget.value),
+                })
+              }
+              onPointerUp={actions.onExpressionCommit}
+              onPointerCancel={actions.onExpressionCommit}
+              onKeyDown={(event) => {
+                if (
+                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
+                )
+                  actions.onExpressionBegin("chord-complexity");
+              }}
+              onKeyUp={actions.onExpressionCommit}
+              onBlur={actions.onExpressionCommit}
+            />
+            <small>
+              <span>Simple</span>
+              <span>Rich</span>
+            </small>
+          </label>
+        </fieldset>
+      ) : null}
+      {planet.role === "melody" && melodyExpression ? (
+        <fieldset className="role-expression-controls">
+          <legend>Melody shape</legend>
+          <p>Control its pitch range and the direction it tends to travel.</p>
+          <label className="expression-slider" htmlFor={pitchVarietyId}>
+            <span>
+              <strong>Pitch variety</strong>
+              <output htmlFor={pitchVarietyId}>
+                {varietyLabel(melodyExpression.pitchVariety)}
+              </output>
+            </span>
+            <input
+              id={pitchVarietyId}
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={melodyExpression.pitchVariety}
+              onPointerDown={() => actions.onExpressionBegin("pitch-variety")}
+              onInput={(event) =>
+                actions.onMelodyExpression({
+                  pitchVariety: Number(event.currentTarget.value),
+                })
+              }
+              onPointerUp={actions.onExpressionCommit}
+              onPointerCancel={actions.onExpressionCommit}
+              onKeyDown={(event) => {
+                if (
+                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
+                )
+                  actions.onExpressionBegin("pitch-variety");
+              }}
+              onKeyUp={actions.onExpressionCommit}
+              onBlur={actions.onExpressionCommit}
+            />
+            <small>
+              <span>Focused</span>
+              <span>Varied</span>
+            </small>
+          </label>
+          <fieldset className="contour-options">
+            <legend>Preferred motion</legend>
+            <div>
+              {(
+                [
+                  ["ascending", "Ascend"],
+                  ["alternating", "Alternate"],
+                  ["descending", "Descend"],
+                ] as const satisfies readonly (readonly [
+                  MelodyContour,
+                  string,
+                ])[]
+              ).map(([contour, label]) => (
+                <button
+                  type="button"
+                  key={contour}
+                  aria-pressed={melodyExpression.contour === contour}
+                  onClick={() => actions.onMelodyExpression({ contour })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </fieldset>
+      ) : null}
       <fieldset className="orbit-options">
         <legend>Orbit rate</legend>
         <p>

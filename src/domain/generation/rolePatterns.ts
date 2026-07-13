@@ -1,10 +1,13 @@
 import type { StarPresetDefinition } from "../../content/starPresets";
+import { createPlanetExpression } from "../composition/expression";
 import type {
   MacroState,
+  MelodyContour,
   PatternEvent,
   PatternState,
   PlanetRole,
   PlanetState,
+  VoicingPresetId,
 } from "../composition/types";
 import { instantiateRhythmTemplate } from "../rhythm/templates";
 import { createStableId } from "../serialization/ids";
@@ -230,6 +233,7 @@ export interface GenerateRolePlanetOptions {
   role: PlanetRole;
   ordinal?: number;
   starPreset: StarPresetDefinition;
+  voicingId: VoicingPresetId;
   macros: MacroState;
   beatPattern?: PatternState;
 }
@@ -276,6 +280,14 @@ export function generateRolePlanet(
 
   const loopBars = options.role === "beat" ? 1 : 4;
   const sizeRange = ROLE_SIZES[options.role];
+  const melodyContour = random
+    .derive("expression")
+    .pick([
+      "ascending",
+      "alternating",
+      "alternating",
+      "descending",
+    ] as const satisfies readonly MelodyContour[]);
 
   return {
     id: createStableId("planet", options.seed, options.role, String(ordinal)),
@@ -301,6 +313,11 @@ export function generateRolePlanet(
       size: round(sizeRange[0] + random.next() * (sizeRange[1] - sizeRange[0])),
       roughness: round(clamp01(0.28 + random.next() * 0.52)),
     },
+    expression: createPlanetExpression(options.role, {
+      voicingId: options.voicingId,
+      macros: options.macros,
+      melodyContour,
+    }),
     moons: [],
     muted: false,
     soloed: false,

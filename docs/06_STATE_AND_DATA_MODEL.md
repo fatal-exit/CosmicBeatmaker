@@ -118,6 +118,7 @@ export interface PlanetState {
 
   orbit: OrbitState;
   pattern: PatternState;
+  expression: PlanetExpressionState;
   mix: TrackMixState;
   appearance: PlanetAppearanceState;
 
@@ -129,6 +130,23 @@ export interface PlanetState {
   locked: boolean;
 }
 ```
+
+```ts
+export type PlanetExpressionState =
+  | {
+      kind: "chords";
+      voicingSpread: number; // 0 closed, 0.5 open, 1 wide
+      chordComplexity: number; // 0..1
+    }
+  | {
+      kind: "melody";
+      pitchVariety: number; // 0..1
+      contour: "ascending" | "alternating" | "descending";
+    }
+  | { kind: "default" };
+```
+
+Expression state is stored per planet because it is audible, undoable, and export-relevant. Playback derives the resulting chord voicings and melody pitch intents without destructively rewriting the saved rhythmic pattern.
 
 ## Orbit state
 
@@ -368,7 +386,7 @@ Serialized composition must:
 
 Use a runtime schema validator or explicit validation functions.
 
-During this early test phase, the schema-version-1 rate contract is updated in place and pre-polymeter local saves/share links are not guaranteed to load. This intentional break removes the rejected shared-shell interpretation instead of carrying compatibility state before the product has a stable public save contract.
+Schema version 2 introduces role-specific planet expression state. Version-1 compositions migrate deterministically: chord voicing spread is initialized from the saved global harmony voicing, chord complexity and melody pitch variety are initialized from the saved macro complexity, and other roles receive the default expression variant.
 
 ## Migrations
 

@@ -4,6 +4,7 @@ import {
   createStarterComposition,
   validateComposition,
 } from "../src/domain/composition";
+import { generateCompleteSystem } from "../src/domain/generation";
 import {
   deserializeComposition,
   serializeComposition,
@@ -26,6 +27,37 @@ describe("starter composition", () => {
       success: true,
       composition,
     });
+  });
+
+  it("migrates schema-version-1 planets to role expression defaults", () => {
+    const current = generateCompleteSystem("migration-v1");
+    const legacy = {
+      ...current,
+      schemaVersion: 1,
+      planets: current.planets.map(({ expression, ...planet }) => {
+        void expression;
+        return planet;
+      }),
+    };
+    const result = deserializeComposition(JSON.stringify(legacy));
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.composition.schemaVersion).toBe(2);
+      expect(
+        result.composition.planets.find((planet) => planet.role === "chords")
+          ?.expression,
+      ).toEqual({
+        kind: "chords",
+        voicingSpread:
+          current.harmony.voicingId === "compact"
+            ? 0
+            : current.harmony.voicingId === "wide"
+              ? 1
+              : 0.5,
+        chordComplexity: 0.18 + current.macros.complexity * 0.55,
+      });
+    }
   });
 
   it("rejects unsupported future versions", () => {

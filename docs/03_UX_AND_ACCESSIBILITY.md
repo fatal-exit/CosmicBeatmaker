@@ -137,10 +137,14 @@ Visible after selecting an object:
 - Mute and solo
 - Pattern preset
 - Orbit rate, with familiar choices first and deeper polymetric choices progressively disclosed
+- Chord Shape controls for voicing width and harmonic complexity on chord planets
+- Melody Shape controls for pitch variety and ascending, alternating, or descending contour on melody planets
 - Regenerate
 - Duplicate
 - Delete
 - Lock
+
+Sound and visual surface labels must remain distinct. Material names such as “Harmonic strata” describe appearance only and must not be presented as, or confused with, the selected sound preset.
 
 ### Level 3: Orbit Lab
 

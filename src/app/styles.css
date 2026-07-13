@@ -550,8 +550,25 @@ p {
   margin-bottom: 2px;
 }
 
-.selected-summary p:last-child {
+.selected-sound strong {
   text-transform: capitalize;
+}
+
+.selected-sound {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.selected-sound span {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.selected-sound strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 680;
 }
 
 .segmented-actions {
@@ -573,6 +590,93 @@ p {
 .segmented-actions button[aria-pressed="true"] {
   color: var(--ink);
   background: var(--surface-active);
+}
+
+.role-expression-controls {
+  margin: 18px 0;
+  padding: 14px 0;
+  display: grid;
+  gap: 13px;
+  border: 0;
+  border-block: 1px solid var(--border);
+}
+
+.role-expression-controls > legend,
+.contour-options legend {
+  padding: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.role-expression-controls > p {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.expression-slider {
+  display: grid;
+  gap: 3px;
+}
+
+.expression-slider > span,
+.expression-slider > small {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.expression-slider strong,
+.expression-slider output {
+  font-size: 0.75rem;
+}
+
+.expression-slider output,
+.expression-slider small {
+  color: var(--muted);
+}
+
+.expression-slider input {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.expression-slider small {
+  font-size: 0.62rem;
+}
+
+.contour-options {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.contour-options > div {
+  margin-top: 7px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.contour-options button {
+  min-height: 44px;
+  padding: 0 5px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.7rem;
+}
+
+.contour-options button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface-active);
+  border-color: var(--primary);
 }
 
 .orbit-options {

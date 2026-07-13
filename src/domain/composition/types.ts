@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = 1 as const;
+export const CURRENT_SCHEMA_VERSION = 2 as const;
 
 import type { SupportedLoopBars } from "./loopRates";
 
@@ -22,6 +22,7 @@ export type MoonBehaviorPresetId =
 export type DrumVoiceId =
   "kick" | "snare" | "clap" | "closed-hat" | "open-hat" | "rim" | "perc";
 export type ChordAction = "strike" | "hold" | "release";
+export type MelodyContour = "ascending" | "alternating" | "descending";
 
 export type PlanetRole = "beat" | "bass" | "chords" | "melody" | "texture";
 export type LoopBars = SupportedLoopBars;
@@ -82,12 +83,26 @@ export interface PlanetState {
   pattern: PatternState;
   mix: TrackMixState;
   appearance: PlanetAppearanceState;
+  expression: PlanetExpressionState;
   moons: MoonState[];
   ring?: RingState;
   muted: boolean;
   soloed: boolean;
   locked: boolean;
 }
+
+export type PlanetExpressionState =
+  | {
+      kind: "chords";
+      voicingSpread: number;
+      chordComplexity: number;
+    }
+  | {
+      kind: "melody";
+      pitchVariety: number;
+      contour: MelodyContour;
+    }
+  | { kind: "default" };
 
 export interface OrbitState {
   loopBars: LoopBars;

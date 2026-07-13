@@ -176,7 +176,9 @@ describe("first-party sample pack", () => {
       expect(sample.sampleRate).toBe(48_000);
       expect(sample.encodedPeakDb).toBeLessThan(-0.1);
       expect(sample.durationSeconds).toBeLessThanOrEqual(2.85);
-      expect(sample.synthesisVersion).toBe("1.0.0");
+      expect(sample.synthesisVersion).toBe(
+        sample.id === "glass-chords-c4" ? "1.1.0" : "1.0.0",
+      );
     }
     expect(generatedManifest.pack.proceduralSynthesis).toMatchObject({
       version: "1.0.0",

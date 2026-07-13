@@ -145,6 +145,42 @@ test("offers the full semantic editor on mobile", async ({
   ).toBeVisible();
 });
 
+test("shapes chord voicing and melody direction in the semantic inspector", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  const inspector = await visibleInspector(page, testInfo.project.name);
+  const objectScope =
+    testInfo.project.name === "mobile-chrome" ? inspector : page;
+
+  await objectScope.getByRole("button", { name: /, chords role,/ }).click();
+  const voicing = inspector.getByLabel("Voicing");
+  const chordComplexity = inspector.getByLabel("Chord complexity");
+  await expect(voicing).toBeVisible();
+  await expect(chordComplexity).toBeVisible();
+  await voicing.evaluate((input: HTMLInputElement) => {
+    input.value = "1";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(voicing).toHaveValue("1");
+  await expect(
+    inspector.locator(`output[for="${await voicing.getAttribute("id")}"]`),
+  ).toHaveText("Wide");
+
+  await objectScope.getByRole("button", { name: /, melody role,/ }).click();
+  const pitchVariety = inspector.getByLabel("Pitch variety");
+  await expect(pitchVariety).toBeVisible();
+  await pitchVariety.evaluate((input: HTMLInputElement) => {
+    input.value = "1";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(pitchVariety).toHaveValue("1");
+  await inspector.getByRole("button", { name: "Descend" }).click();
+  await expect(
+    inspector.getByRole("button", { name: "Descend" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 test("deletes a planet with clear feedback and restores it with undo", async ({
   page,
 }, testInfo) => {

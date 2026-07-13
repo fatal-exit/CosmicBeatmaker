@@ -18,6 +18,7 @@ import type {
   Composition,
   LoopBars,
   MoonState,
+  PlanetExpressionState,
   PlanetRole,
   PlanetState,
   RingState,
@@ -73,6 +74,12 @@ import { ScenePolishOverlay } from "../ui/scene/ScenePolishOverlay";
 import { TransportBar } from "../ui/transport/TransportBar";
 
 type OpenPanel = "menu" | "add" | "library" | "export" | "mobile-editor" | null;
+type ChordExpressionUpdate = Partial<
+  Omit<Extract<PlanetExpressionState, { kind: "chords" }>, "kind">
+>;
+type MelodyExpressionUpdate = Partial<
+  Omit<Extract<PlanetExpressionState, { kind: "melody" }>, "kind">
+>;
 
 const repository = new LocalCompositionRepository();
 const SceneCanvas = lazy(async () => {
@@ -565,6 +572,35 @@ export function App() {
     setToast(`${selectedPlanet.name} gates set to ${presetId}.`);
   };
 
+  const beginExpressionEdit = (
+    control: "voicing" | "chord-complexity" | "pitch-variety",
+  ) => {
+    const descriptions = {
+      voicing: "Changed chord voicing",
+      "chord-complexity": "Changed chord complexity",
+      "pitch-variety": "Changed melody pitch variety",
+    } as const;
+    beginHistoryGroup(`expression-${control}`, descriptions[control]);
+  };
+
+  const setChordExpression = (expression: ChordExpressionUpdate) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetChordExpression",
+      planetId: selectedPlanet.id,
+      expression,
+    });
+  };
+
+  const setMelodyExpression = (expression: MelodyExpressionUpdate) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetMelodyExpression",
+      planetId: selectedPlanet.id,
+      expression,
+    });
+  };
+
   const addRing = () => {
     if (!selectedPlanet || selectedPlanet.ring) return;
     dispatch({
@@ -796,6 +832,10 @@ export function App() {
           onSolo={toggleSelectedSolo}
           onLock={toggleSelectedLock}
           onOrbit={setOrbit}
+          onExpressionBegin={beginExpressionEdit}
+          onExpressionCommit={commitHistoryGroup}
+          onChordExpression={setChordExpression}
+          onMelodyExpression={setMelodyExpression}
           gateRhythmPreset={
             selectedPlanet
               ? inferGateRhythmPreset(selectedPlanet.pattern)
@@ -983,6 +1023,10 @@ export function App() {
             onSolo={toggleSelectedSolo}
             onLock={toggleSelectedLock}
             onOrbit={setOrbit}
+            onExpressionBegin={beginExpressionEdit}
+            onExpressionCommit={commitHistoryGroup}
+            onChordExpression={setChordExpression}
+            onMelodyExpression={setMelodyExpression}
             gateRhythmPreset={
               selectedPlanet
                 ? inferGateRhythmPreset(selectedPlanet.pattern)

@@ -18,7 +18,7 @@ import { createSeededRandom, deriveSeed } from "./prng";
 import { generateRolePlanet } from "./rolePatterns";
 import { createSafeMasterMix } from "./rules";
 
-export const GENERATOR_VERSION = "2.0.0";
+export const GENERATOR_VERSION = "2.1.0";
 
 const DEFAULT_CREATED_AT = "2026-01-01T00:00:00.000Z";
 const STAR_PRESET_IDS = Object.keys(STAR_PRESETS) as StarPresetId[];
@@ -102,6 +102,7 @@ function generateMacros(
 function generatePlanets(
   generationSeed: string,
   starPreset: StarPresetDefinition,
+  harmony: HarmonyState,
   macros: MacroState,
 ): PlanetState[] {
   const planets: PlanetState[] = [];
@@ -112,6 +113,7 @@ function generatePlanets(
       seed: deriveSeed(generationSeed, "role", role),
       role,
       starPreset,
+      voicingId: harmony.voicingId,
       macros,
       beatPattern,
     });
@@ -167,7 +169,7 @@ export function generateCompleteSystem(
     mix: createSafeMasterMix(
       createSeededRandom(generationSeed).derive("master-mix"),
     ),
-    planets: generatePlanets(generationSeed, starPreset, macros),
+    planets: generatePlanets(generationSeed, starPreset, harmony, macros),
     generation: {
       revision: 0,
       generatorVersion: GENERATOR_VERSION,
@@ -216,6 +218,7 @@ export function generatePlanetForRole(
       role,
       ordinal,
       starPreset,
+      voicingId: composition.harmony.voicingId,
       macros: composition.macros,
       beatPattern,
     });
@@ -282,6 +285,7 @@ export function regenerateSystem(
         role,
         ordinal,
         starPreset,
+        voicingId: harmony.voicingId,
         macros: composition.macros,
         beatPattern,
       });
@@ -308,6 +312,7 @@ export function regenerateSystem(
         seed: deriveSeed(generationSeed, "role", role),
         role,
         starPreset,
+        voicingId: harmony.voicingId,
         macros: composition.macros,
         beatPattern,
       });

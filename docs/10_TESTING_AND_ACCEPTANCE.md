@@ -31,6 +31,9 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Bass note ranges remain valid.
 - Harmony changes transpose or re-resolve notes safely.
 - Voice-leading output remains within configured bounds.
+- Closed, Open, and Wide chord settings produce ordered, bounded voicings with no adjacent dissonant clusters.
+- Chord complexity adds only safe separated chord or scale tones, and pitched chord-pattern events still compile as full chords.
+- Melody pitch variety remains bounded, while ascending, descending, and alternating contour projections are deterministic.
 
 ### Rhythm
 
@@ -60,6 +63,7 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Invalid input fails safely.
 - Unknown future schema version produces a useful error.
 - Migration fixtures produce valid current state.
+- Schema-version-1 expression migration derives stable role-appropriate defaults from saved harmony and macro state.
 - Encoded state remains under the agreed size target for typical systems.
 
 ### Export

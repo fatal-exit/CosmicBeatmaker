@@ -120,7 +120,7 @@
       "url": "audio/cosmic-samples/glass-chords-c4.ogg",
       "sourceFile": "procedural:glass-chords-c4",
       "sourceKind": "procedural",
-      "synthesisVersion": "1.0.0",
+      "synthesisVersion": "1.1.0",
       "durationSeconds": 1.9,
       "attackSeconds": 0.003,
       "releaseSeconds": 0.075,
@@ -131,11 +131,11 @@
       "sampleRate": 48000,
       "sourceBitDepth": 16,
       "sourceBytes": 364844,
-      "encodedBytes": 28612,
-      "sourcePeakDb": -5.8,
-      "sourceMeanDb": -16.5,
-      "encodedPeakDb": -5.1,
-      "encodedMeanDb": -16.5
+      "encodedBytes": 23219,
+      "sourcePeakDb": -6.1,
+      "sourceMeanDb": -15.9,
+      "encodedPeakDb": -5.9,
+      "encodedMeanDb": -15.8
     },
     {
       "id": "heavy-void-clap",

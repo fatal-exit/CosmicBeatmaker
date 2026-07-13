@@ -156,6 +156,12 @@ The rendered drum, chord, texture, ring, and asteroid active subset has explicit
 
 **Reason:** Pre-rendering fixed first-party patches bounds mobile CPU work and runtime voice complexity without changing musical timing or serialized composition intent. Lazy fallback construction avoids most duplicate graphs while retaining a loading-time graph protects audio already scheduled through the lookahead window. Stable definitions and versioned deterministic generation keep the cache reviewable and reproducible without maintaining additional raw masters. Separate provenance preserves the authored pack's processing contract, C-rooted tonal files retain normal runtime transposition, and the established synth path prevents a missing or undecodable cache asset from becoming silence.
 
+### D-025 — Per-planet chord and melody expression
+
+**Decision:** Schema version 2 stores role-specific expression state on every planet, and deterministic generation advances to version 2.1.0. Chord planets expose Closed, Open, and Wide voicing spread plus continuous chord complexity; the canonical compiler turns main chord-planet triggers into bounded full voicings while chord-ring events remain individual arpeggio notes. Melody planets expose pitch variety plus ascending, alternating, or descending contour; these settings deterministically project saved pitch intents at compile time without rewriting their rhythm. Version-1 saves migrate using the saved harmony voicing and macro complexity. Live playback, WAV, MIDI, save/share, and undo all consume the same expression state. The `glass-chords-c4` procedural asset advances independently to synthesis version 1.1.0 with restrained integer-ratio FM partials.
+
+**Reason:** Per-planet controls let beginners shape harmonic width and melodic direction in plain language while preserving Safe Harmony and visible rhythmic causality. Compile-time projection keeps the serialized model compact and prevents playback/export drift. Separating the visual Surface label from Sound also prevents appearance names such as “Harmonic strata” from implying an abrasive synth preset.
+
 ### Current implementation note for D-014
 
 Deterministic probability, transport reset/resume behavior, and export loop indexing are implemented. Structural composition replacements currently reschedule immediately; next-bar replacement quantization remains a known reliability task.

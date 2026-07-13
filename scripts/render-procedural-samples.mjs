@@ -159,6 +159,7 @@ const TONAL_DEFINITIONS = [
   {
     id: "glass-chords-c4",
     name: "Glass Chords C4",
+    synthesisVersion: "1.1.0",
     rootMidi: 60,
     category: "synth",
     durationSeconds: 1.9,
@@ -455,9 +456,10 @@ function renderStereoDefinition(definition) {
   const frames = Math.ceil(definition.durationSeconds * SAMPLE_RATE);
   const left = new Float32Array(frames);
   const right = new Float32Array(frames);
-  const randomLeft = createRandom(`${definition.id}/left/${SYNTHESIS_VERSION}`);
+  const synthesisVersion = definition.synthesisVersion ?? SYNTHESIS_VERSION;
+  const randomLeft = createRandom(`${definition.id}/left/${synthesisVersion}`);
   const randomRight = createRandom(
-    `${definition.id}/right/${SYNTHESIS_VERSION}`,
+    `${definition.id}/right/${synthesisVersion}`,
   );
   const frequency = 440 * 2 ** ((definition.rootMidi - 69) / 12);
   let lowLeft = 0;
@@ -534,22 +536,23 @@ function renderStereoDefinition(definition) {
       case "glass-chords-c4": {
         const envelope =
           Math.exp(-time / 0.72) * fadeEnvelope(time, duration, 0.004, 0.18);
-        const index = 5.2 * Math.exp(-time / 0.38);
+        const index = 1.65 * Math.exp(-time / 0.42);
+        const rightFrequency = frequency * 1.001;
         leftValue =
           (Math.sin(
             TWO_PI * frequency * time +
-              Math.sin(TWO_PI * frequency * 2.71 * time) * index,
+              Math.sin(TWO_PI * frequency * 2 * time) * index,
           ) *
             0.7 +
-            Math.sin(TWO_PI * frequency * 4.09 * time) * 0.16) *
+            Math.sin(TWO_PI * frequency * 4 * time) * 0.12) *
           envelope;
         rightValue =
           (Math.sin(
-            TWO_PI * frequency * 1.001 * time +
-              Math.sin(TWO_PI * frequency * 3.03 * time + 0.12) * index,
+            TWO_PI * rightFrequency * time +
+              Math.sin(TWO_PI * rightFrequency * 3 * time + 0.12) * index,
           ) *
             0.7 +
-            Math.sin(TWO_PI * frequency * 5.13 * time) * 0.14) *
+            Math.sin(TWO_PI * rightFrequency * 5 * time) * 0.1) *
           envelope;
         break;
       }
@@ -1127,7 +1130,7 @@ function main() {
         url: `audio/cosmic-samples/${definition.id}.ogg`,
         sourceFile: `procedural:${definition.id}`,
         sourceKind: "procedural",
-        synthesisVersion: SYNTHESIS_VERSION,
+        synthesisVersion: definition.synthesisVersion ?? SYNTHESIS_VERSION,
         durationSeconds: rounded(encodedProbe.durationSeconds),
         attackSeconds: definition.attackSeconds,
         releaseSeconds: definition.releaseSeconds,

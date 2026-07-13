@@ -1,4 +1,5 @@
 import { createStableId } from "../serialization/ids";
+import { createPlanetExpression } from "./expression";
 import {
   type Composition,
   CURRENT_SCHEMA_VERSION,
@@ -86,6 +87,7 @@ export function createStarterComposition(
           delaySend: 0.04,
         },
         appearance: { visualSeed: 231, hue: 31, size: 1.05, roughness: 0.46 },
+        expression: createPlanetExpression("beat"),
         moons: [],
         muted: false,
         soloed: false,

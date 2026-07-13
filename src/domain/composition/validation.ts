@@ -7,6 +7,7 @@ import {
   type LoopBars,
 } from "./types";
 import { LOOP_BAR_RATES, isLoopBars } from "./loopRates";
+import { migrateCompositionInput } from "./migrations";
 
 const normalized = z.number().finite().min(0).max(1);
 const normalizedPhase = z.number().finite().min(0).lt(1);
@@ -114,6 +115,20 @@ const ringSchema = z
     }
   });
 
+const planetExpressionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("chords"),
+    voicingSpread: normalized,
+    chordComplexity: normalized,
+  }),
+  z.object({
+    kind: z.literal("melody"),
+    pitchVariety: normalized,
+    contour: z.enum(["ascending", "alternating", "descending"]),
+  }),
+  z.object({ kind: z.literal("default") }),
+]);
+
 const planetSchema = z.object({
   id: z.string().min(1),
   role: z.enum(["beat", "bass", "chords", "melody", "texture"]),
@@ -140,6 +155,7 @@ const planetSchema = z.object({
     size: z.number().positive().max(4),
     roughness: normalized,
   }),
+  expression: planetExpressionSchema,
   moons: z.array(moonSchema).max(3),
   ring: ringSchema.optional(),
   muted: z.boolean(),
@@ -256,6 +272,20 @@ export const compositionSchema = z
       }
       if (planet.ring) ids.push(planet.ring.id);
 
+      const expectedExpressionKind =
+        planet.role === "chords"
+          ? "chords"
+          : planet.role === "melody"
+            ? "melody"
+            : "default";
+      if (planet.expression.kind !== expectedExpressionKind) {
+        context.addIssue({
+          code: "custom",
+          message: `${planet.role} planet ${planet.id} has incompatible expression controls.`,
+          path: ["planets"],
+        });
+      }
+
       for (const event of planet.pattern.events) {
         if (planet.role === "beat" && !event.drumVoice) {
           context.addIssue({
@@ -314,7 +344,7 @@ export type CompositionValidation =
   | { success: false; issues: string[] };
 
 export function validateComposition(input: unknown): CompositionValidation {
-  const result = compositionSchema.safeParse(input);
+  const result = compositionSchema.safeParse(migrateCompositionInput(input));
 
   if (result.success) {
     return { success: true, composition: result.data };
