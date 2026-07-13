@@ -27,11 +27,13 @@ export interface PlanetInspectorProps {
   onRing: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  canDelete: boolean;
   headingId?: string;
 }
 
 export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   const gateRhythmId = useId();
+  const deleteHintId = useId();
   const headingId = actions.headingId ?? "inspector-heading";
   if (!planet) {
     return (
@@ -198,13 +200,23 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         <button type="button" onClick={actions.onDuplicate}>
           Duplicate
         </button>
-        <button
-          type="button"
-          className="danger-action"
-          onClick={actions.onDelete}
-        >
-          Delete
-        </button>
+        <div className="destruction-action">
+          <button
+            type="button"
+            className="danger-action"
+            onClick={actions.onDelete}
+            disabled={!actions.canDelete}
+            aria-label={`Delete ${planet.name} planet`}
+            aria-describedby={deleteHintId}
+          >
+            Delete planet
+          </button>
+          <small id={deleteHintId}>
+            {actions.canDelete
+              ? "Deletes with a blast. Undo restores it."
+              : "Keep at least one planet in orbit."}
+          </small>
+        </div>
       </div>
     </aside>
   );

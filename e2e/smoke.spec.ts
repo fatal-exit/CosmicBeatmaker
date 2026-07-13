@@ -145,6 +145,44 @@ test("offers the full semantic editor on mobile", async ({
   ).toBeVisible();
 });
 
+test("deletes a planet with clear feedback and restores it with undo", async ({
+  page,
+}, testInfo) => {
+  const exploreDemo = page.getByRole("button", { name: "Explore the demo" });
+  await exploreDemo.click();
+  await expect(exploreDemo).toBeHidden();
+  const inspector = await visibleInspector(page, testInfo.project.name);
+  const planetName =
+    (await inspector.locator(".selected-summary h2").textContent()) ?? "";
+  expect(planetName).not.toBe("");
+
+  await inspector
+    .getByRole("button", { name: `Delete ${planetName} planet` })
+    .click();
+
+  await expect(
+    page.getByText(`${planetName} was blown out of orbit. Undo restores it.`),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Objects and controls" }),
+  ).toBeHidden();
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  let objectScope: Locator;
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("button", { name: "Controls" }).click();
+    objectScope = page.getByRole("dialog", { name: "Objects and controls" });
+  } else {
+    objectScope = page.locator(".workspace");
+  }
+  await expect(
+    objectScope
+      .locator(".object-row strong")
+      .filter({ hasText: planetName })
+      .first(),
+  ).toBeVisible();
+});
+
 test("offers bounded scene zoom, rotation, and reset controls", async ({
   page,
 }) => {

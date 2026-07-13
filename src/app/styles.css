@@ -719,7 +719,9 @@ p {
   margin-top: 18px;
   padding-top: 12px;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 10px;
   border-top: 1px solid var(--border);
 }
 
@@ -733,6 +735,30 @@ p {
 
 .danger-action:hover {
   color: var(--danger);
+}
+
+.destruction-action {
+  max-width: 16ch;
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+
+.destruction-action .danger-action {
+  color: color-mix(in oklch, var(--danger) 82%, var(--ink));
+  font-weight: 720;
+}
+
+.destruction-action .danger-action:hover:not(:disabled) {
+  color: color-mix(in oklch, var(--danger) 62%, white);
+  background: color-mix(in oklch, var(--danger) 12%, transparent);
+}
+
+.destruction-action small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .macro-bar {

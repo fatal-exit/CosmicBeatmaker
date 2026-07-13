@@ -36,6 +36,10 @@ import {
   compositionToSceneDescriptor,
   orbitRadiusForShellIndex,
 } from "../src/scene/descriptors";
+import {
+  deletedPlanetId,
+  planetDestructionEffectProfile,
+} from "../src/scene/effects/planetDestruction";
 import { gatePhaseForTrigger, spawnPhaseAtTick } from "../src/scene/gates";
 import { orbitPhaseAtTick } from "../src/scene/phase";
 import {
@@ -96,6 +100,50 @@ describe("scene contracts", () => {
     expect(
       highlightedSpawnId(new Set(["a"]), new Set(["b", "c"]), false),
     ).toBeNull();
+  });
+
+  it("detects one explicit planet deletion without treating system replacement as destruction", () => {
+    expect(deletedPlanetId(new Set(["a", "b"]), new Set(["a"]), false)).toBe(
+      "b",
+    );
+    expect(deletedPlanetId(new Set(["a"]), new Set(), true)).toBeNull();
+    expect(
+      deletedPlanetId(new Set(["a", "b"]), new Set(["c"]), false),
+    ).toBeNull();
+  });
+
+  it("bounds destruction spectacle by quality and comfort preferences", () => {
+    expect(
+      planetDestructionEffectProfile("low", {
+        reducedMotion: false,
+        reducedParticles: false,
+        reducedFlash: false,
+      }),
+    ).toMatchObject({
+      durationMs: 480,
+      fragmentCount: 6,
+      flashOpacity: 0.9,
+    });
+    expect(
+      planetDestructionEffectProfile("high", {
+        reducedMotion: false,
+        reducedParticles: false,
+        reducedFlash: false,
+      }).fragmentCount,
+    ).toBe(18);
+    expect(
+      planetDestructionEffectProfile("high", {
+        reducedMotion: true,
+        reducedParticles: true,
+        reducedFlash: true,
+      }),
+    ).toMatchObject({
+      durationMs: 180,
+      fragmentCount: 0,
+      flashOpacity: 0.14,
+      shockwaveOpacity: 0.42,
+      shockwaveExpansion: 1.05,
+    });
   });
 
   it("delays visual pulses until their authoritative scheduled tick", () => {

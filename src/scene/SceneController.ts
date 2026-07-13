@@ -10,6 +10,13 @@ import type {
   VisualPreferences,
   VisualPulse,
 } from "./contracts";
+import {
+  createPlanetDestructionEffect,
+  deletedPlanetId,
+  planetDestructionEffectProfile,
+  type RuntimePlanetDestructionEffect,
+  updatePlanetDestructionEffect,
+} from "./effects/planetDestruction";
 import { SCENE_TICKS_PER_BEAT, spawnPhaseAtTick } from "./gates";
 import {
   createCelestialOutlineMaterial,
@@ -117,6 +124,7 @@ const defaultPreferences: VisualPreferences = {
 const DRAG_THRESHOLD_PX = 7;
 const PIXELS_PER_ORBIT_SHELL = 44;
 const SPAWN_MARKER_DURATION_MS = 3_200;
+const MAX_ACTIVE_DESTRUCTION_EFFECTS = 2;
 const CAMERA_DEFAULT_POSITION = { y: 8.8, z: 10.5 } as const;
 const CAMERA_BASE_DISTANCE = 16;
 const CAMERA_REFERENCE_ASPECT = 1.3;
@@ -359,6 +367,7 @@ export class SceneController {
   private tempoBpm = 120;
   private pulseWindows = new Map<string, PulseWindow[]>();
   private eventPulseWindows = new Map<string, PulseWindow[]>();
+  private destructionEffects = new Set<RuntimePlanetDestructionEffect>();
   private gesture: PointerGesture | null = null;
   private pinchGesture: PinchGesture | null = null;
   private readonly activePointers = new Map<number, ActivePointer>();
@@ -413,6 +422,11 @@ export class SceneController {
       nextIds,
       isInitialReconcile,
     );
+    const destructionId = deletedPlanetId(
+      previousIds,
+      nextIds,
+      isInitialReconcile,
+    );
     const outerExtent = Math.max(
       6.2,
       ...descriptor.planets.map(
@@ -430,6 +444,7 @@ export class SceneController {
     for (const [id, runtime] of this.planets) {
       if (!nextIds.has(id)) {
         if (this.gesture?.planet === runtime) this.releaseGesture();
+        if (id === destructionId) this.spawnPlanetDestruction(runtime);
         this.scene.remove(runtime.group);
         this.clearRuntimePulseWindows(runtime);
         runtime.dispose();
@@ -571,6 +586,44 @@ export class SceneController {
     }
   }
 
+  private spawnPlanetDestruction(runtime: RuntimePlanet): void {
+    if (!this.scene) return;
+    while (this.destructionEffects.size >= MAX_ACTIVE_DESTRUCTION_EFFECTS) {
+      const oldest = this.destructionEffects.values().next().value;
+      if (!oldest) break;
+      this.removePlanetDestruction(oldest);
+    }
+    const position = new THREE.Vector3();
+    runtime.body.getWorldPosition(position);
+    const effect = createPlanetDestructionEffect(
+      {
+        position,
+        hue: runtime.descriptor.hue,
+        size: runtime.descriptor.size,
+        visualSeed: runtime.descriptor.visualSeed,
+      },
+      planetDestructionEffectProfile(this.qualityProfile, this.preferences),
+    );
+    this.destructionEffects.add(effect);
+    this.scene.add(effect.group);
+  }
+
+  private removePlanetDestruction(
+    effect: RuntimePlanetDestructionEffect,
+  ): void {
+    this.scene?.remove(effect.group);
+    disposeObject(effect.group);
+    this.destructionEffects.delete(effect);
+  }
+
+  private updatePlanetDestructions(now: number): void {
+    for (const effect of this.destructionEffects) {
+      if (!updatePlanetDestructionEffect(effect, now)) {
+        this.removePlanetDestruction(effect);
+      }
+    }
+  }
+
   private appendPulseWindow(
     windows: Map<string, PulseWindow[]>,
     key: string,
@@ -646,6 +699,11 @@ export class SceneController {
     }
     for (const runtime of this.planets.values()) runtime.dispose();
     this.planets.clear();
+    for (const effect of this.destructionEffects) {
+      this.scene?.remove(effect.group);
+      disposeObject(effect.group);
+    }
+    this.destructionEffects.clear();
     this.pulseWindows.clear();
     this.eventPulseWindows.clear();
     this.gesture = null;
@@ -1507,6 +1565,7 @@ export class SceneController {
         }
       }
     }
+    this.updatePlanetDestructions(now);
     if (this.star) {
       const materialTime = this.preferences.reducedMotion ? 0 : ticks;
       const stellarPulse = this.preferences.reducedFlash

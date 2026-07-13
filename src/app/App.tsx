@@ -609,8 +609,15 @@ export function App() {
 
   const deleteSelectedPlanet = () => {
     if (!selectedPlanet) return;
+    if (composition.planets.length <= 1) {
+      setToast("Keep at least one planet in orbit.");
+      return;
+    }
+    const deletedName = selectedPlanet.name;
     dispatch({ type: "RemovePlanet", planetId: selectedPlanet.id });
     selectObject(composition.star.id);
+    setOpenPanel(null);
+    setToast(`${deletedName} was blown out of orbit. Undo restores it.`);
   };
 
   const exportWav = async () => {
@@ -793,6 +800,7 @@ export function App() {
           onRing={addRing}
           onDuplicate={duplicateSelectedPlanet}
           onDelete={deleteSelectedPlanet}
+          canDelete={composition.planets.length > 1}
         />
       </div>
 
@@ -979,6 +987,7 @@ export function App() {
             onRing={addRing}
             onDuplicate={duplicateSelectedPlanet}
             onDelete={deleteSelectedPlanet}
+            canDelete={composition.planets.length > 1}
           />
         </section>
       ) : null}

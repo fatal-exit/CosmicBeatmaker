@@ -377,8 +377,16 @@ export function applyCompositionCommand(
           : "Removed the asteroid belt",
       };
     case "RemovePlanet": {
+      const removedPlanet = composition.planets.find(
+        (planet) => planet.id === command.planetId,
+      );
+      if (!removedPlanet)
+        return { composition, description: "Planet was already gone" };
       if (composition.planets.length === 1)
-        return { composition, description: "Kept the last audible planet" };
+        return {
+          composition,
+          description: "Kept at least one planet in orbit",
+        };
       return {
         composition: {
           ...composition,
@@ -387,7 +395,7 @@ export function applyCompositionCommand(
           ),
           updatedAt: timestamp,
         },
-        description: "Removed planet",
+        description: `${removedPlanet.name} removed`,
       };
     }
   }
