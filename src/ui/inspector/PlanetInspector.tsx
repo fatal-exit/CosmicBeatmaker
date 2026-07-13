@@ -12,9 +12,11 @@ export interface PlanetInspectorProps {
   onRing: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  headingId?: string;
 }
 
 export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
+  const headingId = actions.headingId ?? "inspector-heading";
   if (!planet) {
     return (
       <aside className="inspector">
@@ -26,7 +28,7 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   }
 
   return (
-    <aside className="inspector" aria-labelledby="inspector-heading">
+    <aside className="inspector" aria-labelledby={headingId}>
       <div className="selected-summary">
         <span
           aria-hidden="true"
@@ -34,7 +36,7 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         />
         <div>
           <p className="panel-label">Selected {planet.role}</p>
-          <h2 id="inspector-heading">{planet.name}</h2>
+          <h2 id={headingId}>{planet.name}</h2>
           <p>{planet.soundPresetId.replaceAll("-", " ")}</p>
         </div>
       </div>
@@ -90,8 +92,9 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         type="button"
         className="secondary-panel-action"
         onClick={actions.onRing}
+        disabled={Boolean(planet.ring)}
       >
-        {planet.ring ? "Edit rhythmic ring" : "Add rhythmic ring"}
+        {planet.ring ? "Rhythmic ring added" : "Add rhythmic ring"}
       </button>
       <div className="inspector-footer">
         <button type="button" onClick={actions.onDuplicate}>

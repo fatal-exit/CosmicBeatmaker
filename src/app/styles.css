@@ -315,6 +315,10 @@ p {
   background: var(--surface-raised);
 }
 
+.structural-object {
+  color: var(--muted);
+}
+
 .object-row.selected {
   outline: 1px solid var(--border);
   outline-offset: -1px;
@@ -365,6 +369,15 @@ p {
 .star-symbol,
 .role-beat {
   background: var(--primary);
+}
+
+.asteroid-symbol {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--muted) 0 3px,
+    transparent 3px 6px
+  );
+  border: 1px solid var(--muted);
 }
 
 .role-bass {
@@ -945,6 +958,25 @@ p {
   font-size: 1.4rem;
 }
 
+.mobile-editor-sheet {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.mobile-editor-sheet .object-panel,
+.mobile-editor-sheet .inspector {
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+}
+
+.mobile-editor-sheet .inspector {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
 .role-list,
 .menu-actions,
 .export-actions {
@@ -1317,6 +1349,11 @@ p {
   .object-panel,
   .inspector {
     display: none;
+  }
+
+  .mobile-editor-sheet .object-panel,
+  .mobile-editor-sheet .inspector {
+    display: block;
   }
 
   .scene-panel {

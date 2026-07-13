@@ -1,4 +1,4 @@
-import type { PlanetRole } from "../domain/composition";
+import type { LoopBars, PlanetRole } from "../domain/composition";
 
 export type QualityProfile = "low" | "balanced" | "high";
 export type QualityPreference = QualityProfile | "auto";
@@ -14,7 +14,7 @@ export interface PlanetSceneDescriptor {
   id: string;
   role: PlanetRole;
   orbitRadius: number;
-  loopBars: number;
+  loopBars: LoopBars;
   phase: number;
   inclination: number;
   size: number;
@@ -22,9 +22,29 @@ export interface PlanetSceneDescriptor {
   muted: boolean;
   soloed: boolean;
   locked: boolean;
-  eventIds: string[];
-  moonIds: string[];
-  ringSegments: boolean[];
+  events: SceneEventDescriptor[];
+  moons: MoonSceneDescriptor[];
+  ringSegments: RingSegmentSceneDescriptor[];
+}
+
+export interface SceneEventDescriptor {
+  eventId: string;
+  step: number;
+  /** Normalized position after the planet's pattern phase is applied. */
+  phase: number;
+}
+
+export interface RingSegmentSceneDescriptor {
+  eventId: string;
+  active: boolean;
+  phase: number;
+}
+
+export interface MoonSceneDescriptor {
+  id: string;
+  selectionTargetId: string;
+  phase: number;
+  events: SceneEventDescriptor[];
 }
 
 export interface SceneDescriptor {
@@ -49,7 +69,18 @@ export interface VisualPulse {
   velocity: number;
 }
 
-export interface SceneInteractionIntent {
-  type: "select";
-  entityId: string | null;
-}
+export type SceneInteractionIntent =
+  | {
+      type: "select";
+      entityId: string | null;
+    }
+  | {
+      type: "set-orbit-loop-bars";
+      entityId: string;
+      loopBars: LoopBars;
+    }
+  | {
+      type: "set-orbit-phase";
+      entityId: string;
+      phase: number;
+    };

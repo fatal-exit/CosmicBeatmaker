@@ -57,7 +57,12 @@ test("completes the guided first-minute create and save flow", async ({
   await page.getByRole("button", { name: "Add object" }).click();
   await page.getByRole("button", { name: /^Planetary ring/ }).click();
 
-  await page.getByRole("button", { name: /Edit.*pattern/ }).click();
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("button", { name: "Controls" }).click();
+  }
+  await page
+    .getByRole("button", { name: "Edit circular pattern", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: /pattern$/ })).toBeVisible();
   await page.getByRole("button", { name: "Step 2", exact: true }).click();
   await page.getByRole("button", { name: "Close pattern editor" }).click();
@@ -70,4 +75,56 @@ test("completes the guided first-minute create and save flow", async ({
     await page.getByRole("button", { name: /^Save current system/ }).click();
   }
   await expect(page.getByText("Saved in this browser.")).toBeVisible();
+});
+
+test("contains modal focus, closes with Escape, and restores its trigger", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  const menuTrigger = page.getByRole("button", { name: "Open project menu" });
+  await menuTrigger.click();
+
+  const close = page.getByRole("button", { name: "Close project menu" });
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "System menu" })).toBeHidden();
+  await expect(menuTrigger).toBeFocused();
+});
+
+test("restores visual comfort preferences", async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem("cosmic-quality", "low");
+    localStorage.setItem("cosmic-reduced-effects", "true");
+    localStorage.setItem("cosmic-reduced-flash", "true");
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  await page.getByRole("button", { name: "Open project menu" }).click();
+
+  await expect(page.getByLabel("Quality")).toHaveValue("low");
+  await expect(
+    page.getByRole("checkbox", { name: "Reduce particles and motion" }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: "Reduce event flashes" }),
+  ).toBeChecked();
+});
+
+test("offers the full semantic editor on mobile", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-chrome");
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  await page.getByRole("button", { name: "Controls" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Objects and controls" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: /^Undertow, bass/ }).click();
+  const mute = page.getByRole("button", { name: "Mute", exact: true });
+  await mute.click();
+  await expect(mute).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: /Undertow, bass.*muted/ }),
+  ).toBeVisible();
 });

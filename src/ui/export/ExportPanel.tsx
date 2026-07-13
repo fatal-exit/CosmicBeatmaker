@@ -6,6 +6,7 @@ export interface ExportPanelProps {
   onWav: () => void | Promise<void>;
   onMidi: () => void | Promise<void>;
   onJson: () => void;
+  onCancel: () => void;
   onClose: () => void;
 }
 
@@ -78,6 +79,15 @@ export function ExportPanel(props: ExportPanelProps) {
         <p className={`export-status ${props.status}`} role="status">
           {props.message}
         </p>
+      ) : null}
+      {props.status === "working" ? (
+        <button
+          type="button"
+          className="secondary-panel-action"
+          onClick={props.onCancel}
+        >
+          Cancel WAV export
+        </button>
       ) : null}
     </section>
   );

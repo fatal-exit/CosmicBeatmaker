@@ -18,6 +18,12 @@ export interface OfflineRenderOptions {
   sampleRate?: number;
   tailSeconds?: number;
   onProgress?: (progress: OfflineRenderProgress) => void;
+  signal?: AbortSignal;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted)
+    throw new DOMException("WAV export cancelled.", "AbortError");
 }
 
 export async function renderCompositionToWav(
@@ -33,8 +39,10 @@ export async function renderCompositionToWav(
     );
   }
 
+  throwIfAborted(options.signal);
   options.onProgress?.({ phase: "compiling", progress: 0.05 });
   const sequence = compileComposition(composition, { loops });
+  throwIfAborted(options.signal);
   const musicalDuration = ticksToSeconds(sequence.totalTicks, sequence.bpm);
   const renderDuration = musicalDuration + tailSeconds;
   options.onProgress?.({ phase: "rendering", progress: 0.25 });
@@ -65,6 +73,10 @@ export async function renderCompositionToWav(
     sampleRate,
   );
 
+  if (options.signal?.aborted) {
+    buffer.dispose();
+    throwIfAborted(options.signal);
+  }
   options.onProgress?.({ phase: "encoding", progress: 0.9 });
   const channels = Array.from(
     { length: buffer.numberOfChannels },
@@ -72,6 +84,7 @@ export async function renderCompositionToWav(
   );
   const wav = encodePcm16Wav({ sampleRate: buffer.sampleRate, channels });
   buffer.dispose();
+  throwIfAborted(options.signal);
   options.onProgress?.({ phase: "encoding", progress: 1 });
   return wav;
 }

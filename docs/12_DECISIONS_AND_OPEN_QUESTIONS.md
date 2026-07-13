@@ -96,6 +96,16 @@ This is a living log. Durable changes should be recorded here and reflected in t
 
 **Reason:** This aligns the canonical contract with the explicit MVP cuts before parallel work depends on it.
 
+### D-016 — Static GitHub Pages deployment
+
+**Decision:** Build the Vite application with the repository base path and deploy `dist` from `main` through the official GitHub Pages Actions workflow.
+
+**Reason:** The application is intentionally backend-free, and an automated public deployment provides a repeatable Build Week demo without adding runtime infrastructure.
+
+### Current implementation note for D-014
+
+Deterministic probability, transport reset/resume behavior, and export loop indexing are implemented. Structural composition replacements currently reschedule immediately; next-bar replacement quantization remains a known reliability task.
+
 ## Open questions before implementation
 
 ### Q-001 — State library (resolved by D-011)

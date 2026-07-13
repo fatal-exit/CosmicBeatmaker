@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { renderCompositionToWav } from "../src/audio/OfflineRenderer";
 import { encodePcm16Wav } from "../src/audio/WavEncoder";
+import { createStarterComposition } from "../src/domain/composition";
 
 function ascii(bytes: Uint8Array, start: number, length: number): string {
   return String.fromCharCode(...bytes.slice(start, start + length));
@@ -34,5 +36,16 @@ describe("PCM16 WAV encoder", () => {
         channels: [new Float32Array(4), new Float32Array(3)],
       }),
     ).toThrow(/same frame count/);
+  });
+
+  it("honors cancellation before offline rendering begins", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      renderCompositionToWav(createStarterComposition(), {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

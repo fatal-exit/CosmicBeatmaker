@@ -17,6 +17,10 @@ const STAR_HUES = {
   void: 260,
 } as const;
 
+function normalizePhase(phase: number): number {
+  return ((phase % 1) + 1) % 1;
+}
+
 export function compositionToSceneDescriptor(
   composition: Composition,
 ): SceneDescriptor {
@@ -41,9 +45,38 @@ export function compositionToSceneDescriptor(
       muted: planet.muted,
       soloed: planet.soloed,
       locked: planet.locked,
-      eventIds: planet.pattern.events.map((event) => event.id),
-      moonIds: planet.moons.map((moon) => moon.id),
-      ringSegments: planet.ring?.active ?? [],
+      events: planet.pattern.events.map((event) => ({
+        eventId: event.id,
+        step: event.step,
+        phase: normalizePhase(
+          event.step / planet.pattern.gridSize + planet.orbit.phase,
+        ),
+      })),
+      moons: planet.moons.map((moon) => ({
+        id: moon.id,
+        selectionTargetId: planet.id,
+        phase: normalizePhase(planet.orbit.phase + moon.phase),
+        events: moon.pattern.events.map((event) => ({
+          eventId: event.id,
+          step: event.step,
+          phase: normalizePhase(
+            event.step / moon.pattern.gridSize +
+              planet.orbit.phase +
+              moon.phase,
+          ),
+        })),
+      })),
+      ringSegments: planet.ring
+        ? planet.ring.active.map((active, index) => ({
+            eventId: `${planet.ring?.id}:segment:${index}`,
+            active,
+            phase: normalizePhase(
+              index / planet.ring!.segments +
+                planet.orbit.phase +
+                planet.ring!.phase,
+            ),
+          }))
+        : [],
     })),
     asteroidBelt: composition.asteroidBelt
       ? {

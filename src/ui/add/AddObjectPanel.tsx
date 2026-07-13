@@ -22,8 +22,10 @@ const ROLES: Array<{
 
 export interface AddObjectPanelProps {
   selectedHasRing: boolean;
+  selectedCanAddMoon: boolean;
   canAddAsteroids: boolean;
   onRole: (role: PlanetRole) => void;
+  onMoon: () => void;
   onRing: () => void;
   onAsteroids: () => void;
   onClose: () => void;
@@ -71,6 +73,18 @@ export function AddObjectPanel(props: AddObjectPanelProps) {
       </div>
       <div className="structural-additions">
         <h3>Rhythmic structures</h3>
+        <button
+          type="button"
+          onClick={props.onMoon}
+          disabled={!props.selectedCanAddMoon}
+        >
+          <span>Orbiting moon</span>
+          <small>
+            {props.selectedCanAddMoon
+              ? "A quieter embellishment linked to this planet"
+              : "Select a planet with room for another moon"}
+          </small>
+        </button>
         <button
           type="button"
           onClick={props.onRing}

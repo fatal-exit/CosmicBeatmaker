@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import type { LoopBars } from "../domain/composition";
 import type {
   PlanetSceneDescriptor,
   SceneDescriptor,
@@ -13,8 +14,26 @@ import { QUALITY_DPR_CAP, resolveQualityProfile } from "./quality";
 interface RuntimePlanet {
   group: THREE.Group;
   body: THREE.Mesh;
+  eventNodes: Map<string, THREE.Mesh>;
   descriptor: PlanetSceneDescriptor;
   dispose: () => void;
+}
+
+export type PlanetDragMode = "radial" | "tangential";
+
+interface PointerGesture {
+  pointerId: number;
+  entityId: string | null;
+  planet?: RuntimePlanet;
+  startX: number;
+  startY: number;
+  radialX: number;
+  radialY: number;
+  startAngle: number;
+  mode: PlanetDragMode | null;
+  previewLoopBars?: LoopBars;
+  previewOrbitRadius?: number;
+  previewPhase?: number;
 }
 
 export interface SceneControllerOptions {
@@ -29,25 +48,79 @@ const defaultPreferences: VisualPreferences = {
   reducedFlash: false,
 };
 
+const DRAG_THRESHOLD_PX = 7;
+const PIXELS_PER_ORBIT_SHELL = 44;
+const LOOP_BAR_SHELLS: readonly LoopBars[] = [0.5, 1, 2, 4];
+
+export function classifyPlanetDrag(
+  deltaX: number,
+  deltaY: number,
+  radialX: number,
+  radialY: number,
+  threshold = DRAG_THRESHOLD_PX,
+): PlanetDragMode | null {
+  if (Math.hypot(deltaX, deltaY) < threshold) return null;
+  const radialDistance = deltaX * radialX + deltaY * radialY;
+  const tangentialDistance = deltaX * -radialY + deltaY * radialX;
+  return Math.abs(radialDistance) >= Math.abs(tangentialDistance)
+    ? "radial"
+    : "tangential";
+}
+
+export function quantizeLoopBarsFromRadialDrag(
+  startLoopBars: LoopBars,
+  radialDistance: number,
+  pixelsPerShell = PIXELS_PER_ORBIT_SHELL,
+): LoopBars {
+  const startIndex = LOOP_BAR_SHELLS.indexOf(startLoopBars);
+  const shellDelta = Math.round(radialDistance / pixelsPerShell);
+  const index = Math.max(
+    0,
+    Math.min(LOOP_BAR_SHELLS.length - 1, startIndex + shellDelta),
+  );
+  return LOOP_BAR_SHELLS[index];
+}
+
+export function phaseFromTangentialDrag(
+  startPhase: number,
+  startAngle: number,
+  currentAngle: number,
+): number {
+  const angleDelta = Math.atan2(
+    Math.sin(currentAngle - startAngle),
+    Math.cos(currentAngle - startAngle),
+  );
+  return (((startPhase + angleDelta / (Math.PI * 2)) % 1) + 1) % 1;
+}
+
 function colorFromHue(hue: number, lightness = 0.62): THREE.Color {
   const color = new THREE.Color();
   color.setHSL((((hue % 360) + 360) % 360) / 360, 0.62, lightness);
   return color;
 }
 
-function disposeObject(object: THREE.Object3D): void {
+export function disposeObject(object: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
   object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh || child instanceof THREE.Line)) return;
+    if (!(
+      child instanceof THREE.Mesh ||
+      child instanceof THREE.Line ||
+      child instanceof THREE.Points
+    ))
+      return;
     const renderable = child as THREE.Mesh<
       THREE.BufferGeometry,
       THREE.Material | THREE.Material[]
     >;
-    renderable.geometry.dispose();
-    const materials = Array.isArray(renderable.material)
+    geometries.add(renderable.geometry);
+    const materialList = Array.isArray(renderable.material)
       ? renderable.material
       : [renderable.material];
-    for (const material of materials) material.dispose();
+    for (const material of materialList) materials.add(material);
   });
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
 }
 
 export class SceneController {
@@ -64,6 +137,8 @@ export class SceneController {
   private selectedId: string | null = null;
   private preferences = defaultPreferences;
   private pulseExpiry = new Map<string, number>();
+  private eventPulseExpiry = new Map<string, number>();
+  private gesture: PointerGesture | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
 
@@ -90,7 +165,10 @@ export class SceneController {
     const light = new THREE.PointLight(0xff9b58, 32, 22);
     light.position.set(0, 1.2, 0);
     this.scene.add(light);
-    canvas.addEventListener("pointerup", this.handlePointer);
+    canvas.addEventListener("pointerdown", this.handlePointerDown);
+    canvas.addEventListener("pointermove", this.handlePointerMove);
+    canvas.addEventListener("pointerup", this.handlePointerUp);
+    canvas.addEventListener("pointercancel", this.handlePointerCancel);
     canvas.addEventListener("webglcontextlost", this.handleContextLoss);
     canvas.addEventListener("webglcontextrestored", this.handleContextRestore);
     this.resize(canvas.clientWidth, canvas.clientHeight);
@@ -105,10 +183,14 @@ export class SceneController {
     const nextIds = new Set(descriptor.planets.map((planet) => planet.id));
     for (const [id, runtime] of this.planets) {
       if (!nextIds.has(id)) {
+        if (this.gesture?.planet === runtime) this.releaseGesture();
         this.scene.remove(runtime.group);
         runtime.dispose();
         this.planets.delete(id);
         this.pulseExpiry.delete(id);
+        for (const eventId of runtime.eventNodes.keys()) {
+          this.eventPulseExpiry.delete(eventId);
+        }
       }
     }
 
@@ -119,6 +201,7 @@ export class SceneController {
         JSON.stringify(existing.descriptor) !== JSON.stringify(planet)
       ) {
         if (existing) {
+          if (this.gesture?.planet === existing) this.releaseGesture();
           this.scene.remove(existing.group);
           existing.dispose();
         }
@@ -149,6 +232,10 @@ export class SceneController {
       pulse.entityId,
       performance.now() + 90 + pulse.velocity * 110,
     );
+    this.eventPulseExpiry.set(
+      pulse.eventId,
+      performance.now() + 110 + pulse.velocity * 150,
+    );
   }
 
   resize(width: number, height: number): void {
@@ -168,8 +255,15 @@ export class SceneController {
 
   destroy(): void {
     cancelAnimationFrame(this.frame);
+    this.releaseGesture();
     if (this.canvas) {
-      this.canvas.removeEventListener("pointerup", this.handlePointer);
+      this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+      this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+      this.canvas.removeEventListener("pointerup", this.handlePointerUp);
+      this.canvas.removeEventListener(
+        "pointercancel",
+        this.handlePointerCancel,
+      );
       this.canvas.removeEventListener(
         "webglcontextlost",
         this.handleContextLoss,
@@ -181,6 +275,9 @@ export class SceneController {
     }
     for (const runtime of this.planets.values()) runtime.dispose();
     this.planets.clear();
+    this.pulseExpiry.clear();
+    this.eventPulseExpiry.clear();
+    this.gesture = null;
     if (this.star) disposeObject(this.star);
     if (this.asteroidBelt) disposeObject(this.asteroidBelt);
     this.renderer?.dispose();
@@ -215,6 +312,7 @@ export class SceneController {
 
   private createPlanet(descriptor: PlanetSceneDescriptor): RuntimePlanet {
     const group = new THREE.Group();
+    const eventNodes = new Map<string, THREE.Mesh>();
     group.userData.entityId = descriptor.id;
     const orbitPoints = Array.from({ length: 96 }, (_, index) => {
       const angle = (index / 95) * Math.PI * 2;
@@ -252,58 +350,72 @@ export class SceneController {
     hit.userData.entityId = descriptor.id;
     body.add(hit);
 
-    const nodeGeometry = new THREE.SphereGeometry(0.055, 8, 6);
-    for (let index = 0; index < descriptor.eventIds.length; index += 1) {
-      const angle =
-        (index / Math.max(1, descriptor.eventIds.length)) * Math.PI * 2;
-      const node = new THREE.Mesh(
-        nodeGeometry.clone(),
-        new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue, 0.76),
-        }),
-      );
-      node.position.set(
-        Math.cos(angle) * descriptor.orbitRadius,
-        0.02,
-        Math.sin(angle) * descriptor.orbitRadius,
-      );
-      group.add(node);
+    if (descriptor.events.length > 0) {
+      const nodeGeometry = new THREE.SphereGeometry(0.055, 8, 6);
+      const nodeMaterial = new THREE.MeshBasicMaterial({
+        color: colorFromHue(descriptor.hue, 0.76),
+      });
+      for (const event of descriptor.events) {
+        const angle = event.phase * Math.PI * 2;
+        const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+        node.position.set(
+          Math.cos(angle) * descriptor.orbitRadius,
+          0.02,
+          Math.sin(angle) * descriptor.orbitRadius,
+        );
+        node.userData.entityId = descriptor.id;
+        node.userData.eventId = event.eventId;
+        eventNodes.set(event.eventId, node);
+        group.add(node);
+      }
     }
 
-    descriptor.moonIds.forEach((id, index) => {
-      const angle =
-        (index / Math.max(1, descriptor.moonIds.length)) * Math.PI * 2;
-      const moon = new THREE.Mesh(
-        new THREE.SphereGeometry(0.11, 10, 8),
-        new THREE.MeshStandardMaterial({
-          color: colorFromHue(descriptor.hue + 25, 0.7),
-        }),
-      );
-      moon.position.set(
-        Math.cos(angle) * (descriptor.size + 0.3),
-        0.06,
-        Math.sin(angle) * (descriptor.size + 0.3),
-      );
-      moon.userData.entityId = id;
-      body.add(moon);
-    });
+    if (descriptor.moons.length > 0) {
+      const moonGeometry = new THREE.SphereGeometry(0.11, 10, 8);
+      const moonMaterial = new THREE.MeshStandardMaterial({
+        color: colorFromHue(descriptor.hue + 25, 0.7),
+      });
+      descriptor.moons.forEach((moonDescriptor) => {
+        const angle = moonDescriptor.phase * Math.PI * 2;
+        const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+        moon.position.set(
+          Math.cos(angle) * (descriptor.size + 0.3),
+          0.06,
+          Math.sin(angle) * (descriptor.size + 0.3),
+        );
+        // The inspector edits planets; moon hits intentionally select the parent.
+        moon.userData.entityId = moonDescriptor.selectionTargetId;
+        moon.userData.sourceEntityId = moonDescriptor.id;
+        for (const event of moonDescriptor.events) {
+          eventNodes.set(event.eventId, moon);
+        }
+        body.add(moon);
+      });
+    }
 
     if (descriptor.ringSegments.length > 0) {
       const ringGeometry = new THREE.BoxGeometry(0.1, 0.035, 0.18);
-      descriptor.ringSegments.forEach((active, index) => {
-        const angle = (index / descriptor.ringSegments.length) * Math.PI * 2;
-        const fragment = new THREE.Mesh(
-          ringGeometry.clone(),
-          new THREE.MeshBasicMaterial({
-            color: colorFromHue(descriptor.hue + 50, active ? 0.76 : 0.32),
-          }),
-        );
+      let activeMaterial: THREE.MeshBasicMaterial | undefined;
+      let inactiveMaterial: THREE.MeshBasicMaterial | undefined;
+      descriptor.ringSegments.forEach((segment) => {
+        const angle = segment.phase * Math.PI * 2;
+        const material = segment.active
+          ? (activeMaterial ??= new THREE.MeshBasicMaterial({
+              color: colorFromHue(descriptor.hue + 50, 0.76),
+            }))
+          : (inactiveMaterial ??= new THREE.MeshBasicMaterial({
+              color: colorFromHue(descriptor.hue + 50, 0.32),
+            }));
+        const fragment = new THREE.Mesh(ringGeometry, material);
         fragment.position.set(
           Math.cos(angle) * (descriptor.size + 0.22),
           0,
           Math.sin(angle) * (descriptor.size + 0.22),
         );
         fragment.rotation.y = -angle;
+        fragment.userData.entityId = descriptor.id;
+        fragment.userData.eventId = segment.eventId;
+        eventNodes.set(segment.eventId, fragment);
         body.add(fragment);
       });
     }
@@ -311,6 +423,7 @@ export class SceneController {
     return {
       group,
       body,
+      eventNodes,
       descriptor,
       dispose: () => disposeObject(group),
     };
@@ -356,9 +469,10 @@ export class SceneController {
     }
   }
 
-  private readonly handlePointer = (event: PointerEvent): void => {
-    if (!this.canvas || !this.camera || !this.scene) return;
+  private entityAtPointer(event: PointerEvent): string | null {
+    if (!this.canvas || !this.camera || !this.scene) return null;
     const bounds = this.canvas.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
     this.pointer.set(
       ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
       -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
@@ -367,11 +481,136 @@ export class SceneController {
     const hit = this.raycaster
       .intersectObjects(this.scene.children, true)
       .find((intersection) => intersection.object.userData.entityId);
-    this.options.onInteraction?.({
-      type: "select",
-      entityId: (hit?.object.userData.entityId as string | undefined) ?? null,
-    });
+    return (hit?.object.userData.entityId as string | undefined) ?? null;
+  }
+
+  private systemCenterInClient(): { x: number; y: number } | null {
+    if (!this.canvas || !this.camera) return null;
+    const bounds = this.canvas.getBoundingClientRect();
+    const projected = new THREE.Vector3(0, 0, 0).project(this.camera);
+    return {
+      x: bounds.left + ((projected.x + 1) / 2) * bounds.width,
+      y: bounds.top + ((1 - projected.y) / 2) * bounds.height,
+    };
+  }
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (!this.canvas || this.gesture) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const entityId = this.entityAtPointer(event);
+    const center = this.systemCenterInClient();
+    if (!center) return;
+    const offsetX = event.clientX - center.x;
+    const offsetY = event.clientY - center.y;
+    const length = Math.hypot(offsetX, offsetY) || 1;
+    const candidate = entityId ? this.planets.get(entityId) : undefined;
+    const planet =
+      candidate && entityId === this.selectedId && !candidate.descriptor.locked
+        ? candidate
+        : undefined;
+    this.gesture = {
+      pointerId: event.pointerId,
+      entityId,
+      planet,
+      startX: event.clientX,
+      startY: event.clientY,
+      radialX: offsetX / length,
+      radialY: offsetY / length,
+      startAngle: Math.atan2(offsetY, offsetX),
+      mode: null,
+    };
+    this.canvas.setPointerCapture(event.pointerId);
   };
+
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    const gesture = this.gesture;
+    if (!gesture || event.pointerId !== gesture.pointerId || !gesture.planet)
+      return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    gesture.mode ??= classifyPlanetDrag(
+      deltaX,
+      deltaY,
+      gesture.radialX,
+      gesture.radialY,
+    );
+    if (!gesture.mode) return;
+
+    if (gesture.mode === "radial") {
+      const radialDistance =
+        deltaX * gesture.radialX + deltaY * gesture.radialY;
+      const startLoopBars = gesture.planet.descriptor.loopBars;
+      gesture.previewLoopBars = quantizeLoopBarsFromRadialDrag(
+        startLoopBars,
+        radialDistance,
+      );
+      const startShell = LOOP_BAR_SHELLS.indexOf(startLoopBars);
+      const previewShell = LOOP_BAR_SHELLS.indexOf(gesture.previewLoopBars);
+      gesture.previewOrbitRadius =
+        gesture.planet.descriptor.orbitRadius +
+        (previewShell - startShell) * 1.25;
+    } else {
+      const center = this.systemCenterInClient();
+      if (!center) return;
+      const currentAngle = Math.atan2(
+        event.clientY - center.y,
+        event.clientX - center.x,
+      );
+      gesture.previewPhase = phaseFromTangentialDrag(
+        gesture.planet.descriptor.phase,
+        gesture.startAngle,
+        currentAngle,
+      );
+    }
+    event.preventDefault();
+  };
+
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    const gesture = this.gesture;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    if (gesture.mode === "radial" && gesture.planet) {
+      const loopBars =
+        gesture.previewLoopBars ?? gesture.planet.descriptor.loopBars;
+      if (loopBars !== gesture.planet.descriptor.loopBars) {
+        this.options.onInteraction?.({
+          type: "set-orbit-loop-bars",
+          entityId: gesture.planet.descriptor.id,
+          loopBars,
+        });
+      }
+    } else if (gesture.mode === "tangential" && gesture.planet) {
+      const phase = gesture.previewPhase ?? gesture.planet.descriptor.phase;
+      if (Math.abs(phase - gesture.planet.descriptor.phase) > 0.0001) {
+        this.options.onInteraction?.({
+          type: "set-orbit-phase",
+          entityId: gesture.planet.descriptor.id,
+          phase,
+        });
+      }
+    } else {
+      this.options.onInteraction?.({
+        type: "select",
+        entityId: gesture.entityId,
+      });
+    }
+    this.releaseGesture();
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent): void => {
+    if (!this.gesture || event.pointerId !== this.gesture.pointerId) return;
+    this.releaseGesture();
+  };
+
+  private releaseGesture(): void {
+    if (
+      this.canvas &&
+      this.gesture &&
+      this.canvas.hasPointerCapture(this.gesture.pointerId)
+    ) {
+      this.canvas.releasePointerCapture(this.gesture.pointerId);
+    }
+    this.gesture = null;
+  }
 
   private readonly handleContextLoss = (event: Event): void => {
     event.preventDefault();
@@ -387,16 +626,21 @@ export class SceneController {
     const ticks = this.options.readTransportTicks();
     const now = performance.now();
     for (const [id, runtime] of this.planets) {
+      const activeGesture =
+        this.gesture?.planet === runtime ? this.gesture : undefined;
       const phase = orbitPhaseAtTick(
-        runtime.descriptor.phase,
+        activeGesture?.previewPhase ?? runtime.descriptor.phase,
         ticks,
-        runtime.descriptor.loopBars,
+        activeGesture?.previewLoopBars ?? runtime.descriptor.loopBars,
+        480,
       );
       const angle = phase * Math.PI * 2;
+      const orbitRadius =
+        activeGesture?.previewOrbitRadius ?? runtime.descriptor.orbitRadius;
       runtime.body.position.set(
-        Math.cos(angle) * runtime.descriptor.orbitRadius,
+        Math.cos(angle) * orbitRadius,
         Math.sin(angle * 2) * runtime.descriptor.inclination,
-        Math.sin(angle) * runtime.descriptor.orbitRadius,
+        Math.sin(angle) * orbitRadius,
       );
       const pulsing = (this.pulseExpiry.get(id) ?? 0) > now;
       const selectedScale = id === this.selectedId ? 1.08 : 1;
@@ -405,6 +649,17 @@ export class SceneController {
           ? selectedScale * 1.16
           : selectedScale,
       );
+      const pulsingNodes = new Set<THREE.Mesh>();
+      for (const [eventId, node] of runtime.eventNodes) {
+        if ((this.eventPulseExpiry.get(eventId) ?? 0) > now) {
+          pulsingNodes.add(node);
+        }
+      }
+      for (const node of new Set(runtime.eventNodes.values())) {
+        node.scale.setScalar(
+          pulsingNodes.has(node) && !this.preferences.reducedFlash ? 1.9 : 1,
+        );
+      }
     }
     if (this.star && !this.preferences.reducedMotion) {
       this.star.rotation.y = ticks / 2600;

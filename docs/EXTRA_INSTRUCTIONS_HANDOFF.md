@@ -41,10 +41,10 @@ The source package at `/Users/gugogon/Downloads/cosmic-beatmaker-codex-pack.zip`
 - Cover the interaction metaphor, beginner-safe music system, technical architecture, local development, verification commands, current milestone status, accessibility/mobile goals, and Build Week context.
 - Keep claims aligned with what has actually been implemented.
 
-## Status at relocation
+## Current implementation status
 
 - The complete documentation package has been copied into the GitHub working repository.
-- Early Milestone 0 scaffold work from the misfired location may be imported into the GitHub working repository: package/config files, initial composition types, seeded PRNG, and stable-ID utilities.
-- No dependencies have been installed yet.
-- No Git repository or public GitHub repository has been created yet.
-- No commits or pushes have occurred.
+- All implementation and dependency installation occurred in the canonical GitHub working repository, not the misfired location.
+- The public repository is `https://github.com/fatal-exit/CosmicBeatmaker`.
+- Milestone checkpoint commits are pushed to `main` after verification.
+- The application includes the integrated music domain, audio/visual runtime, editing workflows, persistence, sharing, exports, showcase systems, tests, and GitHub Pages deployment workflow.

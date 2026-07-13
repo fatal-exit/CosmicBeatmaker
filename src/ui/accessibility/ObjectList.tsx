@@ -4,19 +4,21 @@ export interface ObjectListProps {
   composition: Composition;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  headingId?: string;
 }
 
 export function ObjectList({
   composition,
   selectedId,
   onSelect,
+  headingId = "object-list-heading",
 }: ObjectListProps) {
   return (
-    <nav className="object-panel" aria-labelledby="object-list-heading">
+    <nav className="object-panel" aria-labelledby={headingId}>
       <div className="panel-heading-row">
         <div>
           <p className="panel-label">Navigator</p>
-          <h2 id="object-list-heading">Your system</h2>
+          <h2 id={headingId}>Your system</h2>
         </div>
         <span>{composition.planets.length + 1}</span>
       </div>
@@ -40,7 +42,7 @@ export function ObjectList({
             key={planet.id}
             onClick={() => onSelect(planet.id)}
             aria-pressed={selectedId === planet.id}
-            aria-label={`${planet.name}, ${planet.role}, ${planet.soundPresetId}, ${planet.orbit.loopBars} bar loop${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
+            aria-label={`${planet.name}, ${planet.role}, ${planet.soundPresetId}, ${planet.orbit.loopBars} bar loop, ${planet.moons.length} moons${planet.ring ? ", rhythmic ring" : ""}${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
           >
             <span
               aria-hidden="true"
@@ -50,6 +52,9 @@ export function ObjectList({
               <strong>{planet.name}</strong>
               <small>
                 {planet.role} · {planet.orbit.loopBars} bar
+                {planet.moons.length > 0
+                  ? ` · ${planet.moons.length} moon${planet.moons.length === 1 ? "" : "s"}`
+                  : ""}
                 {planet.muted ? " · muted" : ""}
               </small>
             </span>
@@ -60,6 +65,18 @@ export function ObjectList({
             ) : null}
           </button>
         ))}
+        {composition.asteroidBelt ? (
+          <div className="object-row structural-object" role="status">
+            <span
+              aria-hidden="true"
+              className="object-symbol asteroid-symbol"
+            />
+            <span>
+              <strong>Asteroid belt</strong>
+              <small>Seeded irregular percussion</small>
+            </span>
+          </div>
+        ) : null}
       </div>
     </nav>
   );

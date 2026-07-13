@@ -16,6 +16,7 @@ import type {
   AsteroidBeltState,
   Composition,
   LoopBars,
+  MoonState,
   PlanetRole,
   PlanetState,
   RingState,
@@ -59,7 +60,7 @@ import { ProjectMenu } from "../ui/menu/ProjectMenu";
 import { Onboarding } from "../ui/onboarding/Onboarding";
 import { TransportBar } from "../ui/transport/TransportBar";
 
-type OpenPanel = "menu" | "add" | "library" | "export" | null;
+type OpenPanel = "menu" | "add" | "library" | "export" | "mobile-editor" | null;
 
 const repository = new LocalCompositionRepository();
 const SceneCanvas = lazy(async () => {
@@ -107,6 +108,52 @@ function makeAsteroidBelt(): AsteroidBeltState {
     level: 0.24,
     locked: false,
     visualSeed: Date.now() % 100_000,
+  };
+}
+
+function makeMoon(parent: PlanetState): MoonState {
+  const step = Math.max(1, Math.floor(parent.pattern.gridSize * 0.375));
+  return {
+    id: createId("moon"),
+    behaviorPresetId:
+      parent.role === "beat"
+        ? "accent"
+        : parent.role === "bass"
+          ? "pickup"
+          : parent.role === "chords"
+            ? "harmony"
+            : parent.role === "melody"
+              ? "echo"
+              : "counterpulse",
+    pattern: {
+      gridSize: parent.pattern.gridSize,
+      humanize: Math.min(0.12, parent.pattern.humanize + 0.02),
+      events: [
+        {
+          id: createId("event"),
+          step,
+          velocity: 0.58,
+          probability: 0.76,
+          durationSteps: 0.5,
+          ...(parent.role === "beat"
+            ? { drumVoice: "clap" as const }
+            : {
+                pitch: {
+                  kind: "scaleDegree" as const,
+                  degree: parent.role === "bass" ? 0 : 2,
+                  octaveOffset: parent.role === "bass" ? 1 : 0,
+                },
+              }),
+        },
+      ],
+    },
+    orbitRatio: 2,
+    phase: 0.125,
+    level: 0.42,
+    probability: 0.78,
+    appearanceSeed: Date.now() % 100_000,
+    muted: false,
+    locked: false,
   };
 }
 
@@ -174,6 +221,7 @@ export function App() {
   const audioLoadRef = useRef<Promise<AudioEngine> | null>(null);
   const sharedLoadedRef = useRef(false);
   const initializedRef = useRef(false);
+  const exportAbortRef = useRef<AbortController | null>(null);
   const [pulse, setPulse] = useState<VisualPulse | null>(null);
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [focusOpen, setFocusOpen] = useState(false);
@@ -256,6 +304,59 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    if (!openPanel && !focusOpen) return;
+
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const background = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".topbar, .workspace, .macro-bar, .mobile-bottom-sheet",
+      ),
+    );
+    for (const element of background) element.inert = true;
+
+    const dialog = document.querySelector<HTMLElement>(
+      '[role="dialog"][aria-modal="true"]',
+    );
+    const focusableSelector =
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+    const frame = window.requestAnimationFrame(() => {
+      dialog?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    });
+    const handleModalKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpenPanel(null);
+        setFocusOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(focusableSelector),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleModalKey);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleModalKey);
+      for (const element of background) element.inert = false;
+      previousFocus?.focus();
+    };
+  }, [focusOpen, openPanel]);
+
   const readTransportTicks = useCallback(
     () => audioRef.current?.transport.positionTick ?? 0,
     [],
@@ -276,10 +377,10 @@ export function App() {
   };
 
   const startOnboarding = async () => {
-    if (!(await unlockAudio())) return;
+    const audioReady = await unlockAudio();
     if (sharedLoadedRef.current) {
-      audioRef.current?.play();
-      setPlaying(true);
+      if (audioReady) audioRef.current?.play();
+      setPlaying(audioReady);
       setOnboardingStep("complete");
     } else {
       setOnboardingStep("mood");
@@ -287,7 +388,7 @@ export function App() {
   };
 
   const openCompleteDemo = async () => {
-    if (!(await unlockAudio())) return;
+    const audioReady = await unlockAudio();
     const showcase = SHOWCASE_SYSTEMS[0];
     const demo = generateCompleteSystem(showcase.seed, {
       name: showcase.name,
@@ -295,8 +396,8 @@ export function App() {
     });
     replaceComposition(demo);
     audioRef.current?.setComposition(demo);
-    audioRef.current?.play();
-    setPlaying(true);
+    if (audioReady) audioRef.current?.play();
+    setPlaying(audioReady);
     setOnboardingStep("complete");
     localStorage.setItem("cosmic-onboarding-version", "1");
   };
@@ -317,8 +418,8 @@ export function App() {
     const starter = starterForMood(presetId);
     replaceComposition(starter);
     audioRef.current?.setComposition(starter);
-    audioRef.current?.play();
-    setPlaying(true);
+    if (ui.audioStatus === "ready") audioRef.current?.play();
+    setPlaying(ui.audioStatus === "ready");
     setOnboardingStep("add-bass");
   };
 
@@ -419,13 +520,61 @@ export function App() {
     setOpenPanel(null);
   };
 
+  const addMoon = () => {
+    if (!selectedPlanet || selectedPlanet.moons.length >= 3) return;
+    dispatch({
+      type: "AddMoon",
+      planetId: selectedPlanet.id,
+      moon: makeMoon(selectedPlanet),
+    });
+    setOpenPanel(null);
+    setToast(`${selectedPlanet.name} has a new moon.`);
+  };
+
+  const toggleSelectedMute = () => {
+    if (!selectedPlanet) return;
+    dispatch({ type: "TogglePlanetMute", planetId: selectedPlanet.id });
+  };
+
+  const toggleSelectedSolo = () => {
+    if (!selectedPlanet) return;
+    dispatch({ type: "TogglePlanetSolo", planetId: selectedPlanet.id });
+  };
+
+  const toggleSelectedLock = () => {
+    if (!selectedPlanet) return;
+    dispatch({ type: "TogglePlanetLock", planetId: selectedPlanet.id });
+  };
+
+  const openPatternEditor = () => {
+    setOpenPanel(null);
+    setFocusOpen(true);
+  };
+
+  const duplicateSelectedPlanet = () => {
+    if (!selectedPlanet) return;
+    const planet = clonePlanet(selectedPlanet);
+    dispatch({ type: "DuplicatePlanet", planet });
+    selectObject(planet.id);
+  };
+
+  const deleteSelectedPlanet = () => {
+    if (!selectedPlanet) return;
+    dispatch({ type: "RemovePlanet", planetId: selectedPlanet.id });
+    selectObject(composition.star.id);
+  };
+
   const exportWav = async () => {
+    const controller = new AbortController();
+    exportAbortRef.current?.abort();
+    exportAbortRef.current = controller;
     setExportStatus("working");
     setExportMessage("Preparing sounds…");
     try {
       const { renderCompositionToWav } = await import("../audio");
       const wav = await renderCompositionToWav(composition, {
         loops: repetitions,
+        signal: controller.signal,
         onProgress: ({ phase, progress }) =>
           setExportMessage(
             `${phase === "compiling" ? "Preparing" : phase === "rendering" ? "Rendering" : "Encoding"}… ${Math.round(progress * 100)}%`,
@@ -437,11 +586,19 @@ export function App() {
       );
       setExportStatus("idle");
       setToast("WAV export ready.");
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setExportStatus("idle");
+        setExportMessage("");
+        setToast("WAV export cancelled.");
+        return;
+      }
       setExportStatus("error");
       setExportMessage(
         "WAV rendering is unavailable here. Your MIDI and project JSON are still safe.",
       );
+    } finally {
+      if (exportAbortRef.current === controller) exportAbortRef.current = null;
     }
   };
 
@@ -464,6 +621,27 @@ export function App() {
     }
   };
 
+  const handleSceneOrbitChange = useCallback(
+    (planetId: string, loopBars: LoopBars) => {
+      selectObject(planetId);
+      dispatch({ type: "SetPlanetLoopBars", planetId, loopBars });
+      if (ui.onboardingStep === "orbit") {
+        setOnboardingStep("complete");
+        localStorage.setItem("cosmic-onboarding-version", "1");
+        setToast("You made your first cosmic groove.");
+      }
+    },
+    [dispatch, selectObject, setOnboardingStep, ui.onboardingStep],
+  );
+
+  const handleScenePhaseChange = useCallback(
+    (planetId: string, phase: number) => {
+      selectObject(planetId);
+      dispatch({ type: "SetPlanetPhase", planetId, phase });
+    },
+    [dispatch, selectObject],
+  );
+
   return (
     <main className="app-shell">
       <TransportBar
@@ -471,6 +649,7 @@ export function App() {
         bpm={composition.bpm}
         isPlaying={ui.isPlaying}
         audioReady={ui.audioStatus === "ready"}
+        audioError={ui.audioStatus === "error"}
         canUndo={canUndo}
         canRedo={canRedo}
         saveState={saveStatus.state}
@@ -510,6 +689,8 @@ export function App() {
               readTransportTicks={readTransportTicks}
               pulse={pulse}
               onSelect={selectObject}
+              onOrbitLoopBarsChange={handleSceneOrbitChange}
+              onOrbitPhaseChange={handleScenePhaseChange}
             />
           </Suspense>
           <div className="scene-status">
@@ -541,41 +722,14 @@ export function App() {
         </section>
         <PlanetInspector
           planet={selectedPlanet}
-          onMute={() =>
-            selectedPlanet &&
-            dispatch({
-              type: "TogglePlanetMute",
-              planetId: selectedPlanet.id,
-            })
-          }
-          onSolo={() =>
-            selectedPlanet &&
-            dispatch({
-              type: "TogglePlanetSolo",
-              planetId: selectedPlanet.id,
-            })
-          }
-          onLock={() =>
-            selectedPlanet &&
-            dispatch({
-              type: "TogglePlanetLock",
-              planetId: selectedPlanet.id,
-            })
-          }
+          onMute={toggleSelectedMute}
+          onSolo={toggleSelectedSolo}
+          onLock={toggleSelectedLock}
           onOrbit={setOrbit}
-          onPattern={() => setFocusOpen(true)}
+          onPattern={openPatternEditor}
           onRing={addRing}
-          onDuplicate={() => {
-            if (!selectedPlanet) return;
-            const planet = clonePlanet(selectedPlanet);
-            dispatch({ type: "DuplicatePlanet", planet });
-            selectObject(planet.id);
-          }}
-          onDelete={() => {
-            if (!selectedPlanet) return;
-            dispatch({ type: "RemovePlanet", planetId: selectedPlanet.id });
-            selectObject(composition.star.id);
-          }}
+          onDuplicate={duplicateSelectedPlanet}
+          onDelete={deleteSelectedPlanet}
         />
       </div>
 
@@ -605,12 +759,8 @@ export function App() {
             </small>
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setFocusOpen(true)}
-          disabled={!selectedPlanet}
-        >
-          Edit pattern
+        <button type="button" onClick={() => setOpenPanel("mobile-editor")}>
+          Controls
         </button>
         {selectedPlanet ? (
           <label className="mobile-orbit-control">
@@ -672,8 +822,12 @@ export function App() {
       {openPanel === "add" ? (
         <AddObjectPanel
           selectedHasRing={Boolean(selectedPlanet?.ring)}
+          selectedCanAddMoon={
+            Boolean(selectedPlanet) && (selectedPlanet?.moons.length ?? 3) < 3
+          }
           canAddAsteroids={!composition.asteroidBelt}
           onRole={addRole}
+          onMoon={addMoon}
           onRing={addRing}
           onAsteroids={() => {
             dispatch({ type: "SetAsteroidBelt", belt: makeAsteroidBelt() });
@@ -706,8 +860,52 @@ export function App() {
           onWav={exportWav}
           onMidi={exportMidi}
           onJson={() => downloadCompositionJson(composition)}
-          onClose={() => setOpenPanel(null)}
+          onCancel={() => exportAbortRef.current?.abort()}
+          onClose={() => {
+            exportAbortRef.current?.abort();
+            setOpenPanel(null);
+          }}
         />
+      ) : null}
+      {openPanel === "mobile-editor" ? (
+        <section
+          className="side-sheet mobile-editor-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-editor-heading"
+        >
+          <header>
+            <div>
+              <p className="panel-label">Accessible editor</p>
+              <h2 id="mobile-editor-heading">Objects and controls</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenPanel(null)}
+              aria-label="Close object controls"
+            >
+              ×
+            </button>
+          </header>
+          <ObjectList
+            composition={composition}
+            selectedId={ui.selectedObjectId}
+            onSelect={selectObject}
+            headingId="mobile-object-list-heading"
+          />
+          <PlanetInspector
+            planet={selectedPlanet}
+            headingId="mobile-inspector-heading"
+            onMute={toggleSelectedMute}
+            onSolo={toggleSelectedSolo}
+            onLock={toggleSelectedLock}
+            onOrbit={setOrbit}
+            onPattern={openPatternEditor}
+            onRing={addRing}
+            onDuplicate={duplicateSelectedPlanet}
+            onDelete={deleteSelectedPlanet}
+          />
+        </section>
       ) : null}
       {focusOpen ? (
         <FocusView

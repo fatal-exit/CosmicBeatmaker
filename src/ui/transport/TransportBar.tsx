@@ -5,6 +5,7 @@ export interface TransportBarProps {
   bpm: number;
   isPlaying: boolean;
   audioReady: boolean;
+  audioError?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   saveState: string;
@@ -101,7 +102,11 @@ export function TransportBar(props: TransportBarProps) {
         </button>
       </div>
       {!props.audioReady ? (
-        <span className="audio-lock">Audio starts on first play</span>
+        <span className="audio-lock">
+          {props.audioError
+            ? "Audio unavailable — press Play to retry"
+            : "Audio starts on first play"}
+        </span>
       ) : null}
     </header>
   );

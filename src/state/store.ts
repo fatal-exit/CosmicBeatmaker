@@ -61,15 +61,47 @@ export interface AppStore {
 
 const starter = createStarterComposition();
 
+function readStoredQuality(): EphemeralUiState["quality"] {
+  if (typeof localStorage === "undefined") return "auto";
+  try {
+    const value = localStorage.getItem("cosmic-quality");
+    return value === "low" ||
+      value === "balanced" ||
+      value === "high" ||
+      value === "auto"
+      ? value
+      : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+const prefersReducedMotion =
+  typeof matchMedia !== "undefined" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export const useAppStore = create<AppStore>((set) => ({
   compositionHistory: createHistory(starter),
   ui: {
     selectedObjectId: starter.planets[0]?.id ?? null,
     inspectorExpanded: false,
     announcement: "First Light is ready.",
-    quality: "auto",
-    reducedEffects: false,
-    reducedFlash: false,
+    quality: readStoredQuality(),
+    reducedEffects: readStoredBoolean(
+      "cosmic-reduced-effects",
+      prefersReducedMotion,
+    ),
+    reducedFlash: readStoredBoolean("cosmic-reduced-flash", false),
     onboardingStep: "enter",
     audioStatus: "locked",
     isPlaying: false,
