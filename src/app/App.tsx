@@ -86,10 +86,16 @@ function bytesToBlob(bytes: Uint8Array, type: string): Blob {
   return new Blob([copy.buffer], { type });
 }
 
-function makeRing(): RingState {
+function ringTypeForRole(role: PlanetRole): RingState["type"] {
+  if (role === "beat") return "hat";
+  if (role === "texture") return "shaker";
+  return "perc";
+}
+
+function makeRing(role: PlanetRole): RingState {
   return {
     id: createId("ring"),
-    type: "hat",
+    type: ringTypeForRole(role),
     segments: 16,
     active: Array.from({ length: 16 }, (_, step) => step % 2 === 0),
     phase: 0,
@@ -564,7 +570,7 @@ export function App() {
     dispatch({
       type: "SetRing",
       planetId: selectedPlanet.id,
-      ring: makeRing(),
+      ring: makeRing(selectedPlanet.role),
     });
     setOpenPanel(null);
   };

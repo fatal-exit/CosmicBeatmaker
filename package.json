@@ -11,7 +11,9 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "samples:build": "node scripts/process-samples.mjs",
+    "samples:build": "node scripts/build-samples.mjs",
+    "samples:authored": "node scripts/process-samples.mjs",
+    "samples:render": "node scripts/render-procedural-samples.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

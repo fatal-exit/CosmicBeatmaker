@@ -186,7 +186,7 @@ Give the existing instrument a richer, coherent material identity and clearer ta
 
 ### Status
 
-Milestone 7 implementation now includes the procedural materials, glow, microinteraction, orbit-gate, rhythm-preset, transport-aligned spawn, camera-navigation, and live deterministic macro-derived pattern scope. Review fixes have landed, and the primary agent is rerunning the complete format, typecheck, lint, test, build, E2E, and real-browser acceptance set. The checkpoint is not complete until that re-verification passes; commit, push, and deployment remain pending.
+Milestone 7 is delivered in checkpoint `6474aee`, with an additional accessible planet-destruction microinteraction in the following polish revision. It includes the procedural materials, glow, microinteraction, orbit-gate, rhythm-preset, transport-aligned spawn, camera-navigation, and live deterministic macro-derived pattern scope. Format, typecheck, lint, unit, build, E2E, and deployed-browser acceptance checks passed.
 
 Physical iOS and Android performance and listening checks remain an unverified release task. Mobile viewport automation supports interaction and rendering acceptance but does not establish physical-device frame rate, thermal behavior, touch latency, or audio quality.
 
@@ -241,7 +241,7 @@ Physical iOS and Android performance and listening checks remain an unverified r
 
 This milestone does not add procedural terrain simulation, a full-screen compositor, a parallel gate sequencer, new musical behavior, a new top-level creative-control hierarchy, or new runtime dependencies. Rhythm presets and Focus View continue to edit the existing canonical pattern model; gates and spawn markers are scene projections only. Camera navigation is an accessible renderer control surface and never becomes composition data.
 
-### Implementation stopping condition — re-verification in progress
+### Implementation stopping condition — complete
 
 The milestone stops when the primary re-verification confirms that the five showcase systems retain their role and star-preset identities; seeded surfaces remain stable; deterministic macro projections drive both audio and gates without mutating canonical patterns; preset and Focus View gates remain exact; transport-aligned spawning and camera navigation retain their tested behavior; renderer-only state stays out of serialization and history; low-quality and reduced-motion modes retain all musical state cues; and the complete quality suite and real-browser WebGL review remain green without adding a post-processing pipeline.
 
@@ -262,7 +262,7 @@ Prove a small authored sample pack can be processed repeatably, delivered effici
 
 ### Status
 
-The 20-asset pilot, generated manifest, processor, runtime mappings, lazy Tone playback, playback envelopes, and synth fallback are implemented locally. Primary verification, diff review, checkpoint commit, push, and deployment remain pending. Physical-device listening has not been completed.
+The 20-user-authored-asset pilot, generated manifest, processor, runtime mappings, lazy Tone playback, playback envelopes, and synth fallback are delivered in checkpoint `6474aee`. Repository and deployed-browser verification passed. Physical-device listening has not been completed.
 
 ### Deliverables
 
@@ -270,8 +270,8 @@ The 20-asset pilot, generated manifest, processor, runtime mappings, lazy Tone p
 - Explicit rerun prerequisites: `ffmpeg`, `ffprobe`, and Xiph `oggenc` on `PATH`
 - Terminal-silence trimming only for at least 120 ms below -60 dBFS, with 30 ms retained after the audible tail and internal or authored reverberant space preserved
 - No processor gain or normalization and no mutation of raw input WAVs
-- Stereo 48 kHz Ogg Vorbis quality-5 delivery for all 20 current first-party assets, encoded through Xiph `oggenc`
-- A committed 20-entry generated manifest with stable URLs plus source, output, processing, level, license, authorship, and per-sample attack/release metadata
+- Stereo 48 kHz Ogg Vorbis quality-5 delivery for all 20 current user-authored assets, encoded through Xiph `oggenc`
+- A committed 20-entry authored-pilot manifest with stable URLs plus source, output, processing, level, license, authorship, and per-sample attack/release metadata
 - Near-immediate attack for punchy transients, optional subtle fade-in for softer or style-dependent samples, and release before the file boundary for the 2.182-second long assets
 - Lazy Tone sample playback for active live presets with an event-for-event synthesized fallback while loading or after fetch, decode, or trigger failure
 - Existing synth-only offline WAV rendering and canonical MIDI export preserved unchanged
@@ -279,7 +279,7 @@ The 20-asset pilot, generated manifest, processor, runtime mappings, lazy Tone p
 
 ### Acceptance
 
-- Running `npm run samples:build` with the three prerequisite tools available discovers the current WAV inputs in stable order and produces exactly 20 `.ogg` files plus a 20-entry schema-versioned manifest.
+- Running `npm run samples:build` with the three prerequisite tools available discovers the current user-authored WAV inputs in stable order and produces exactly 20 `.ogg` files plus a 20-entry schema-versioned authored manifest before any later procedural merge.
 - Every generated asset decodes as stereo 48 kHz Ogg Vorbis quality 5, has a unique stable ID and base-path-safe URL, and is represented once in the runtime manifest and a live sound-preset mapping.
 - The processor trims only terminal silence meeting the 120 ms and -60 dBFS policy, retains 30 ms after the audible tail, and preserves internal gaps, short endings, and identified long or reverberant tails.
 - No processing step applies gain or normalization. Manifest level metadata supports review of the source and decoded output without treating lossy-codec peak movement as normalization.
@@ -295,7 +295,7 @@ This pilot does not add a sample marketplace, user sample import, stems, sample-
 
 ### Stopping condition
 
-The primary agent reruns the processor and complete repository quality suite, confirms the 20 generated assets and manifest policy, exercises lazy load and failure fallback, verifies WAV and MIDI regressions remain green, confirms no raw WAV is tracked, and reviews live sample playback without clipped or missing events. Only then may the checkpoint be committed and pushed for deployment; physical iOS and Android listening remains a separate release task.
+The primary agent reruns the processor and complete repository quality suite, confirms the 20 user-authored outputs and manifest policy, exercises lazy load and failure fallback, verifies WAV and MIDI regressions remain green, confirms no raw WAV is tracked, and reviews live sample playback without clipped or missing events. Only then may the checkpoint be committed and pushed for deployment; physical iOS and Android listening remains a separate release task.
 
 ## Milestone 9 — Exact Polymeter & Unique Orbit Lanes
 
@@ -334,6 +334,47 @@ This milestone does not add arbitrary decimal rates, user-authored time signatur
 ### Stopping condition
 
 The primary agent reviews the complete diff; runs format, typecheck, lint, unit tests, production build, and the critical E2E suite; verifies the 3 + 4 and 6 + 8 acceptance cases; checks unique lanes and outline legibility at phone and desktop sizes; then commits and pushes the coherent checkpoint and monitors the Pages smoke test. Physical iOS and Android timing, zoom, and listening checks remain separate release tasks.
+
+## Milestone 10 — Procedural Runtime Sample Cache
+
+### Goal
+
+Move the remaining computationally heavier live synth patches to compact, deterministic cached audio while retaining the synth engine as a reliable loading/error fallback and the offline-render baseline.
+
+### Status
+
+The renderer has produced 41 procedural Ogg assets and merged them with the 20 user-authored assets into a 61-entry manifest. Runtime mappings cover the four rendered drum kits, rendered chord and texture voices, and ring/asteroid percussion. A baked sample that is ready before its first event avoids constructing the fallback synth graph; a loading-time graph becomes idle after readiness and is retained only until normal voice disposal so scheduled events remain safe. Two complete rebuilds produced the same digest, and format, typecheck, lint, unit, and production-build checks pass. Physical-device listening remains pending.
+
+### Deliverables
+
+- A dependency-free `scripts/render-procedural-samples.mjs` renderer invoked with `npm run samples:render`, and automatically after the default authored `npm run samples:build` stage
+- A transactional `scripts/build-samples.mjs` orchestrator that builds outside `public/`, accepts future authored inventory growth, validates the whole pack, and rolls back both pack and runtime inventory on promotion failure
+- Deterministic 48 kHz PCM16 synthesis keyed by stable definition/channel IDs and synthesis version, followed by fixed Ogg Vorbis quality-5 encoding arguments
+- 28 mono drum transients spanning four style families and seven voices each, plus four mono auxiliary transients
+- Eight stereo C4 tonal/texture assets and one stereo C2 drone, with runtime transposition from their declared roots after integration
+- A merged 61-entry manifest that retains the 20 authored outputs and records procedural synthesis version, channels, levels, envelope metadata, and a fixed-gain peak policy
+- A generated TypeScript runtime inventory refreshed from the same 41 definitions
+- Lazy sample loading after audio unlock with synth fallback constructed only when loading, fetch, decode, or trigger state requires it
+
+### Acceptance
+
+- Starting from the 20-entry authored manifest, running `npm run samples:render` with `ffmpeg`, `ffprobe`, and Xiph `oggenc` available produces exactly 41 procedural Ogg files and a 61-entry merged manifest.
+- Repeating the render under the same renderer and codec toolchain preserves stable IDs, inventory, channel counts, synthesis-version metadata, and encoded output.
+- The procedural set contains exactly 32 mono transient assets and nine stereo tonal/texture assets; all decode as 48 kHz Ogg Vorbis and remain below the encoded peak safety threshold.
+- The tonal cache uses C4 (MIDI 60) for eight assets and C2 (MIDI 36) for the low drone; preset mappings transpose from those roots rather than baking composition notes into the files.
+- Runtime integration maps every intended remaining live patch without changing composition schema, timing, or preset IDs. Until an asset is ready, and after any sample failure, the same scheduled event uses the prior synth implementation.
+- A sample that is ready before its first event constructs no fallback synth. A loading fallback stops receiving events after readiness but remains valid until voice disposal so lookahead-scheduled notes cannot be disconnected prematurely.
+- The authored processor still rebuilds its 20 inputs independently, and the procedural renderer never mutates or reclassifies those raw masters.
+- The canonical complete build discovers the authored count dynamically; adding a twenty-first source does not require a builder code change.
+- Offline WAV remains on the deterministic synth renderer and MIDI remains sample-independent unless a later recorded decision explicitly changes that boundary.
+
+### Scope boundary
+
+This milestone does not add user sample import, a sample marketplace, streaming, stems, sample-based offline WAV rendering, or runtime procedural synthesis. It caches first-party patch definitions as build artifacts and preserves existing fallback behavior.
+
+### Stopping condition
+
+The primary agent reruns both asset commands and the complete repository quality suite; verifies the exact 20 + 41 inventory, manifest/runtime alignment, C-root transposition, loading and forced-failure fallback, base-path URLs, and no-clipping policy; performs desktop and mobile listening review; then commits and deploys the coherent checkpoint. Physical iOS and Android listening remains a separate release task.
 
 ## Nine-day build sequence
 

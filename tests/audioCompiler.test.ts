@@ -121,4 +121,35 @@ describe("composition audio compiler", () => {
     expect(orbitPhaseAtTick(480, 1, 0.25)).toBe(0.5);
     expect(orbitPhaseAtTick(1_920, 1, 0.25)).toBe(0.25);
   });
+
+  it("routes each ring type to its dedicated orbital sample voice", () => {
+    const expectedVoices = {
+      hat: "closed-hat",
+      shaker: "open-hat",
+      perc: "perc",
+    } as const;
+
+    for (const [type, drumVoice] of Object.entries(expectedVoices)) {
+      const composition = createStarterComposition(`compiler-ring-${type}`);
+      composition.planets[0].ring = {
+        id: `ring-${type}`,
+        type: type as keyof typeof expectedVoices,
+        segments: 8,
+        active: [true, false, false, false, false, false, false, false],
+        phase: 0,
+        velocityVariation: 0,
+        probability: 1,
+        soundPresetId: "orbital-hat",
+        level: 0.4,
+      };
+
+      const ringEvents = compileComposition(composition).occurrences.filter(
+        (event) => event.sourceKind === "ring",
+      );
+      expect(ringEvents).not.toHaveLength(0);
+      expect(ringEvents.every((event) => event.drumVoice === drumVoice)).toBe(
+        true,
+      );
+    }
+  });
 });

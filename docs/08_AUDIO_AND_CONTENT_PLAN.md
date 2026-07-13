@@ -109,7 +109,7 @@ Each star preset selects recommended sounds and effect defaults.
 ## Asset constraints
 
 - Keep initial download reasonable for mobile.
-- Preserve the authored channel layout; the current 20 pilot sources and outputs are stereo.
+- Preserve the authored channel layout; the 20 user-authored pilot sources and their processed outputs are stereo. Separately generated procedural transients may be mono by design.
 - Do not normalize or apply gain in the sample processor. Author loudness in the source or runtime mix instead.
 - Trim only qualified terminal silence according to the documented pilot policy; preserve internal gaps and authored reverb tails.
 - Deliver web samples at a consistent 48 kHz sample rate.
@@ -122,7 +122,7 @@ Each star preset selects recommended sounds and effect defaults.
 
 ### Current local status
 
-The pilot contains 20 first-party assets and a generated manifest under `public/audio/cosmic-samples/`. The generated Ogg set is 654,518 bytes from 12,571,120 source bytes, or 5.2% of the source size. The repeatable processor and lazy live-playback path are implemented locally. Primary verification, checkpoint commit, push, and deployment remain pending. Physical iOS and Android listening is not yet verified.
+The authored pilot contains 20 user-created source inputs and 20 processed assets under `public/audio/cosmic-samples/`. That authored Ogg subset is 654,518 bytes from 12,571,120 source bytes, or 5.2% of the source size. The deterministic renderer adds 41 procedural runtime assets, bringing the merged manifest to 61 entries and 1,208,325 encoded bytes. Asset generation, preset integration, auxiliary ring/asteroid coverage, lazy synth-fallback construction, deterministic rebuild verification, and the automated regression suite are complete. Physical iOS/Android listening remains pending.
 
 ### Repeatable processor
 
@@ -132,7 +132,7 @@ Run from any working directory:
 npm run samples:build
 ```
 
-The package command runs `node scripts/process-samples.mjs`. Optional `--input <dir>` and `--output <dir>` flags support controlled reruns through `npm run samples:build -- --input <dir> --output <dir>`. The default input is the ignored local `sample inputs/` directory, and the default output is `public/audio/cosmic-samples/`.
+The package command runs `scripts/build-samples.mjs`, which builds the authored subset and procedural extension in a sibling staging directory outside `public/`, validates the complete manifest/file/runtime contract, then promotes the pack directory and generated TypeScript inventory together. Promotion has rollback coverage, so a renderer or swap failure leaves the last good pack intact. The authored count is discovered rather than fixed at 20, allowing future WAV additions without changing the builder. Optional `--input <dir>` and `--output <dir>` flags support controlled authored-subset reruns through `npm run samples:authored -- --input <dir> --output <dir>`. The default input is the ignored local `sample inputs/` directory, and the default output is `public/audio/cosmic-samples/`.
 
 Rerun prerequisites available on `PATH`:
 
@@ -151,6 +151,27 @@ The processor:
 
 Raw WAV inputs remain local and uncommitted. Generated Ogg assets and their manifest are the reviewable repository artifacts.
 
+### Deterministic procedural extension
+
+The procedural renderer turns the remaining built-in patch designs into cached audio without adding new raw masters:
+
+```bash
+npm run samples:render
+```
+
+Run `npm run samples:build` first when rebuilding from an empty output directory, because the procedural renderer merges into the authored manifest rather than replacing it. It uses the same `ffmpeg`, `ffprobe`, and Xiph `oggenc` prerequisites.
+
+The current procedural inventory contains:
+
+- 28 mono drum transients: seven voices for each of four style families
+- Four mono auxiliary ring and asteroid transients
+- Eight stereo tonal or texture assets rendered at C4 (MIDI 60)
+- One stereo low drone rendered at C2 (MIDI 36)
+
+Definitions, synthesis version `1.0.0`, stable asset/channel identifiers, and a seeded local pseudo-random generator determine the 48 kHz PCM16 render. Xiph `oggenc` then uses quality 5, discarded comments, and serial 0. Under the same renderer and codec toolchain, reruns reproduce the asset inventory and encoded output; manifest metadata records the synthesis version, channel contract, level measurements, and fixed patch-gain peak policy. Source and encoded duration, codec, channel, sample-rate, audibility, peak, and size bounds are validated before promotion. The command preserves every authored entry, replaces the procedural subset, removes only canonical procedural files, writes the merged manifest, and regenerates `src/content/generatedProceduralSampleAssets.ts`.
+
+Procedural generation is a content-build optimization, not permission to remove runtime resilience. Synthesis remains the event-for-event fallback while a generated asset is loading or if fetch, decode, or trigger fails.
+
 ### Silence and encoding policy
 
 - Detect silence below -60 dBFS.
@@ -158,7 +179,7 @@ Raw WAV inputs remain local and uncommitted. Generated Ogg assets and their mani
 - Retain 30 ms after the detected audible tail.
 - Preserve internal silence, shorter terminal gaps, and long or reverberant tails.
 - Apply no gain, peak normalization, or loudness normalization.
-- Resample to 48 kHz and preserve the authored channel layout; all 20 current sources and outputs are stereo.
+- Resample to 48 kHz and preserve the authored channel layout; all 20 user-authored sources and outputs are stereo. The separate procedural renderer deliberately emits 32 mono transient assets and nine stereo tonal/texture assets.
 - Encode with Xiph `oggenc` at Ogg Vorbis quality 5, discard comments, and use serial 0 for repeatable output.
 
 ### Generated manifest contract
@@ -171,7 +192,14 @@ export interface FirstPartySampleManifest {
     codec: "Ogg Vorbis";
     sampleRate: 48000;
     quality: 5;
-    generatedBy: "node scripts/process-samples.mjs";
+    generatedBy: string;
+    proceduralSynthesis?: {
+      version: string;
+      renderer: "deterministic PCM16 offline synthesis";
+      transientChannels: 1;
+      tonalChannels: 2;
+      peakPolicy: string;
+    };
     trimPolicy: {
       thresholdDb: -60;
       minimumTerminalSilenceSeconds: 0.12;
@@ -196,6 +224,8 @@ export interface AudioAssetManifestEntry {
   encodedPeakDb: number | null;
   attackSeconds: number;
   releaseSeconds: number;
+  sourceKind?: "procedural";
+  synthesisVersion?: string;
 }
 ```
 
@@ -203,21 +233,24 @@ The generated manifest retains processing, byte-size, source, output, level, lic
 
 ### Live playback and export boundary
 
-- Tone sample voices load lazily for the active track preset after audio unlock.
+- Authored and procedural sample voices load lazily for the active track preset after audio unlock.
 - While a sample is loading, or after a fetch, decode, or trigger failure, the same scheduled event uses the synthesized fallback voice.
+- A baked sample that is ready before its first event does not construct a fallback synth graph. If loading required synthesis, that graph remains idle after readiness until normal voice disposal so already-scheduled fallback events cannot be disconnected before their audio time.
 - Runtime URLs resolve below the Vite repository base path rather than the domain root.
 - Live playback may use the first-party samples, but offline WAV rendering remains synth-only for this pilot.
 - MIDI export remains on the existing canonical note-event path and has no sample dependency.
 
 This boundary keeps live playback resilient and preserves the existing deterministic WAV and MIDI export paths while sample compatibility is proven.
 
-### Provisional preset substitutions
+### Active preset mapping
 
-The pilot intentionally substitutes the supplied assets across the current live preset catalog so they can be evaluated in musical context before the final content pass. Tonal sources are authored on C: low assets map from C2 (MIDI 36), mid assets from C3 (MIDI 48), and high assets from C4 (MIDI 60), with Tone transposing from those roots into the composition's active scale and chord voicing. `sub-short` and `chunk-bass-short` cover compact bass presets; their long versions cover rough, drone, and sustained bass roles; and the reverb square-saw sources provisionally cover chord and texture presets. The six new lead mappings are `signal-lead` to high-long, `ice-bell` to high-short, `midnight-lead` to mid-long, `star-pluck` to mid-short, `deep-signal` to low-long, and `organic-mallet` to low-short. All six presets are selectable and used by mood palettes. These are replaceable content mappings rather than composition-schema choices, so a more suitable future sample can replace any assignment without invalidating saves or changing pattern data.
+Authored tonal sources use C roots: low assets map from C2 (MIDI 36), mid assets from C3 (MIDI 48), and high assets from C4 (MIDI 60), with Tone transposing from those roots into the composition's active scale and chord voicing. `sub-short`, `chunk-bass-short`, and their long versions cover the four bass presets. The six imported lead variants cover all six selectable melody presets. Clean Orbit retains the compact imported techno kit, including the dark hat, while Metallic Array uses the imported crash as its current open-hat alternative; the other beat slots use their dedicated rendered kits. Soft Keys, Glass Chords, Pulsing Synth, Radio, Nebula, Mechanical, Void Drone, ring, and asteroid presets use purpose-built procedural renders. Hat, shaker, and percussion rings route to distinct generated voices, and newly added rings choose a type from their parent planet role. Warm Pad and Dust retain the imported reverb square/saw sources after comparison; their two procedural renders remain versioned alternatives rather than creating duplicate live samplers.
+
+These are replaceable content mappings rather than composition-schema choices, so a more suitable future sample can replace any assignment without invalidating saves or changing pattern data.
 
 ### Future arrivals
 
-The processor is intentionally inventory-agnostic. New first-party WAVs can be added to the ignored input directory and incorporated by rerunning the same command. Stable ID collision checks, generated metadata, stale-output cleanup, and manifest/runtime alignment tests keep the pack scalable; assigning a new asset to a sound preset remains an intentional reviewed content decision.
+The authored processor is intentionally inventory-agnostic. New first-party WAVs can be added to the ignored input directory and incorporated by rerunning the same command. Procedural arrivals are added as versioned renderer definitions and regenerated through the separate command. Stable ID collision checks across both sets, generated metadata, stale-output cleanup, and manifest/runtime alignment tests keep the pack scalable; assigning any new asset to a sound preset remains an intentional reviewed content decision.
 
 ## Audio routing
 

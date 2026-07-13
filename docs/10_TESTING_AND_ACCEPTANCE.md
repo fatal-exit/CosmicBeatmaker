@@ -89,6 +89,18 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Scheduled sample overlap never exceeds the six-source drum or sixteen-source pitched budgets.
 - The master applies 0.72 headroom before a -3 dB limiter and health failure fades to zero over 15 ms.
 
+### Sample content pipeline
+
+- The authored processor produces exactly 20 user-authored outputs before the procedural merge.
+- The procedural renderer adds exactly 41 assets for a 61-entry merged manifest without mutating the authored inputs or entries.
+- The canonical builder discovers future authored additions dynamically, stages outside the deploy tree, and restores the prior pack and runtime inventory after an injected promotion failure.
+- Procedural reruns under the same renderer and codec toolchain preserve stable IDs, inventory, channel contracts, synthesis-version metadata, and encoded output.
+- The procedural inventory contains 32 mono transients, eight stereo C4 tonal/texture assets, and one stereo C2 drone, all at 48 kHz with safe encoded peaks.
+- The generated TypeScript inventory and manifest agree on every procedural ID, URL, duration, category, attack, and release value.
+- Unsafe IDs, stale procedural paths, non-finite or silent PCM, duration/format drift, and excessive encoded size fail before promotion.
+- Until runtime preset integration is complete, unmapped patches continue using synth voices. Once mapped, loading and forced sample failures still trigger the same scheduled event through the synth fallback.
+- Offline WAV output remains deterministic and synth-based; MIDI remains independent of sample availability.
+
 ### Scene reconciliation
 
 - Add creates exactly one runtime object set.

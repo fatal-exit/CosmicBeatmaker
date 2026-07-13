@@ -107,7 +107,7 @@ function ringPattern(
   active: readonly boolean[],
   probability: number,
   velocityVariation: number,
-  drumVoice: "closed-hat" | "perc",
+  drumVoice: "closed-hat" | "open-hat" | "perc",
 ): PatternState {
   const events: PatternEvent[] = [];
   for (let step = 0; step < active.length; step += 1) {
@@ -217,7 +217,11 @@ function gatherTrackSources(
             ring.active,
             ring.probability,
             ring.velocityVariation,
-            ring.type === "hat" ? "closed-hat" : "perc",
+            ring.type === "hat"
+              ? "closed-hat"
+              : ring.type === "shaker"
+                ? "open-hat"
+                : "perc",
           ),
           loopTicks,
           phase: normalizePhase(planet.orbit.phase + ring.phase),

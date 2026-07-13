@@ -526,11 +526,21 @@ class PitchedSampleVoice implements OptionalSampleVoice {
 class SampleWithFallbackVoice implements RuntimeVoice {
   private sampleDisabled = false;
   private disposed = false;
+  private fallback: RuntimeVoice | undefined;
+  private readonly createFallback: () => RuntimeVoice;
+  private latestTrack: CompiledTrack | undefined;
 
   constructor(
     private readonly sample: OptionalSampleVoice,
-    private readonly fallback: RuntimeVoice,
-  ) {}
+    fallback: RuntimeVoice | (() => RuntimeVoice),
+  ) {
+    if (typeof fallback === "function") {
+      this.createFallback = fallback;
+    } else {
+      this.fallback = fallback;
+      this.createFallback = () => fallback;
+    }
+  }
 
   trigger(
     occurrence: ScheduledOccurrence,
@@ -549,34 +559,45 @@ class SampleWithFallbackVoice implements RuntimeVoice {
         this.sampleDisabled = true;
       }
     }
-    this.fallback.trigger(occurrence, scheduledAudioTime, bpm);
+    this.getFallback().trigger(occurrence, scheduledAudioTime, bpm);
   }
 
   update(track: CompiledTrack): void {
     if (this.disposed) return;
+    this.latestTrack = track;
     this.sample.update?.(track);
-    this.fallback.update?.(track);
+    this.fallback?.update?.(track);
   }
 
   releaseAll(scheduledAudioTime?: number): void {
     if (this.disposed) return;
     this.sample.releaseAll?.(scheduledAudioTime);
-    this.fallback.releaseAll?.(scheduledAudioTime);
+    this.fallback?.releaseAll?.(scheduledAudioTime);
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.releaseAll();
+    this.sample.releaseAll?.();
+    this.fallback?.releaseAll?.();
     this.disposed = true;
     this.sample.dispose();
-    this.fallback.dispose();
+    this.fallback?.dispose();
+    this.fallback = undefined;
+  }
+
+  private getFallback(): RuntimeVoice {
+    if (!this.fallback) {
+      this.fallback = this.createFallback();
+      if (this.latestTrack) this.fallback.update?.(this.latestTrack);
+    }
+    return this.fallback;
   }
 }
 
 /** Exported for focused routing tests without constructing a Web Audio context. */
 export function createSampleWithFallbackVoice(
   sample: OptionalSampleVoice,
-  fallback: RuntimeVoice,
+  fallback: RuntimeVoice | (() => RuntimeVoice),
 ): RuntimeVoice {
   return new SampleWithFallbackVoice(sample, fallback);
 }
@@ -610,15 +631,14 @@ export function createLiveVoice(
   track: CompiledTrack,
   output: InputNode,
 ): RuntimeVoice {
-  const fallback = createFallbackVoice(track, output);
   const definition = getSampleVoicePreset(track.soundPresetId);
-  if (!definition) return fallback;
+  if (!definition) return createFallbackVoice(track, output);
   try {
     return createSampleWithFallbackVoice(
       createOptionalSampleVoice(track, output, definition),
-      fallback,
+      () => createFallbackVoice(track, output),
     );
   } catch {
-    return fallback;
+    return createFallbackVoice(track, output);
   }
 }

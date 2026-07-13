@@ -3,6 +3,7 @@ import type {
   PlanetRole,
   StarPresetId,
 } from "../domain/composition/types";
+import { PROCEDURAL_SAMPLE_ASSETS } from "./generatedProceduralSampleAssets";
 
 export interface SoundPresetDefinition {
   id: string;
@@ -113,6 +114,8 @@ export interface AudioSampleAssetDefinition {
   durationSeconds: number;
   attackSeconds: number;
   releaseSeconds: number;
+  /** MIDI pitch rendered into tonal assets; absent for unpitched transients. */
+  rootMidi?: number;
 }
 
 export function resolveAudioSampleUrl(
@@ -308,6 +311,7 @@ export const AUDIO_SAMPLE_MANIFEST = [
     attackSeconds: 0.0015,
     releaseSeconds: 0.04,
   },
+  ...PROCEDURAL_SAMPLE_ASSETS,
 ] as const satisfies readonly AudioSampleAssetDefinition[];
 
 export type AudioSampleId = (typeof AUDIO_SAMPLE_MANIFEST)[number]["id"];
@@ -327,6 +331,16 @@ export interface PitchedSampleVoiceDefinition {
 export type SampleVoiceDefinition =
   DrumSampleVoiceDefinition | PitchedSampleVoiceDefinition;
 
+export const AUXILIARY_SAMPLE_PRESET_IDS = [
+  "orbital-hat",
+  "orbital-shaker",
+  "orbital-perc",
+  "dust-percussion",
+] as const;
+
+export type AuxiliarySamplePresetId =
+  (typeof AUXILIARY_SAMPLE_PRESET_IDS)[number];
+
 /** Active presets are loaded lazily after audio unlock; unavailable assets fall back to synthesis. */
 export const SAMPLE_VOICE_PRESETS = {
   "clean-orbit": {
@@ -334,7 +348,7 @@ export const SAMPLE_VOICE_PRESETS = {
     samples: {
       kick: "techno-kick",
       snare: "techno-snare",
-      clap: "techno-snare",
+      clap: "techno-dark-hat",
       "closed-hat": "techno-light-hat",
       "open-hat": "techno-ride",
       rim: "techno-rimshot",
@@ -344,49 +358,49 @@ export const SAMPLE_VOICE_PRESETS = {
   "soft-impact": {
     kind: "drum-kit",
     samples: {
-      kick: "techno-kick",
-      snare: "techno-snare",
-      clap: "techno-rimshot",
-      "closed-hat": "techno-dark-hat",
-      "open-hat": "techno-crash",
-      rim: "techno-rimshot",
-      perc: "techno-tom",
+      kick: "soft-impact-kick",
+      snare: "soft-impact-snare",
+      clap: "soft-impact-clap",
+      "closed-hat": "soft-impact-closed-hat",
+      "open-hat": "soft-impact-open-hat",
+      rim: "soft-impact-rim",
+      perc: "soft-impact-perc",
     },
   },
   "small-dry": {
     kind: "drum-kit",
     samples: {
-      kick: "techno-kick",
-      snare: "techno-rimshot",
-      clap: "techno-snare",
-      "closed-hat": "techno-light-hat",
-      "open-hat": "techno-dark-hat",
-      rim: "techno-rimshot",
-      perc: "techno-tom",
+      kick: "small-dry-kick",
+      snare: "small-dry-snare",
+      clap: "small-dry-clap",
+      "closed-hat": "small-dry-closed-hat",
+      "open-hat": "small-dry-open-hat",
+      rim: "small-dry-rim",
+      perc: "small-dry-perc",
     },
   },
   "metallic-array": {
     kind: "drum-kit",
     samples: {
-      kick: "techno-kick",
-      snare: "techno-snare",
-      clap: "techno-rimshot",
-      "closed-hat": "techno-dark-hat",
-      "open-hat": "techno-ride",
-      rim: "techno-rimshot",
-      perc: "techno-crash",
+      kick: "metallic-array-kick",
+      snare: "metallic-array-snare",
+      clap: "metallic-array-clap",
+      "closed-hat": "metallic-array-closed-hat",
+      "open-hat": "techno-crash",
+      rim: "metallic-array-rim",
+      perc: "metallic-array-perc",
     },
   },
   "heavy-void": {
     kind: "drum-kit",
     samples: {
-      kick: "techno-kick",
-      snare: "techno-tom",
-      clap: "techno-snare",
-      "closed-hat": "techno-dark-hat",
-      "open-hat": "techno-crash",
-      rim: "techno-rimshot",
-      perc: "techno-tom",
+      kick: "heavy-void-kick",
+      snare: "heavy-void-snare",
+      clap: "heavy-void-clap",
+      "closed-hat": "heavy-void-closed-hat",
+      "open-hat": "heavy-void-open-hat",
+      rim: "heavy-void-rim",
+      perc: "heavy-void-perc",
     },
   },
   "deep-sub": {
@@ -416,18 +430,18 @@ export const SAMPLE_VOICE_PRESETS = {
   },
   "soft-keys": {
     kind: "pitched",
-    sampleId: "reverb-square-saw-short",
-    rootMidi: 48,
+    sampleId: "soft-keys-c4",
+    rootMidi: 60,
   },
   "glass-chords": {
     kind: "pitched",
-    sampleId: "reverb-square-saw-short",
-    rootMidi: 48,
+    sampleId: "glass-chords-c4",
+    rootMidi: 60,
   },
   "pulsing-synth": {
     kind: "pitched",
-    sampleId: "reverb-square-saw-short",
-    rootMidi: 48,
+    sampleId: "pulsing-synth-c4",
+    rootMidi: 60,
   },
   "ice-bell": {
     kind: "pitched",
@@ -466,25 +480,48 @@ export const SAMPLE_VOICE_PRESETS = {
   },
   radio: {
     kind: "pitched",
-    sampleId: "reverb-square-saw-long",
-    rootMidi: 48,
+    sampleId: "radio-texture-c4",
+    rootMidi: 60,
   },
   nebula: {
     kind: "pitched",
-    sampleId: "reverb-square-saw-long",
-    rootMidi: 48,
+    sampleId: "nebula-texture-c4",
+    rootMidi: 60,
   },
   mechanical: {
     kind: "pitched",
-    sampleId: "reverb-square-saw-short",
-    rootMidi: 48,
+    sampleId: "mechanical-texture-c4",
+    rootMidi: 60,
   },
   "void-drone": {
     kind: "pitched",
-    sampleId: "sub-long",
+    sampleId: "void-drone-c2",
     rootMidi: 36,
   },
-} as const satisfies Record<SoundPresetId, SampleVoiceDefinition>;
+  "orbital-hat": {
+    kind: "drum-kit",
+    samples: {
+      "closed-hat": "orbital-ring-hat",
+      "open-hat": "orbital-ring-shaker",
+      perc: "orbital-ring-perc",
+    },
+  },
+  "orbital-shaker": {
+    kind: "drum-kit",
+    samples: { perc: "orbital-ring-shaker" },
+  },
+  "orbital-perc": {
+    kind: "drum-kit",
+    samples: { perc: "orbital-ring-perc" },
+  },
+  "dust-percussion": {
+    kind: "drum-kit",
+    samples: { perc: "asteroid-dust-perc" },
+  },
+} as const satisfies Record<
+  SoundPresetId | AuxiliarySamplePresetId,
+  SampleVoiceDefinition
+>;
 
 export function getAudioSampleAsset(
   id: AudioSampleId,

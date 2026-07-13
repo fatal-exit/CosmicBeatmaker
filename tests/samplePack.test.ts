@@ -11,9 +11,10 @@ import {
   planSamplePlayback,
   triggerPlannedOneShot,
 } from "../src/audio/samplePlayback";
-import type { ScheduledOccurrence } from "../src/audio/types";
+import type { CompiledTrack, ScheduledOccurrence } from "../src/audio/types";
 import {
   AUDIO_SAMPLE_MANIFEST,
+  AUXILIARY_SAMPLE_PRESET_IDS,
   resolveAudioSampleEnvelope,
   resolveAudioSampleUrl,
   SAMPLE_VOICE_PRESETS,
@@ -26,6 +27,10 @@ interface GeneratedManifest {
     codec: string;
     sampleRate: number;
     quality: number;
+    proceduralSynthesis?: {
+      version: string;
+      renderer: string;
+    };
   };
   samples: {
     id: string;
@@ -36,8 +41,13 @@ interface GeneratedManifest {
     releaseSeconds: number;
     sourceDurationSeconds: number;
     trimmedSeconds: number;
+    channels: number;
+    sampleRate: number;
     encodedBytes: number;
     encodedPeakDb: number;
+    sourceKind?: string;
+    synthesisVersion?: string;
+    rootMidi?: number;
   }[];
 }
 
@@ -89,10 +99,19 @@ describe("first-party sample pack", () => {
       expect(generated?.durationSeconds).toBeLessThanOrEqual(
         generated?.sourceDurationSeconds ?? 0,
       );
+      expect(runtimeAsset.url.startsWith("/")).toBe(false);
+      expect(runtimeAsset.url).toBe(
+        `audio/cosmic-samples/${runtimeAsset.id}.ogg`,
+      );
+      const runtimeRootMidi =
+        "rootMidi" in runtimeAsset ? runtimeAsset.rootMidi : undefined;
+      if (runtimeRootMidi !== undefined) {
+        expect(generated?.rootMidi).toBe(runtimeRootMidi);
+      }
     }
   });
 
-  it("maps every sound preset and every first-party sample into live playback", () => {
+  it("maps every sound and auxiliary preset while retaining the authored catalog", () => {
     const referencedSampleIds = new Set<string>();
     for (const preset of SOUND_PRESETS) {
       const definition = SAMPLE_VOICE_PRESETS[preset.id];
@@ -107,9 +126,97 @@ describe("first-party sample pack", () => {
         referencedSampleIds.add(definition.sampleId);
       }
     }
-    expect([...referencedSampleIds].sort()).toEqual(
-      AUDIO_SAMPLE_MANIFEST.map((asset) => asset.id).sort(),
+    for (const presetId of AUXILIARY_SAMPLE_PRESET_IDS) {
+      const definition = SAMPLE_VOICE_PRESETS[presetId];
+      expect(definition).toBeDefined();
+      expect(definition.kind).toBe("drum-kit");
+      for (const sampleId of Object.values(definition.samples)) {
+        if (sampleId) referencedSampleIds.add(sampleId);
+      }
+    }
+
+    const knownSampleIds = new Set<string>(
+      AUDIO_SAMPLE_MANIFEST.map((asset) => asset.id),
     );
+    for (const sampleId of referencedSampleIds) {
+      expect(knownSampleIds.has(sampleId)).toBe(true);
+    }
+
+    const authoredSampleIds = generatedManifest.samples
+      .filter((sample) => sample.sourceKind !== "procedural")
+      .map((sample) => sample.id);
+    expect(authoredSampleIds).toHaveLength(20);
+    for (const sampleId of authoredSampleIds) {
+      expect(referencedSampleIds.has(sampleId)).toBe(true);
+    }
+
+    const inactiveAlternatives = AUDIO_SAMPLE_MANIFEST.map(
+      (asset) => asset.id,
+    ).filter((id) => !referencedSampleIds.has(id));
+    expect(inactiveAlternatives).toEqual([
+      "dust-texture-c4",
+      "metallic-array-open-hat",
+      "warm-pad-c4",
+    ]);
+  });
+
+  it("ships the rendered mobile palette with mono transients and stereo tonal voices", () => {
+    const procedural = generatedManifest.samples.filter(
+      (sample) => sample.sourceKind === "procedural",
+    );
+    expect(procedural).toHaveLength(41);
+    expect(generatedManifest.samples).toHaveLength(61);
+    expect(procedural.filter((sample) => sample.channels === 1)).toHaveLength(
+      32,
+    );
+    expect(procedural.filter((sample) => sample.channels === 2)).toHaveLength(
+      9,
+    );
+    for (const sample of procedural) {
+      expect(sample.sampleRate).toBe(48_000);
+      expect(sample.encodedPeakDb).toBeLessThan(-0.1);
+      expect(sample.durationSeconds).toBeLessThanOrEqual(2.85);
+      expect(sample.synthesisVersion).toBe("1.0.0");
+    }
+    expect(generatedManifest.pack.proceduralSynthesis).toMatchObject({
+      version: "1.0.0",
+      renderer: "deterministic PCM16 offline synthesis",
+    });
+
+    const tonal = procedural.filter((sample) => sample.channels === 2);
+    for (const sample of tonal) {
+      expect(sample.rootMidi).toBe(sample.id.endsWith("-c2") ? 36 : 60);
+      expect(sample.id.endsWith("-c2") || sample.id.endsWith("-c4")).toBe(true);
+    }
+  });
+
+  it("uses authored reverbs plus dedicated chord, texture, ring, and asteroid renders", () => {
+    expect(SAMPLE_VOICE_PRESETS["warm-pad"]).toMatchObject({
+      sampleId: "reverb-square-saw-long",
+      rootMidi: 48,
+    });
+    expect(SAMPLE_VOICE_PRESETS.dust).toMatchObject({
+      sampleId: "reverb-square-saw-short",
+      rootMidi: 48,
+    });
+    expect(SAMPLE_VOICE_PRESETS["glass-chords"]).toMatchObject({
+      sampleId: "glass-chords-c4",
+      rootMidi: 60,
+    });
+    expect(SAMPLE_VOICE_PRESETS.nebula).toMatchObject({
+      sampleId: "nebula-texture-c4",
+      rootMidi: 60,
+    });
+    expect(SAMPLE_VOICE_PRESETS["orbital-hat"]).toMatchObject({
+      samples: {
+        "closed-hat": "orbital-ring-hat",
+        "open-hat": "orbital-ring-shaker",
+        perc: "orbital-ring-perc",
+      },
+    });
+    expect(SAMPLE_VOICE_PRESETS["dust-percussion"]).toMatchObject({
+      samples: { perc: "asteroid-dust-perc" },
+    });
   });
 
   it("maps the six C-rooted lead variants at their authored octaves", () => {
@@ -285,6 +392,95 @@ describe("first-party sample pack", () => {
 });
 
 describe("sample voice fallback", () => {
+  it("does not construct a synth graph when the baked sample is ready", () => {
+    const sampleTrigger = vi.fn();
+    const fallbackFactory = vi.fn<() => RuntimeVoice>(() => ({
+      trigger: vi.fn(),
+      dispose: vi.fn(),
+    }));
+    const sample: OptionalSampleVoice = {
+      canTrigger: () => true,
+      trigger: sampleTrigger,
+      dispose: vi.fn(),
+    };
+    const voice = createSampleWithFallbackVoice(sample, fallbackFactory);
+
+    voice.trigger(occurrence, 1, 120);
+
+    expect(sampleTrigger).toHaveBeenCalledOnce();
+    expect(fallbackFactory).not.toHaveBeenCalled();
+  });
+
+  it("keeps loading-time synthesis idle after sample readiness until voice disposal", () => {
+    let ready = false;
+    const fallbackTrigger = vi.fn();
+    const fallbackRelease = vi.fn();
+    const fallbackDispose = vi.fn();
+    const fallbackFactory = vi.fn<() => RuntimeVoice>(() => ({
+      trigger: fallbackTrigger,
+      releaseAll: fallbackRelease,
+      dispose: fallbackDispose,
+    }));
+    const sample: OptionalSampleVoice = {
+      canTrigger: () => ready,
+      trigger: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const voice = createSampleWithFallbackVoice(sample, fallbackFactory);
+
+    voice.trigger(occurrence, 1, 120);
+    expect(fallbackFactory).toHaveBeenCalledOnce();
+    expect(fallbackTrigger).toHaveBeenCalledOnce();
+
+    ready = true;
+    voice.trigger(occurrence, 2, 120);
+    voice.trigger(occurrence, 3, 120);
+
+    expect(fallbackTrigger).toHaveBeenCalledOnce();
+    expect(fallbackRelease).not.toHaveBeenCalled();
+    expect(fallbackDispose).not.toHaveBeenCalled();
+    expect(fallbackFactory).toHaveBeenCalledOnce();
+
+    voice.dispose();
+    expect(fallbackRelease).toHaveBeenCalledOnce();
+    expect(fallbackDispose).toHaveBeenCalledOnce();
+  });
+
+  it("applies the latest track state when synthesis is created lazily", () => {
+    const fallbackUpdate = vi.fn();
+    const fallbackTrigger = vi.fn();
+    const fallbackFactory = vi.fn<() => RuntimeVoice>(() => ({
+      trigger: fallbackTrigger,
+      update: fallbackUpdate,
+      dispose: vi.fn(),
+    }));
+    const sample: OptionalSampleVoice = {
+      canTrigger: () => false,
+      trigger: vi.fn(),
+      update: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const updatedTrack: CompiledTrack = {
+      id: "track:test",
+      name: "Updated",
+      role: "beat",
+      sourceKind: "planet",
+      soundPresetId: "clean-orbit",
+      level: 0.42,
+      pan: -0.25,
+      filter: 0.7,
+    };
+    const voice = createSampleWithFallbackVoice(sample, fallbackFactory);
+
+    voice.update?.(updatedTrack);
+    expect(fallbackFactory).not.toHaveBeenCalled();
+    voice.trigger(occurrence, 1, 120);
+
+    expect(fallbackFactory).toHaveBeenCalledOnce();
+    expect(fallbackUpdate).toHaveBeenCalledExactlyOnceWith(updatedTrack);
+    expect(fallbackTrigger).toHaveBeenCalledOnce();
+  });
+
   it("uses synthesis while a sample loads, then switches to the ready sample", () => {
     let ready = false;
     const sampleTrigger = vi.fn();
