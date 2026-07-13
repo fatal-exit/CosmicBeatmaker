@@ -1,13 +1,26 @@
 export interface ExportPanelProps {
   status: "idle" | "working" | "error";
   message: string;
-  repetitions: 2 | 4 | 8;
-  onRepetitions: (value: 2 | 4 | 8) => void;
+  superLoopBars: number;
+  bpm: number;
+  beatsPerBar: number;
+  repetitions: 1 | 2 | 4;
+  onRepetitions: (value: 1 | 2 | 4) => void;
   onWav: () => void | Promise<void>;
   onMidi: () => void | Promise<void>;
   onJson: () => void;
   onCancel: () => void;
   onClose: () => void;
+}
+
+function formatDuration(seconds: number): string {
+  const rounded = Math.round(seconds * 100) / 100;
+  if (rounded < 60) return `${rounded} ${rounded === 1 ? "second" : "seconds"}`;
+  const minutes = Math.floor(rounded / 60);
+  const remainder = Math.round((rounded - minutes * 60) * 10) / 10;
+  return remainder === 0
+    ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}`
+    : `${minutes} min ${remainder} sec`;
 }
 
 export function ExportPanel(props: ExportPanelProps) {
@@ -31,10 +44,32 @@ export function ExportPanel(props: ExportPanelProps) {
           ×
         </button>
       </header>
+      <div className="export-loop-summary" aria-live="polite">
+        <p>
+          <strong>{props.superLoopBars}-bar super-loop</strong>
+          <span>Every active pattern resynchronizes at this boundary.</span>
+        </p>
+        <p>
+          <strong>
+            {props.superLoopBars * props.repetitions} bars ·{" "}
+            {formatDuration(
+              (props.superLoopBars *
+                props.repetitions *
+                props.beatsPerBar *
+                60) /
+                props.bpm,
+            )}
+          </strong>
+          <span>
+            {props.repetitions} complete super-loop
+            {props.repetitions === 1 ? "" : "s"}
+          </span>
+        </p>
+      </div>
       <fieldset className="repetition-options">
-        <legend>Loop repetitions</legend>
+        <legend>Complete super-loops</legend>
         <div>
-          {([2, 4, 8] as const).map((value) => (
+          {([1, 2, 4] as const).map((value) => (
             <button
               type="button"
               key={value}
@@ -55,7 +90,7 @@ export function ExportPanel(props: ExportPanelProps) {
           disabled={props.status === "working"}
         >
           <span>WAV audio</span>
-          <small>Stereo mix with a short effects tail</small>
+          <small>Stereo mix; adds a 0.4-second effects tail</small>
         </button>
         <button
           type="button"
@@ -64,7 +99,7 @@ export function ExportPanel(props: ExportPanelProps) {
           disabled={props.status === "working"}
         >
           <span>Multitrack MIDI</span>
-          <small>One useful track for each orbit</small>
+          <small>One useful track per orbit; ends on the sync boundary</small>
         </button>
         <button
           type="button"

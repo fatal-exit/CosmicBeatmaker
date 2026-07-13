@@ -1,4 +1,9 @@
 import type { Composition } from "../../domain/composition";
+import { PLANET_MATERIAL_PROFILES } from "../../scene/materials/profiles";
+import {
+  formatOrbitLoop,
+  formatOrbitRate,
+} from "../inspector/orbitRateOptions";
 
 export interface ObjectListProps {
   composition: Composition;
@@ -35,36 +40,44 @@ export function ObjectList({
             <small>Sets mood and harmony</small>
           </span>
         </button>
-        {composition.planets.map((planet) => (
-          <button
-            type="button"
-            className={`object-row${selectedId === planet.id ? " selected" : ""}`}
-            key={planet.id}
-            onClick={() => onSelect(planet.id)}
-            aria-pressed={selectedId === planet.id}
-            aria-label={`${planet.name}, ${planet.role}, ${planet.soundPresetId}, ${planet.orbit.loopBars} bar loop, ${planet.moons.length} moons${planet.ring ? ", rhythmic ring" : ""}${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
-          >
-            <span
-              aria-hidden="true"
-              className={`object-symbol role-${planet.role}`}
-            />
-            <span>
-              <strong>{planet.name}</strong>
-              <small>
-                {planet.role} · {planet.orbit.loopBars} bar
-                {planet.moons.length > 0
-                  ? ` · ${planet.moons.length} moon${planet.moons.length === 1 ? "" : "s"}`
-                  : ""}
-                {planet.muted ? " · muted" : ""}
-              </small>
-            </span>
-            {planet.locked ? (
-              <span className="state-glyph" title="Locked" aria-hidden="true">
-                ◆
+        {composition.planets.map((planet) => {
+          const material = PLANET_MATERIAL_PROFILES[planet.role];
+
+          return (
+            <button
+              type="button"
+              className={`object-row${selectedId === planet.id ? " selected" : ""}`}
+              key={planet.id}
+              onClick={() => onSelect(planet.id)}
+              aria-pressed={selectedId === planet.id}
+              aria-label={`${planet.name}, ${planet.role} role, ${material.label} material, ${planet.soundPresetId} sound, ${formatOrbitLoop(planet.orbit.loopBars)}, ${planet.moons.length} ${planet.moons.length === 1 ? "moon" : "moons"}${planet.ring ? ", rhythmic ring" : ""}${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`object-symbol role-${planet.role}`}
+              />
+              <span>
+                <strong>{planet.name}</strong>
+                <small>
+                  {planet.role} ·{" "}
+                  <span className="object-material-label">
+                    {material.label}
+                  </span>{" "}
+                  · {formatOrbitRate(planet.orbit.loopBars)}
+                  {planet.moons.length > 0
+                    ? ` · ${planet.moons.length} moon${planet.moons.length === 1 ? "" : "s"}`
+                    : ""}
+                  {planet.muted ? " · muted" : ""}
+                </small>
               </span>
-            ) : null}
-          </button>
-        ))}
+              {planet.locked ? (
+                <span className="state-glyph" title="Locked" aria-hidden="true">
+                  ◆
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
         {composition.asteroidBelt ? (
           <div className="object-row structural-object" role="status">
             <span

@@ -52,9 +52,9 @@ The tutorial asks the user to perform one action:
 
 The new part should immediately complement the existing system.
 
-The next hint demonstrates orbit shells:
+The next hint demonstrates orbit rate:
 
-> Drag it inward for a shorter, faster loop.
+> Choose a shorter rate for a faster visible orbit and musical pattern.
 
 After this, onboarding ends and the app remains fully usable.
 
@@ -97,7 +97,7 @@ The editing model should feel almost 2D even though the scene is 3D.
 
 - Tap: select
 - Drag selected planet tangentially: change phase
-- Drag selected planet radially: change quantized orbit shell
+- Drag selected planet radially: change quantized orbit rate; the renderer derives a unique spatial lane separately
 - Pinch: zoom
 - Two-finger drag or rotate: limited camera adjustment
 - Tap empty space: deselect
@@ -136,7 +136,7 @@ Visible after selecting an object:
 - Role and sound
 - Mute and solo
 - Pattern preset
-- Orbit length
+- Orbit rate, with familiar choices first and deeper polymetric choices progressively disclosed
 - Regenerate
 - Duplicate
 - Delete

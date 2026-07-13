@@ -7,6 +7,13 @@ import { createStarterComposition } from "../src/domain/composition/starter";
 describe("composition audio compiler", () => {
   it("compiles exact integer timing, duration, and velocity for the starter beat", () => {
     const composition = createStarterComposition("compiler-timing");
+    composition.macros = {
+      energy: 0.5,
+      density: 0.5,
+      groove: 0,
+      space: 0.5,
+      complexity: 0.5,
+    };
     const sequence = compileComposition(composition);
 
     expect(sequence.ppq).toBe(480);
@@ -64,6 +71,49 @@ describe("composition audio compiler", () => {
       ).length;
       expect([0, 4]).toContain(count);
     }
+  });
+
+  it("applies deterministic humanize after swing without crossing source-loop bounds", () => {
+    const composition = createStarterComposition("compiler-humanize");
+    composition.swing = 0.24;
+    composition.macros = {
+      energy: 0.5,
+      density: 0.5,
+      groove: 1,
+      space: 0.5,
+      complexity: 0.5,
+    };
+    composition.planets[0].pattern = {
+      gridSize: 16,
+      humanize: 0.12,
+      events: [
+        {
+          id: "humanized-edge-event",
+          step: 15,
+          velocity: 0.7,
+          probability: 1,
+          durationSteps: 1,
+          drumVoice: "closed-hat",
+        },
+      ],
+    };
+
+    const first = compileComposition(composition, { loops: 2 });
+    const second = compileComposition(composition, { loops: 2 });
+    expect(second).toEqual(first);
+    expect(first.occurrences).toHaveLength(8);
+
+    const sourceLoopTicks = 4 * 480;
+    first.occurrences.forEach((occurrence, index) => {
+      const sourceCycleStart = index * sourceLoopTicks;
+      expect(occurrence.startTick).toBeGreaterThanOrEqual(sourceCycleStart);
+      expect(occurrence.startTick).toBeLessThan(
+        sourceCycleStart + sourceLoopTicks,
+      );
+    });
+    expect(first.occurrences.some((event) => event.startTick % 120 !== 0)).toBe(
+      true,
+    );
   });
 
   it("exposes orbit phase as pure transport math", () => {

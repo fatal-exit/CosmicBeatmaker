@@ -596,7 +596,7 @@ p {
   font-size: 0.75rem;
 }
 
-.orbit-options > div,
+.orbit-common-options,
 .repetition-options > div {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -623,6 +623,69 @@ p {
 
 .orbit-options button small {
   font-size: 0.62rem;
+}
+
+.orbit-current {
+  margin-bottom: 9px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 10px;
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.orbit-current > span,
+.orbit-current > small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.orbit-current > small {
+  grid-column: 1 / -1;
+}
+
+.orbit-current > strong {
+  font-size: 0.82rem;
+}
+
+.orbit-deeper-control {
+  margin-top: 10px;
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.orbit-deeper-control select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.system-sync {
+  margin: 0 0 18px;
+  padding: 11px 0;
+  display: grid;
+  gap: 3px;
+  border-block: 1px solid var(--border);
+}
+
+.system-sync strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.system-sync span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .primary-panel-action,
@@ -1172,6 +1235,30 @@ p {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.export-loop-summary {
+  margin-top: 18px;
+  padding-block: 12px;
+  display: grid;
+  gap: 10px;
+  border-block: 1px solid var(--border);
+}
+
+.export-loop-summary p {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.export-loop-summary strong {
+  font-size: 0.86rem;
+}
+
+.export-loop-summary span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
 .export-status {
   padding: 10px;
   color: var(--muted);
@@ -1437,7 +1524,7 @@ p {
 
   .mobile-orbit-control select {
     width: 76px;
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 6px;
     color: var(--ink);
     background: var(--surface-raised);

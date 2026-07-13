@@ -63,7 +63,7 @@ Cosmic Beatmaker provides a third path:
 
 ## Core promise
 
-A new user should be able to create a coherent, personal four-bar loop within sixty seconds.
+A new user should be able to create a coherent, personal loop around a four-bar harmony phrase within sixty seconds. Individual planets may repeat at shorter, longer, or polymetric rates while the interface derives their complete synchronization boundary.
 
 A returning user should continue discovering deeper relationships between rhythm, harmony, orbits, satellites, and sound.
 
@@ -97,7 +97,7 @@ The solar system should be enjoyable to watch. Motion, pulses, light, particles,
 
 Cosmic Beatmaker is specifically:
 
-> A four-bar cosmic groovebox optimized for fast, safe, tactile loop creation.
+> A four-bar-phrase cosmic groovebox with visible polymetric orbits, optimized for fast, safe, tactile loop creation.
 
 It is not trying to model full songs during the Build Week version.
 

@@ -23,7 +23,7 @@ export interface Composition {
   updatedAt: string;
 
   seed: string;
-  bars: 4 | 8;
+  bars: 4;
   beatsPerBar: 4;
   bpm: number;
   swing: number;
@@ -40,7 +40,7 @@ export interface Composition {
 }
 ```
 
-For the MVP, new compositions default to four bars.
+New compositions keep a canonical four-bar harmony phrase. The active playback/export super-loop is derived from that phrase plus audible orbit periods and may be 4, 12, or up to 24 bars; it is not stored as a second composition length.
 
 ## Identifiers
 
@@ -134,15 +134,17 @@ export interface PlanetState {
 
 ```ts
 export interface OrbitState {
-  loopBars: 0.5 | 1 | 2 | 4 | 8;
+  loopBars: 0.25 | 0.5 | 1 | 1.5 | 2 | 3 | 4 | 6 | 8;
   phase: number; // normalized 0..<1
   inclination: number; // visual and optional pan mapping
-  shellIndex: number;
-  direction: 1 | -1;
+  shellIndex: number; // deprecated; not authoritative scene placement
+  direction: 1;
 }
 ```
 
-For the MVP, direction should default to forward. Reverse may be advanced or stretch.
+Direction remains forward. `loopBars` is the sole audible/visible period. Represent its exact catalog as quarter-bar integers for super-loop LCM math. `shellIndex` remains in the early schema shape temporarily but validation no longer maps it to rate or uses it to place the planet.
+
+The renderer derives a unique compact lane for every planet by rate order and stable composition order or ID. Those lanes, camera fit, and zoom are ephemeral projections and are never serialized. Planets at the same rate receive adjacent distinct lanes.
 
 ## Pattern state
 
@@ -301,7 +303,7 @@ Examples:
 - `AddPlanet`
 - `RemovePlanet`
 - `DuplicatePlanet`
-- `MovePlanetToOrbitShell`
+- `SetPlanetLoopBars`
 - `RotatePattern`
 - `SetPatternEvent`
 - `SetMacro`
@@ -366,6 +368,8 @@ Serialized composition must:
 
 Use a runtime schema validator or explicit validation functions.
 
+During this early test phase, the schema-version-1 rate contract is updated in place and pre-polymeter local saves/share links are not guaranteed to load. This intentional break removes the rejected shared-shell interpretation instead of carrying compatibility state before the product has a stable public save contract.
+
 ## Migrations
 
 ```ts
@@ -389,6 +393,8 @@ Examples:
 - `selectResolvedChordAtBar`
 - `selectResolvedEventsForWindow`
 - `selectOrbitPhaseAtTransportTime`
+- `selectCompositionSuperLoop`
+- `derivePlanetOrbitLanes`
 - `selectExportTrackList`
 - `selectPerformanceBudget`
 - `selectCanUndo`
@@ -406,7 +412,8 @@ Keep expensive derived calculations memoized where useful.
 - Ring segment count matches active array
 - Values normalized
 - Safe Harmony pitch intents valid
-- Loop lengths supported
+- Loop rate is one of 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, or 8 bars
+- Derived supported-rate super-loop does not exceed 24 bars
 - Moon count within limit
 - At least one audible primary planet in generated systems
 - Serialized size below the chosen share limit

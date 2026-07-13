@@ -67,4 +67,33 @@ describe("transport controller", () => {
     expect(adapter.bpm).toBe(96);
     expect(() => transport.setTempo(160)).toThrow(/70 and 140/);
   });
+
+  it("does not rewrite the Tone tempo timeline for unrelated state updates", () => {
+    let bpm = 120;
+    let writes = 0;
+    const adapter: TransportAdapter = {
+      state: "stopped",
+      ticks: 0,
+      ppq: 192,
+      get bpm() {
+        return bpm;
+      },
+      set bpm(value: number) {
+        writes += 1;
+        bpm = value;
+      },
+      start() {},
+      pause() {},
+      stop() {},
+    };
+    const transport = new TransportController(adapter, () => Promise.resolve());
+
+    transport.setTempo(120);
+    transport.setTempo(120);
+    transport.setTempo(121);
+    transport.setTempo(121);
+
+    expect(writes).toBe(1);
+    expect(bpm).toBe(121);
+  });
 });

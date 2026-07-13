@@ -193,12 +193,25 @@ For each animation frame:
 
 For audio:
 
-1. Schedule events ahead using Tone transport callbacks or a bounded lookahead scheduler.
-2. Trigger voices at explicit audio times.
-3. Emit lightweight visual-event messages with event IDs and scheduled times.
-4. Let the scene display the corresponding visual pulse when transport time reaches that event.
+1. Derive the active super-loop with exact integer least-common-multiple math over quarter-bar units, including the canonical four-bar harmony phrase.
+2. Compile each active source into a bounded rate-cycle event template and register one repeating Tone transport callback per source; never expand a global super-loop into an unbounded future timeline.
+3. Trigger voices at explicit audio times.
+4. Emit lightweight visual-event messages with event IDs and scheduled times.
+5. Let the scene display the corresponding visual pulse when transport time reaches that event.
 
 Never detect a mesh crossing a visual marker and use that to trigger sound.
+
+The same stored `loopBars` drives audio recurrence and visible angular phase. Spatial orbit lanes are a deterministic scene projection derived from rate order plus stable planet order or ID; they are not timing data. Each planet receives a unique lane, including duplicate-rate planets. Camera fit and user zoom remain independent renderer state.
+
+### Current audio stability profile
+
+Tone uses a balanced worker-clock context rather than minimum latency. Desktop scheduling uses 120 ms lookahead, a 30 ms update interval, and an 80 ms late-event threshold. Mobile detection uses 180 ms, 45 ms, and 120 ms respectively to tolerate main-thread stalls and browser power management.
+
+The live scheduler registers bounded source-cycle repeats and admits each occurrence once per template repeat. It skips late or duplicate callbacks and stops scheduling if it detects invalid time, timeline regression, more than 128 callbacks in 50 ms, 16 consecutive late callbacks, a 4,096-entry occurrence-ledger overflow, or four consecutive voice-trigger errors. Visual timeouts are separately bounded and may be dropped without dropping audio.
+
+Runtime voices reconcile by stable track ID and role/preset compatibility. Mix-only changes update existing nodes, and unchanged master targets do not enqueue redundant parameter automation. Sample overlap is capped at six scheduled sources per unique drum sample and sixteen per pitched sample voice.
+
+Output applies a 0.72 master-headroom factor before a -3 dB limiter. If the health guard trips, the scheduler clears registrations, the engine fades master output to zero over 15 ms, releases voices, and pauses transport; a later explicit play attempts a clean runtime rebuild. The failure path is audio-clock-only and fail-silent. `App` consumes the engine's health-failure callback so its transport state changes to paused and a recoverable toast explains that playback stopped safely. Deeper diagnostics and physical interruption recovery remain release-test work.
 
 ## Runtime synchronization
 
@@ -285,19 +298,22 @@ A seed-only link is allowed for generated, unedited systems. Edited systems need
 ### WAV
 
 1. Clone or normalize composition state.
-2. Render a chosen number of loops through offline audio.
-3. Apply master processing.
-4. Encode the resulting buffer as WAV.
-5. Download with a sanitized project name.
+2. Derive the exact active super-loop shared with live scheduling.
+3. Render 1×, 2×, or 4× complete super-loops through offline audio, defaulting to 1×.
+4. Apply master processing and a short explicit tail after the musical boundary.
+5. Encode the resulting buffer as WAV.
+6. Download with a sanitized project name.
 
 ### MIDI
 
-1. Convert each track's events to absolute musical time.
+1. Convert each track's events to absolute musical time through the same selected whole-super-loop count.
 2. Resolve harmony into concrete pitches.
 3. Write tempo and time-signature metadata.
 4. Create tracks by planet or role.
 5. Write note duration and velocity.
 6. Export a standard MIDI file.
+
+Both exporters show the exact bar count and musical duration before export. MIDI ends on the boundary; WAV adds only its disclosed effects tail afterward.
 
 ## Error handling
 

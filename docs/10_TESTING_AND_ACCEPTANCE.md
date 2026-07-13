@@ -41,6 +41,8 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Probability decisions are deterministic for seed, loop, and event.
 - Rings maintain segment-array invariants.
 - Asteroid clustering stays within configured density limits.
+- The exact orbit catalog is `[0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8]` bars and round-trips without floating approximation.
+- Quarter-bar integer LCM yields 12 bars for 3 + 4, 24 bars for 6 + 8, and never exceeds 24 bars for the supported catalog.
 
 ### State
 
@@ -67,6 +69,7 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Note timing, velocity, and duration match source events.
 - Percussion mapping remains stable.
 - Offline render duration includes expected loops and effect tail.
+- WAV and MIDI default to one complete active super-loop; 2× and 4× repeat only whole super-loops.
 - Rendered audio does not exceed clipping threshold.
 
 ## Integration tests
@@ -79,6 +82,12 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Muting and soloing update without clicks.
 - Tempo changes do not desynchronize visual phase.
 - Audio continues correctly during artificial render slowdown.
+- Desktop/mobile runtime profiles apply their exact lookahead, cadence, and late-event thresholds.
+- Duplicate and stale callbacks cannot retrigger the same source or replay an audible backlog.
+- Callback bursts, ledger overflow, timeline regression, and repeated trigger errors fail silent within bounded state.
+- Runtime voice reconciliation reuses compatible sample/synth nodes and disposes only incompatible or removed voices.
+- Scheduled sample overlap never exceeds the six-source drum or sixteen-source pitched budgets.
+- The master applies 0.72 headroom before a -3 dB limiter and health failure fades to zero over 15 ms.
 
 ### Scene reconciliation
 
@@ -87,6 +96,8 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Undo restores scene and audio object.
 - Repeated create-delete cycles do not increase object count.
 - Selection and mute appearance match state.
+- Every planet has a unique deterministic orbit lane; duplicate-rate planets occupy neighboring lanes and do not share a path.
+- Rate changes preserve camera zoom/rotation, while auto-fit and essential outlines keep expanded lanes legible.
 
 ### Persistence
 
@@ -103,7 +114,7 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 3. Choose mood.
 4. Hear starter system.
 5. Add bass planet.
-6. Change orbit shell.
+6. Change orbit rate.
 7. Add ring.
 8. Save.
 
@@ -132,7 +143,7 @@ Acceptance:
 
 ### Export flow
 
-1. Export four-loop WAV.
+1. Export the default one-super-loop WAV.
 2. Export MIDI.
 3. Download JSON.
 4. Reopen JSON if import is supported.
@@ -140,7 +151,7 @@ Acceptance:
 Acceptance:
 
 - Files download.
-- WAV has correct approximate duration and no clipping.
+- The panel states the exact super-loop bars and musical duration; WAV has that content plus its disclosed effects tail and no clipping.
 - MIDI opens in at least one external DAW or MIDI inspector.
 - Track names are useful.
 
@@ -148,7 +159,7 @@ Acceptance:
 
 1. Navigate primary UI by keyboard.
 2. Select object through HTML list.
-3. Change orbit length with buttons.
+3. Change orbit rate with semantic buttons or the deeper-rate select.
 4. Mute and unmute.
 5. Enable reduced motion.
 6. Open Focus View.
@@ -159,6 +170,20 @@ Acceptance:
 - Focus visible.
 - Canvas manipulation has DOM alternatives.
 - Reduced motion removes unnecessary movement without hiding state.
+
+### Polymeter flow
+
+1. Open the stable complete demo containing a 4-bar planet.
+2. Select another planet through semantic HTML controls.
+3. Choose the deeper 3-bar orbit rate.
+4. Confirm the visible rate label and 12-bar system sync.
+5. Open export.
+
+Acceptance:
+
+- The selected control explains that rate changes both the visible orbit period and musical pattern period.
+- The export panel defaults to 1× and states 12 bars plus the exact tempo-derived musical duration.
+- The flow passes in desktop Chromium and the Pixel 7 profile with 44-pixel semantic controls.
 
 ## Manual listening matrix
 

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Composition, LoopBars } from "../../domain/composition";
-import { SceneController } from "../../scene/SceneController";
+import {
+  SceneController,
+  type SceneCameraView,
+} from "../../scene/SceneController";
 import { compositionToSceneDescriptor } from "../../scene/descriptors";
 import type { VisualPreferences, VisualPulse } from "../../scene/contracts";
 
@@ -10,7 +13,8 @@ export interface SceneCanvasProps {
   selectedId: string | null;
   visualPreferences: VisualPreferences;
   readTransportTicks: () => number;
-  pulse?: VisualPulse | null;
+  pulseRevision: number;
+  drainVisualPulses: () => VisualPulse[];
   onSelect: (id: string | null) => void;
   onOrbitLoopBarsChange?: (planetId: string, loopBars: LoopBars) => void;
   onOrbitPhaseChange?: (planetId: string, phase: number) => void;
@@ -21,17 +25,26 @@ export function SceneCanvas({
   selectedId,
   visualPreferences,
   readTransportTicks,
-  pulse,
+  pulseRevision,
+  drainVisualPulses,
   onSelect,
   onOrbitLoopBarsChange,
   onOrbitPhaseChange,
 }: SceneCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
+  const [cameraView, setCameraView] = useState<SceneCameraView>({
+    zoomPercent: 100,
+    rotationDegrees: 0,
+    canZoomIn: true,
+    canZoomOut: true,
+    canReset: false,
+  });
   const controller = useMemo(
     () =>
       new SceneController({
         readTransportTicks,
+        onCameraViewChange: setCameraView,
         onInteraction: (intent) => {
           switch (intent.type) {
             case "select":
@@ -71,6 +84,7 @@ export function SceneCanvas({
   }, [controller]);
 
   useEffect(() => {
+    controller.setTempo(composition.bpm);
     controller.reconcile(compositionToSceneDescriptor(composition));
   }, [composition, controller]);
 
@@ -83,8 +97,8 @@ export function SceneCanvas({
     [controller, visualPreferences],
   );
   useEffect(() => {
-    if (pulse) controller.enqueuePulse(pulse);
-  }, [controller, pulse]);
+    for (const pulse of drainVisualPulses()) controller.enqueuePulse(pulse);
+  }, [controller, drainVisualPulses, pulseRevision]);
 
   return (
     <div className="scene-canvas-wrap">
@@ -95,6 +109,71 @@ export function SceneCanvas({
         tabIndex={-1}
         style={{ touchAction: "none" }}
       />
+      <div
+        className="scene-view-controls"
+        role="group"
+        aria-label="Scene view controls"
+        hidden={failed}
+        data-zoom={cameraView.zoomPercent}
+        data-rotation={cameraView.rotationDegrees}
+      >
+        <div className="scene-view-control-row">
+          <button
+            type="button"
+            aria-label="Rotate left"
+            title="Rotate left"
+            onClick={() => controller.rotateLeft()}
+          >
+            <span aria-hidden="true">↶</span>
+          </button>
+          <button
+            type="button"
+            className="scene-view-reset"
+            aria-label="Reset view"
+            title="Reset zoom and rotation"
+            disabled={!cameraView.canReset}
+            onClick={() => controller.resetView()}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            aria-label="Rotate right"
+            title="Rotate right"
+            onClick={() => controller.rotateRight()}
+          >
+            <span aria-hidden="true">↷</span>
+          </button>
+        </div>
+        <div className="scene-view-control-row">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            title="Zoom out"
+            disabled={!cameraView.canZoomOut}
+            onClick={() => controller.zoomOut()}
+          >
+            <span aria-hidden="true">−</span>
+          </button>
+          <output
+            className="scene-zoom-readout"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={`Scene zoom ${cameraView.zoomPercent}%`}
+          >
+            {cameraView.zoomPercent}%
+          </output>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            title="Zoom in"
+            disabled={!cameraView.canZoomIn}
+            onClick={() => controller.zoomIn()}
+          >
+            <span aria-hidden="true">+</span>
+          </button>
+        </div>
+      </div>
       {failed ? (
         <div className="scene-fallback" role="status">
           <strong>The visual cosmos is unavailable.</strong>

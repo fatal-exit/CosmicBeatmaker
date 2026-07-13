@@ -1,0 +1,541 @@
+:root {
+  --polish-fast: 150ms;
+  --polish-standard: 220ms;
+  --polish-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Material identity stays subordinate to sound and role. */
+.selected-summary .selected-material {
+  max-width: 27ch;
+  margin-top: 6px;
+  display: grid;
+  gap: 1px;
+  text-transform: none;
+}
+
+.selected-material strong {
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.selected-material span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.object-material-label {
+  color: color-mix(in oklch, var(--ink) 82%, var(--muted));
+}
+
+.gate-rhythm-control {
+  margin: -2px 0 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.gate-rhythm-control label {
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.gate-rhythm-control p {
+  margin: -2px 0 2px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.gate-rhythm-control select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.primary-panel-action small {
+  display: block;
+  margin-top: 2px;
+  color: color-mix(in oklch, var(--ink) 72%, var(--primary));
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+/* Shared interaction timing: small state confirmation, never choreography. */
+:where(
+  button,
+  .object-row,
+  .scene-status > span,
+  .circular-pattern > span,
+  .focus-planet
+) {
+  transition:
+    color var(--polish-fast) var(--polish-ease),
+    background-color var(--polish-fast) var(--polish-ease),
+    border-color var(--polish-fast) var(--polish-ease),
+    opacity var(--polish-fast) var(--polish-ease),
+    box-shadow var(--polish-standard) var(--polish-ease),
+    transform var(--polish-standard) var(--polish-ease);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  filter: saturate(0.65);
+}
+
+.transport .play-button[aria-pressed="true"],
+.transport .play-button[data-playing="true"] {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 42%, transparent);
+}
+
+.scene-status > span.playing {
+  animation: playback-beacon 1.4s var(--polish-ease) infinite;
+}
+
+@keyframes playback-beacon {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent) 40%, transparent);
+  }
+
+  55% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+.object-row.selected .object-symbol {
+  animation: selected-object-settle 240ms var(--polish-ease);
+  box-shadow: 0 0 0 3px color-mix(in oklch, currentColor 18%, transparent);
+}
+
+@keyframes selected-object-settle {
+  from {
+    transform: scale(0.84);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+.sheet-backdrop {
+  animation: polish-backdrop-in var(--polish-standard) ease-out both;
+}
+
+.side-sheet {
+  animation: polish-sheet-in 240ms var(--polish-ease) both;
+}
+
+@keyframes polish-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes polish-sheet-in {
+  from {
+    opacity: 0.7;
+    transform: translateX(18px);
+  }
+}
+
+.coachmark {
+  animation: polish-coachmark-in var(--polish-standard) var(--polish-ease) both;
+}
+
+@keyframes polish-coachmark-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -7px);
+  }
+}
+
+.toast {
+  animation: polish-toast-in var(--polish-standard) var(--polish-ease) both;
+}
+
+@keyframes polish-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+.focus-view {
+  animation: polish-focus-in var(--polish-standard) ease-out both;
+}
+
+.focus-view .circular-pattern {
+  animation: polish-orbit-lab-in 250ms var(--polish-ease) both;
+}
+
+@keyframes polish-focus-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes polish-orbit-lab-in {
+  from {
+    opacity: 0.65;
+    transform: scale(0.985);
+  }
+}
+
+.circular-pattern > span.active {
+  animation: polish-step-on 180ms var(--polish-ease);
+}
+
+.linear-pattern button.active {
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--bg) 32%, transparent);
+}
+
+@keyframes polish-step-on {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent) 22%, transparent);
+  }
+}
+
+/* Renderer-only camera controls stay compact without making touch targets tiny. */
+.cosmic-canvas {
+  touch-action: none;
+}
+
+.scene-view-controls {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: var(--z-sticky);
+  padding: 4px;
+  display: grid;
+  gap: 4px;
+  color: var(--ink);
+  background: oklch(0.12 0.006 43.2 / 0.94);
+  border-radius: 10px;
+  outline: 1px solid color-mix(in oklch, var(--border) 84%, transparent);
+  outline-offset: -1px;
+  user-select: none;
+}
+
+.scene-view-controls[hidden] {
+  display: none;
+}
+
+.scene-view-control-row {
+  display: grid;
+  grid-template-columns: 44px 58px 44px;
+  gap: 3px;
+}
+
+.scene-view-controls button,
+.scene-zoom-readout {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 0;
+  border-radius: 7px;
+}
+
+.scene-view-controls button {
+  padding: 0;
+  font-size: 1.12rem;
+  font-weight: 760;
+}
+
+.scene-view-controls button:hover:not(:disabled) {
+  background: var(--surface-active);
+}
+
+.scene-view-controls button:disabled {
+  opacity: 0.5;
+}
+
+.scene-view-controls .scene-view-reset {
+  font-size: 0.68rem;
+}
+
+.scene-zoom-readout {
+  color: color-mix(in oklch, var(--ink) 86%, var(--accent));
+  font-size: 0.72rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visual-only scene context; all edits remain available in the HTML controls. */
+.scene-polish-overlay {
+  --material-color: var(--accent);
+  position: absolute;
+  bottom: 18px;
+  left: 16px;
+  z-index: 2;
+  width: min(430px, calc(100% - 190px));
+  padding: 9px 10px 10px;
+  color: var(--ink);
+  background: oklch(0.12 0.006 43.2 / 0.92);
+  border-radius: 10px;
+  outline: 1px solid
+    color-mix(in oklch, var(--material-color) 34%, var(--border));
+  outline-offset: -1px;
+  pointer-events: none;
+  user-select: none;
+  animation: polish-overlay-in var(--polish-standard) var(--polish-ease) both;
+}
+
+.scene-polish-overlay[data-role="beat"] {
+  --material-color: oklch(0.69 0.2 43.2);
+}
+
+.scene-polish-overlay[data-role="bass"] {
+  --material-color: oklch(0.78 0.15 195);
+}
+
+.scene-polish-overlay[data-role="chords"] {
+  --material-color: oklch(0.78 0.15 92);
+}
+
+.scene-polish-overlay[data-role="melody"] {
+  --material-color: oklch(0.72 0.18 325);
+}
+
+.scene-polish-overlay[data-role="texture"] {
+  --material-color: oklch(0.7 0.14 245);
+}
+
+@keyframes polish-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.scene-material-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scene-material-identity > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  flex: 1;
+  gap: 1px;
+}
+
+.scene-material-identity strong,
+.scene-material-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-material-identity strong {
+  font-size: 0.78rem;
+}
+
+.scene-material-identity small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: capitalize;
+}
+
+.scene-material-swatch {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in oklch, var(--material-color) 62%, var(--ink));
+  border-radius: 50%;
+  background: var(--material-color);
+}
+
+.scene-polish-overlay[data-playing="true"] .scene-material-swatch {
+  animation: material-playback 1.4s var(--polish-ease) infinite;
+}
+
+@keyframes material-playback {
+  50% {
+    box-shadow: 0 0 0 4px
+      color-mix(in oklch, var(--material-color) 20%, transparent);
+  }
+}
+
+.scene-lock-state {
+  padding: 3px 6px;
+  color: var(--focus);
+  background: color-mix(in oklch, var(--focus) 10%, transparent);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 720;
+}
+
+.scene-gate-note {
+  margin: 7px 0 0;
+  color: color-mix(in oklch, var(--ink) 74%, var(--muted));
+  font-size: 0.68rem;
+}
+
+.scene-gate-note b {
+  margin-right: 4px;
+  color: var(--material-color);
+  font-weight: 720;
+}
+
+.scene-gesture-guides {
+  margin-top: 7px;
+  padding-top: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  border-top: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+}
+
+.scene-gesture-guides span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: color-mix(in oklch, var(--ink) 74%, var(--muted));
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.scene-gesture-guides b {
+  min-width: 18px;
+  color: var(--material-color);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.scene-polish-overlay[data-locked="true"] .scene-gesture-guides {
+  opacity: 0.48;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(button, .object-row):hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .segmented-actions button:hover:not(:disabled),
+  .orbit-options button:hover:not(:disabled),
+  .linear-pattern button:hover:not(:disabled) {
+    border-color: color-mix(in oklch, var(--primary) 65%, var(--border));
+  }
+}
+
+@media (max-width: 790px) {
+  .scene-view-controls {
+    top: 10px;
+    right: 10px;
+  }
+
+  .scene-panel:has(.coachmark) .scene-view-controls {
+    top: 92px;
+  }
+
+  .scene-polish-overlay {
+    bottom: 12px;
+    left: 10px;
+    width: min(270px, calc(100% - 152px));
+    padding: 8px 9px;
+  }
+
+  .scene-gesture-guides {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .selected-summary .selected-material {
+    max-width: 42ch;
+  }
+}
+
+@media (max-width: 430px) {
+  .scene-panel:has(.coachmark) .scene-view-controls {
+    top: 126px;
+  }
+
+  .scene-polish-overlay {
+    bottom: 66px;
+    width: min(290px, calc(100% - 20px));
+  }
+
+  .scene-gesture-guides {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scene-gesture-guides span {
+    font-size: 0.66rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 900px) {
+  .scene-polish-overlay {
+    bottom: 10px;
+    width: min(390px, calc(100% - 154px));
+  }
+
+  .scene-gesture-guides {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-status > span.playing,
+  .object-row.selected .object-symbol,
+  .sheet-backdrop,
+  .side-sheet,
+  .coachmark,
+  .toast,
+  .focus-view,
+  .focus-view .circular-pattern,
+  .circular-pattern > span.active,
+  .scene-polish-overlay,
+  .scene-polish-overlay[data-playing="true"] .scene-material-swatch {
+    animation: none !important;
+  }
+
+  :where(
+    button,
+    .object-row,
+    .scene-status > span,
+    .circular-pattern > span,
+    .focus-planet
+  ) {
+    transition-duration: 0.01ms !important;
+  }
+
+  button:active:not(:disabled),
+  :where(button, .object-row):hover:not(:disabled) {
+    transform: none;
+  }
+
+  .scene-status > span.playing,
+  .scene-polish-overlay[data-playing="true"] .scene-material-swatch {
+    box-shadow: none;
+  }
+}
+
+.app-shell[data-reduced-motion="true"] *,
+.app-shell[data-reduced-motion="true"] *::before,
+.app-shell[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.app-shell[data-reduced-motion="true"] button:active:not(:disabled),
+.app-shell[data-reduced-motion="true"]
+  :where(button, .object-row):hover:not(:disabled) {
+  transform: none;
+}

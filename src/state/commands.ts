@@ -229,7 +229,6 @@ export function applyCompositionCommand(
                   orbit: {
                     ...planet.orbit,
                     loopBars: command.loopBars,
-                    shellIndex: [0.5, 1, 2, 4].indexOf(command.loopBars),
                   },
                 }
               : planet,

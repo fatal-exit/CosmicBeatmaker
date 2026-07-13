@@ -1,4 +1,4 @@
-import type { LoopBars, PlanetRole } from "../domain/composition";
+import type { LoopBars, PlanetRole, StarPresetId } from "../domain/composition";
 
 export type QualityProfile = "low" | "balanced" | "high";
 export type QualityPreference = QualityProfile | "auto";
@@ -19,6 +19,8 @@ export interface PlanetSceneDescriptor {
   inclination: number;
   size: number;
   hue: number;
+  visualSeed: number;
+  roughness: number;
   muted: boolean;
   soloed: boolean;
   locked: boolean;
@@ -30,8 +32,10 @@ export interface PlanetSceneDescriptor {
 export interface SceneEventDescriptor {
   eventId: string;
   step: number;
-  /** Normalized position after the planet's pattern phase is applied. */
+  /** Normalized audio trigger position after pattern phase is applied. */
   phase: number;
+  /** Fixed orbit position where the moving planet meets this trigger. */
+  gatePhase: number;
 }
 
 export interface RingSegmentSceneDescriptor {
@@ -43,7 +47,10 @@ export interface RingSegmentSceneDescriptor {
 export interface MoonSceneDescriptor {
   id: string;
   selectionTargetId: string;
+  /** Audio-source phase shared by the compiler and the moon orbit renderer. */
   phase: number;
+  /** Number of moon revolutions during one parent-planet orbit. */
+  orbitRatio: number;
   events: SceneEventDescriptor[];
 }
 
@@ -52,7 +59,8 @@ export interface SceneDescriptor {
     id: string;
     hue: number;
     intensity: number;
-    presetId: string;
+    presetId: StarPresetId;
+    visualSeed: number;
   };
   planets: PlanetSceneDescriptor[];
   asteroidBelt?: {
@@ -63,9 +71,11 @@ export interface SceneDescriptor {
 }
 
 export interface VisualPulse {
+  occurrenceId: string;
   entityId: string;
   eventId: string;
   scheduledTick: number;
+  scheduledAudioTime: number;
   velocity: number;
 }
 

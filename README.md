@@ -13,11 +13,28 @@ Cosmic Beatmaker is a mobile-first 3D groovebox created for OpenAI Build Week. A
 - Three.js solar-system scene with transport-driven orbits and event pulses
 - Add, select, duplicate, delete, lock, regenerate, rotate, and resize orbits
 - Planetary rings, asteroid percussion, and a precise Focus View step editor
-- Energy, density, groove, space, and complexity macros with undo/redo
+- Live deterministic, role-safe patterns derived from energy, density, groove, space, and complexity, with undo/redo
 - Responsive phone and desktop layouts with semantic HTML canvas alternatives
 - Browser-local saves, compact share links, and JSON safety backups
 - Offline WAV and multitrack MIDI export
 - Reduced-motion, reduced-particle, reduced-flash, and quality controls
+- Stable seeded procedural planet materials and mood-specific star shaders with a selective additive glow shell
+- Canonical pattern-derived orbit gates with common rhythm presets and Focus View step customization
+- Audio-clock-aligned planet spawning with a transient highlighted entry marker
+- Accessible 44-pixel zoom, rotate, and reset controls with bounded wheel, pinch, and empty-space camera gestures
+- Exact polymetric orbit rates from ¼ to 8 bars, unique visual lanes, and complete-super-loop WAV/MIDI export
+- Locally implemented 20-asset first-party Ogg sample pilot with manifest-driven processing, lazy live playback, and synth fallback
+- Device-aware balanced audio scheduling, bounded callback/voice health guards, stable runtime voice reuse, and fail-silent overload recovery
+
+## Current milestone
+
+Milestone 7 — Visual Material & Interaction Polish now includes live deterministic macro-derived patterns alongside its materials, gates, spawning, and camera work. Review fixes have landed, and the primary agent is rerunning the complete quality and browser acceptance set before checkpointing it. The glow remains a lightweight selective additive shell, not full-screen bloom.
+
+Milestone 8 — First-Party Sample Pack Pilot is implemented locally with 20 manifest-backed stereo 48 kHz Ogg Vorbis assets, lazy Tone playback, per-sample attack/release metadata, and synth fallback. Primary verification, commit, push, and deployment remain pending for both checkpoints. Physical iOS and Android performance and listening checks remain explicit unverified release tasks; browser automation does not establish physical-device FPS or audio quality.
+
+Milestone 9 — Exact Polymeter & Unique Orbit Lanes is implemented locally. The nine supported rates are 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, and 8 bars. Live scheduling, visible orbit periods, WAV, and MIDI share one exact super-loop boundary, while every planet receives a distinct derived spatial lane so duplicate-rate planets never share a path. The supported catalog resynchronizes within 24 bars; exports default to one complete super-loop.
+
+The current audio-stability profile uses Tone's balanced worker clock with 120 ms desktop / 180 ms mobile lookahead, fixed master headroom before a -3 dB limiter, bounded scheduled sample voices, duplicate/late-callback admission guards, and a 15 ms fail-silent fade if the scheduler detects an unsafe backlog or repeated trigger failure. The app synchronizes its transport UI to the resulting safety pause and shows a recoverable toast. Physical-device listening and interruption recovery still require release testing.
 
 ## Run locally
 
@@ -29,6 +46,8 @@ npm run dev
 ```
 
 Open <http://127.0.0.1:4173>. Browser audio starts only after a user gesture.
+
+To rebuild the ignored first-party WAV inputs into the committed Ogg manifest and assets, install `ffmpeg`, `ffprobe`, and Xiph `oggenc`, then run `npm run samples:build`.
 
 ## Verify
 
@@ -54,7 +73,7 @@ The application keeps musical state serializable and separates responsibilities:
 - `src/persistence` — validated IndexedDB saves and compressed share-state URLs
 - `src/ui` — accessible React controls and responsive product workflows
 
-Tone.js is the authoritative clock. The renderer samples transport ticks; it never advances musical time. Seeded probability decisions use stable identifiers and loop indices, so playback, visuals, MIDI, WAV, saves, and shared links resolve the same composition.
+Tone.js is the authoritative clock. The renderer samples transport ticks; it never advances musical time. Each planet's saved orbit rate drives both its visible period and musical pattern period. Exact integer least-common-multiple math derives the active super-loop, and seeded probability decisions use stable identifiers and super-loop indices, so playback, visuals, MIDI, WAV, saves, and shared links resolve the same composition.
 
 ## Product principles
 
@@ -68,7 +87,7 @@ The complete product and engineering package lives in [`docs/`](docs/00_INDEX.md
 
 ## Current boundaries
 
-The synthesizer fallback is the current sound source; curated samples and full effect-send routing are future mix work. Structural edits currently reschedule immediately rather than waiting for the next bar. Physical iOS/Android listening and performance passes and cross-browser verification beyond Chromium remain release tasks.
+The first-party sample pilot is locally implemented for live playback, while synthesis remains the loading/error fallback and the offline WAV rendering path; MIDI remains sample-independent. Primary verification and deployment of the pilot are still pending. Full effect-send routing, next-bar structural replacement quantization, detailed audio-health diagnostics, and physical interruption/resume validation remain future reliability and mix work. Physical iOS/Android listening and performance passes and cross-browser verification beyond Chromium remain release tasks.
 
 ## Repository
 

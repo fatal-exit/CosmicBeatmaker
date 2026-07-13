@@ -3,6 +3,7 @@ import { Gain, Limiter, Offline } from "tone";
 import type { Composition } from "../domain/composition/types";
 import { compileComposition } from "./CompositionCompiler";
 import { ticksToSeconds } from "./timing";
+import type { CompiledSequence } from "./types";
 import { createFallbackVoice } from "./VoiceFactory";
 import { encodePcm16Wav } from "./WavEncoder";
 
@@ -21,6 +22,37 @@ export interface OfflineRenderOptions {
   signal?: AbortSignal;
 }
 
+export interface OfflineRenderTiming {
+  sequence: CompiledSequence;
+  /** Musical content ends on this super-loop resynchronization boundary. */
+  musicalDurationSeconds: number;
+  /** The optional effects tail begins only after the musical boundary. */
+  renderDurationSeconds: number;
+}
+
+export function getOfflineRenderTiming(
+  composition: Composition,
+  options: Pick<OfflineRenderOptions, "loops" | "tailSeconds"> = {},
+): OfflineRenderTiming {
+  const loops = options.loops ?? 1;
+  const tailSeconds = options.tailSeconds ?? 0.4;
+  if (!Number.isFinite(tailSeconds) || tailSeconds < 0 || tailSeconds > 10) {
+    throw new Error(
+      "Offline render tail must be between zero and ten seconds.",
+    );
+  }
+  const sequence = compileComposition(composition, { loops });
+  const musicalDurationSeconds = ticksToSeconds(
+    sequence.totalTicks,
+    sequence.bpm,
+  );
+  return {
+    sequence,
+    musicalDurationSeconds,
+    renderDurationSeconds: musicalDurationSeconds + tailSeconds,
+  };
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted)
     throw new DOMException("WAV export cancelled.", "AbortError");
@@ -30,21 +62,13 @@ export async function renderCompositionToWav(
   composition: Composition,
   options: OfflineRenderOptions = {},
 ): Promise<Uint8Array> {
-  const loops = options.loops ?? 2;
   const sampleRate = options.sampleRate ?? 44_100;
-  const tailSeconds = options.tailSeconds ?? 0.4;
-  if (!Number.isFinite(tailSeconds) || tailSeconds < 0 || tailSeconds > 10) {
-    throw new Error(
-      "Offline render tail must be between zero and ten seconds.",
-    );
-  }
 
   throwIfAborted(options.signal);
   options.onProgress?.({ phase: "compiling", progress: 0.05 });
-  const sequence = compileComposition(composition, { loops });
+  const timing = getOfflineRenderTiming(composition, options);
+  const { sequence } = timing;
   throwIfAborted(options.signal);
-  const musicalDuration = ticksToSeconds(sequence.totalTicks, sequence.bpm);
-  const renderDuration = musicalDuration + tailSeconds;
   options.onProgress?.({ phase: "rendering", progress: 0.25 });
 
   const buffer = await Offline(
@@ -68,7 +92,7 @@ export async function renderCompositionToWav(
       }
       // Nodes belong to the short-lived offline context and are reclaimed with it.
     },
-    renderDuration,
+    timing.renderDurationSeconds,
     2,
     sampleRate,
   );

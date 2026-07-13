@@ -11,7 +11,9 @@ Random generation is not sufficient. Each role uses curated musical grammar, con
 Default composition:
 
 - 4/4 time
-- Four bars
+- One canonical four-bar harmony phrase
+- Planet orbit periods of 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, or 8 bars
+- One derived active super-loop, bounded to 24 bars for the supported catalog
 - Tempo range: 70–140 BPM
 - Global swing: 0–60%, with a safer default range of 0–30%
 - One harmonic progression per system
@@ -25,7 +27,7 @@ Default composition:
 | ----------------- | ----------------------------------------------------- |
 | Star              | Mood, harmony tendency, sound palette, master effects |
 | Planet            | Primary musical track                                 |
-| Orbit             | Loop length and pattern phase                         |
+| Orbit             | Visible and musical period plus pattern phase         |
 | Active nodes      | Notes or hits                                         |
 | Moon              | Parent-linked embellishment or secondary motif        |
 | Ring              | Regular rhythmic subdivision or modulation            |
@@ -189,22 +191,25 @@ Texture should remain quiet enough not to dominate unless explicitly raised.
 
 ## Orbit behavior
 
-### Orbit shells
+### Orbit rates and spatial lanes
 
-Quantized loop lengths:
-
-- Half bar
-- One bar
-- Two bars
-- Four bars
-
-Optional later lengths:
+The exact data-driven planet-rate catalog is:
 
 - Quarter bar
+- Half bar
+- One bar
+- One and a half bars
+- Two bars
+- Three bars
+- Four bars
+- Six bars
 - Eight bars
-- Non-integer phasing
 
-Dragging inward selects a shorter loop. Dragging outward selects a longer loop.
+The stored rate has one meaning: the planet completes one visible orbit and repeats its musical pattern in that period. The rate does not encode scene radius or camera scale.
+
+Represent rates in exact quarter-bar units `[1, 2, 4, 6, 8, 12, 16, 24, 32]`. Include the four-bar harmony phrase in the integer least-common-multiple calculation for active audible sources. This produces the complete super-loop: 3- and 4-bar parts resynchronize after 12 bars, 6- and 8-bar parts after 24, and no supported catalog combination exceeds 24 bars.
+
+Every planet receives a unique visual lane derived from rate order and stable composition order or ID. Duplicate-rate planets occupy neighboring lanes rather than sharing a path. Radial manipulation chooses a rate; lane placement is recalculated from the whole planet set. Camera fit and zoom remain renderer state, independent from rate.
 
 ### Pattern representation
 
@@ -216,7 +221,7 @@ A track stores:
 - Phase offset
 - Role-specific note data
 
-The planet completes one visual orbit per musical loop.
+The planet completes one visual orbit per musical pattern loop. Live scheduling, orbit phase, WAV, and MIDI all consume the same rate and derived super-loop boundary.
 
 ### Pattern rotation
 
@@ -390,7 +395,7 @@ If validation fails, regenerate only the failing layer using a derived seed.
 - Percussion uses a documented drum-note mapping
 - Harmonic tracks preserve pitch, velocity, duration, and channel
 - Tempo and time signature are written to the file
-- Four-bar loop may be repeated a user-selected number of times
+- Export defaults to one complete active super-loop and may repeat that whole boundary 1×, 2×, or 4×
 
 ## Musical definition of done
 

@@ -69,7 +69,7 @@ Create an immediately good-sounding four-bar system.
 - Role-aware rhythm generation
 - Automatic mix guardrails
 - Add, select, mute, solo, duplicate, and delete planet
-- Quantized orbit shells
+- Quantized orbit rates with derived unique spatial lanes
 - Pattern phase rotation
 - Energy, density, groove, and space macros
 - Undo and redo
@@ -176,6 +176,165 @@ Make the application memorable, understandable, and presentable.
 
 The deployed app completes the full first-minute promise on desktop and physical mobile hardware.
 
+---
+
+## Milestone 7 — Visual Material & Interaction Polish
+
+### Goal
+
+Give the existing instrument a richer, coherent material identity and clearer tactile response without changing its musical model, interaction hierarchy, or mobile performance baseline.
+
+### Status
+
+Milestone 7 implementation now includes the procedural materials, glow, microinteraction, orbit-gate, rhythm-preset, transport-aligned spawn, camera-navigation, and live deterministic macro-derived pattern scope. Review fixes have landed, and the primary agent is rerunning the complete format, typecheck, lint, test, build, E2E, and real-browser acceptance set. The checkpoint is not complete until that re-verification passes; commit, push, and deployment remain pending.
+
+Physical iOS and Android performance and listening checks remain an unverified release task. Mobile viewport automation supports interaction and rendering acceptance but does not establish physical-device frame rate, thermal behavior, touch latency, or audio quality.
+
+### Deliverables
+
+- Custom `ShaderMaterial` planet surfaces with a distinct visual vocabulary for beat, bass, chords, melody, and texture roles
+- Custom star surfaces whose color, motion, and pattern parameters distinguish each authored mood preset
+- Stable seed-derived surface parameters that survive save, share, reload, and deterministic regeneration
+- Selective additive bloom-like glow shells for the star and a small set of state-significant scene accents, with no full-screen post-processing bloom pass
+- Low, balanced, and high shader variants that preserve object and transport-state legibility while reducing fragment cost, motion, and glow work
+- Reduced-motion and reduced-flash behavior that removes decorative shader animation and attenuates pulses without hiding selection, mute, solo, lock, or playback state
+- Restrained, state-driven DOM microinteractions for actions such as selection, button activation, panel changes, saves, and exports
+- Live deterministic, role-safe pattern derivation from energy, density, groove, space, and complexity without destructively rewriting the canonical pattern
+- Visible orbit gates projected from each planet and moon pattern. Their resting positions use deterministic step and phase data; each admitted occurrence then corrects its exact gate to the scheduler's swing- and humanize-adjusted audio tick, including events created by macro projection or common rhythm presets
+- Simple common-rhythm preset choices for fast gate layouts, with step-level gate customization through the existing Focus View pattern editor
+- An exact gate-collision pulse keyed by canonical event ID and scheduled audio-clock tick rather than render-frame intersection tests
+- Audio-clock spawn alignment that places a planet added during playback at its transport-derived position in the active super-loop instead of restarting its visual orbit
+- A transient highlighted spawn marker at the newly added planet's computed orbit position, adapted for quality, reduced-motion, and reduced-flash preferences
+- Semantic 44-by-44 CSS-pixel Zoom out, Reset view, Zoom in, Rotate left, and Rotate right controls available in desktop and mobile layouts
+- Zoom constrained to 60–180 percent through buttons, pointer wheel, or touch pinch, plus empty-space camera rotation that does not steal selected-object gestures
+- Renderer-owned camera orientation and zoom with an aspect-aware deterministic reset view and no composition-state, history, save, or share fields
+- Visual regression coverage for representative roles, star presets, gate patterns, quality profiles, and reduced-motion states
+
+### Acceptance
+
+- All five planet roles remain distinguishable by surface pattern or form response, not color alone, at the portrait phone viewport.
+- All five star mood presets have visibly different shader identities while keeping orbit lines, pattern nodes, and the current playhead readable.
+- Opening the same saved or shared composition reproduces the same static surface identity; animation time does not enter seeded generation or serialized state.
+- Regenerating one unlocked object derives its new surface deterministically while leaving locked and unrelated objects' surface identities unchanged.
+- Low quality uses no full-screen post-processing and attenuates optional glow and shader detail while preserving every musical and editing state cue.
+- Reduced motion stops continuous decorative surface movement, and reduced flash limits trigger intensity; neither setting removes the visible cause of an audible event.
+- UI microinteractions are triggered by explicit application state, do not delay input, have no essential motion-only meaning, and settle to a stable state.
+- The same canonical pattern and macro values always produce the same bounded, role-safe live event projection. Audio scheduling and orbit gates consume that same projection, repeated macro changes do not accumulate drift, and undo or redo restores the exact derived result.
+- Each visible planet gate maps one-to-one by ID to a canonical pattern event. Choosing a common rhythm preset replaces those canonical events, and adding, moving, or removing a step in Focus View updates the same gates and audio schedule through the existing undoable command path.
+- At every admitted compiled occurrence, the matching gate is corrected to the planet or moon's audio-clock-derived phase at the occurrence's swing- and humanize-adjusted scheduled tick, modulo one turn. Each admitted occurrence produces exactly one pulse at that matching gate; a probability-rejected occurrence produces no pulse. Resting gates remain a deterministic nominal preview, and geometric collision detection or render frames never decide whether an event occurs.
+- Adding a planet during each bar and at fractional positions of the active super-loop places it at the phase computed from the current audio transport tick within one rendered frame; it does not visibly start at orbit phase zero unless the transport-derived position is zero.
+- The spawn marker appears at that computed position, remains bounded to one short-lived runtime effect per addition, and becomes a static low-intensity highlight when reduced motion or reduced flash requires it.
+- Save, share, reload, undo, and redo contain no gate-runtime state, spawn marker, wall-clock timestamp, or runtime transport tick. Existing canonical pattern, orbit, composition-length, and seed data remain sufficient, so this milestone adds no schema field.
+- In automated desktop and mobile browser stress scenarios, touch feedback, scene-resource lifecycle, and audio-independence checks pass without WebGL compilation, rendering, or console errors.
+
+### Camera navigation acceptance — complete
+
+- Desktop and mobile expose semantic buttons with the accessible names Zoom out, Reset view, Zoom in, Rotate left, and Rotate right; each remains keyboard operable and meets the 44-by-44 CSS-pixel touch target.
+- The buttons apply bounded increments across the 60–180 percent zoom range, and Reset view restores the aspect-appropriate default angle and zoom without changing selection, playback, or composition state.
+- Pointer-wheel and pinch gestures zoom within the same 60–180 percent bounds as the buttons. Dragging empty scene space rotates the constrained camera, while dragging a selected planet continues to edit that planet and never rotates the camera.
+- Camera input produces immediate feedback. Reduced motion removes animated camera interpolation without disabling any control or gesture.
+- Camera orientation, zoom, gesture state, and reset state remain renderer-only and are excluded from composition history, undo, save, share, JSON export, and schema migrations.
+- Desktop and mobile automated-browser coverage verifies the semantic buttons, wheel zoom, aspect-aware reset, and the unobstructed guided flow; pure unit coverage verifies bounded pinch and rotation math, while real-browser review verifies empty-space rotation and a clean console.
+- At the 390-by-844 phone viewport, the corrected coachmark remains readable without obstructing the camera controls.
+
+### Scope boundary
+
+This milestone does not add procedural terrain simulation, a full-screen compositor, a parallel gate sequencer, new musical behavior, a new top-level creative-control hierarchy, or new runtime dependencies. Rhythm presets and Focus View continue to edit the existing canonical pattern model; gates and spawn markers are scene projections only. Camera navigation is an accessible renderer control surface and never becomes composition data.
+
+### Implementation stopping condition — re-verification in progress
+
+The milestone stops when the primary re-verification confirms that the five showcase systems retain their role and star-preset identities; seeded surfaces remain stable; deterministic macro projections drive both audio and gates without mutating canonical patterns; preset and Focus View gates remain exact; transport-aligned spawning and camera navigation retain their tested behavior; renderer-only state stays out of serialization and history; low-quality and reduced-motion modes retain all musical state cues; and the complete quality suite and real-browser WebGL review remain green without adding a post-processing pipeline.
+
+### Checkpoint and release tasks still open
+
+- Complete primary re-verification after the review fixes.
+- Inspect and publish the resulting coherent repository checkpoint, deploy it, and smoke-test the deployed application.
+- On physical iOS and Android devices, verify listening quality, touch response, thermal stability, and the documented 30 FPS minimum during normal editing.
+- Reconfirm that physical-device visual frame drops do not affect audio scheduling before marking release acceptance complete.
+
+---
+
+## Milestone 8 — First-Party Sample Pack Pilot
+
+### Goal
+
+Prove a small authored sample pack can be processed repeatably, delivered efficiently, and used safely in live playback without risking startup sound, deterministic exports, repository size, or future content growth.
+
+### Status
+
+The 20-asset pilot, generated manifest, processor, runtime mappings, lazy Tone playback, playback envelopes, and synth fallback are implemented locally. Primary verification, diff review, checkpoint commit, push, and deployment remain pending. Physical-device listening has not been completed.
+
+### Deliverables
+
+- A repeatable `scripts/process-samples.mjs` processor that recursively discovers WAV inputs, derives stable collision-checked IDs, regenerates a manifest, and removes stale outputs
+- Explicit rerun prerequisites: `ffmpeg`, `ffprobe`, and Xiph `oggenc` on `PATH`
+- Terminal-silence trimming only for at least 120 ms below -60 dBFS, with 30 ms retained after the audible tail and internal or authored reverberant space preserved
+- No processor gain or normalization and no mutation of raw input WAVs
+- Stereo 48 kHz Ogg Vorbis quality-5 delivery for all 20 current first-party assets, encoded through Xiph `oggenc`
+- A committed 20-entry generated manifest with stable URLs plus source, output, processing, level, license, authorship, and per-sample attack/release metadata
+- Near-immediate attack for punchy transients, optional subtle fade-in for softer or style-dependent samples, and release before the file boundary for the 2.182-second long assets
+- Lazy Tone sample playback for active live presets with an event-for-event synthesized fallback while loading or after fetch, decode, or trigger failure
+- Existing synth-only offline WAV rendering and canonical MIDI export preserved unchanged
+- Ignored, uncommitted raw WAV inputs and a processor that accepts future files without a hard-coded inventory
+
+### Acceptance
+
+- Running `npm run samples:build` with the three prerequisite tools available discovers the current WAV inputs in stable order and produces exactly 20 `.ogg` files plus a 20-entry schema-versioned manifest.
+- Every generated asset decodes as stereo 48 kHz Ogg Vorbis quality 5, has a unique stable ID and base-path-safe URL, and is represented once in the runtime manifest and a live sound-preset mapping.
+- The processor trims only terminal silence meeting the 120 ms and -60 dBFS policy, retains 30 ms after the audible tail, and preserves internal gaps, short endings, and identified long or reverberant tails.
+- No processing step applies gain or normalization. Manifest level metadata supports review of the source and decoded output without treating lossy-codec peak movement as normalization.
+- Raw source WAV hashes and contents remain unchanged, `sample inputs/` remains ignored, and no raw WAV enters the checkpoint diff.
+- Manifest envelope metadata keeps punchy transients at near-immediate attack, allows restrained fade-in only where the sample style calls for it, and releases every 2.182-second asset before its file boundary. The six new lead filenames containing `short` remain 2.182 seconds because no terminal silence qualified for trimming; playback release still prevents a hard boundary stop.
+- Live playback loads only active sample voices after audio unlock. A not-yet-ready or failed sample uses synthesis for the same scheduled occurrence rather than dropping the event.
+- Offline WAV rendering remains synth-only, and MIDI output remains on the existing deterministic compiled-note path; sample availability cannot change either export.
+- Adding a future WAV and rerunning the processor yields a stable new asset and manifest entry without modifying discovery code; ID collisions fail clearly, and deliberate runtime preset assignment remains reviewable.
+
+### Scope boundary
+
+This pilot does not add a sample marketplace, user sample import, stems, sample-based offline rendering, automatic loudness normalization, destructive raw-audio editing, or a large preload. It validates a small first-party live palette and a scalable content pipeline while synthesis remains the safety and export baseline.
+
+### Stopping condition
+
+The primary agent reruns the processor and complete repository quality suite, confirms the 20 generated assets and manifest policy, exercises lazy load and failure fallback, verifies WAV and MIDI regressions remain green, confirms no raw WAV is tracked, and reviews live sample playback without clipped or missing events. Only then may the checkpoint be committed and pushed for deployment; physical iOS and Android listening remains a separate release task.
+
+## Milestone 9 — Exact Polymeter & Unique Orbit Lanes
+
+### Goal
+
+Let simple loops and deeper polymeters coexist without breaking the beginner metaphor: a planet's orbit rate must be the same period users see and hear, planets must remain spatially distinct, and live/export playback must end only on a complete synchronization boundary.
+
+### Deliverables
+
+- One data-driven rate catalog containing exactly 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, and 8 bars
+- Exact quarter-bar integer LCM math, including the canonical four-bar harmony phrase, with a maximum supported 24-bar super-loop
+- One `loopBars` source for musical scheduling, visible angular phase, interaction choices, save/share, WAV, and MIDI
+- A bounded live scheduler that repeats complete super-loops without scheduling an unbounded future timeline
+- Unique per-planet spatial lanes ordered by rate and stable composition identity, including adjacent distinct lanes for duplicate rates
+- Camera fit/zoom independent from rate, with essential silhouette outlines retained at expanded zoom and optional glow still quality-dependent
+- A mobile-first semantic rate control with four familiar choices immediately visible and the deeper ¼-, 1½-, 3-, 6-, and 8-bar choices progressively disclosed
+- Inspector copy explaining that rate changes both the visible orbit period and musical pattern period, plus the derived system synchronization length
+- WAV and MIDI export defaulting to one complete super-loop, with 1×, 2×, and 4× whole-loop choices and exact bar/duration copy
+- Browser coverage proving a 3-bar orbit alongside a 4-bar orbit produces a visible 12-bar sync and 12-bar default export
+- Schema-version-1 contract updated in place for the early test build, with old shared-shell compatibility explicitly not guaranteed
+
+### Acceptance
+
+- The catalog round-trips and validates every supported rate while rejecting values outside it.
+- Integer timing proves 3 + 4 → 12 bars, 6 + 8 → 24 bars, fractional rates exactly divide the shared PPQ timeline, and no supported composition exceeds the 24-bar limit.
+- Live playback, visual phase, probability indexing, WAV, and MIDI use the same derived boundary; repeated exports are whole super-loops rather than arbitrary four-bar slices.
+- Every planet has a distinct orbit radius. Planets with the same rate occupy neighboring lanes and never share or cross the same path; reloading the same composition preserves deterministic lane ordering.
+- Rate changes do not change camera state. Auto-fit and bounded user zoom keep the outer lane usable, and essential object outlines remain legible without depending on bloom.
+- All semantic rate and export controls are keyboard reachable, expose selection state, and provide at least 44 by 44 CSS-pixel targets.
+- Desktop Chromium and the Pixel 7 profile can select a 3-bar rate, see the 3-bar label and 12-bar sync, and open an export panel defaulted to one 12-bar super-loop.
+
+### Scope boundary
+
+This milestone does not add arbitrary decimal rates, user-authored time signatures, song arrangement, independent moon-rate controls, audio stems, or a free-fly camera. A four-bar harmonic phrase remains the composition default; the derived super-loop is its polymetric repetition boundary, not a linear song length.
+
+### Stopping condition
+
+The primary agent reviews the complete diff; runs format, typecheck, lint, unit tests, production build, and the critical E2E suite; verifies the 3 + 4 and 6 + 8 acceptance cases; checks unique lanes and outline legibility at phone and desktop sizes; then commits and pushes the coherent checkpoint and monitors the Pages smoke test. Physical iOS and Android timing, zoom, and listening checks remain separate release tasks.
+
 ## Nine-day build sequence
 
 ### Day 1
@@ -221,7 +380,7 @@ Complete Milestone 2.
 Focus:
 
 - Planet editing
-- Orbit shells
+- Orbit rates and unique spatial lanes
 - Macros
 - Mix safety
 - Undo and redo

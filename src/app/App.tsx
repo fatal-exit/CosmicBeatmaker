@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { AudioEngine, ScheduledVisualEvent } from "../audio";
+import { getCompositionSuperLoop } from "../audio/CompositionCompiler";
 import {
   SHOWCASE_SYSTEMS,
   type ShowcaseSystemDefinition,
@@ -27,6 +28,11 @@ import {
   generatePlanetForRole,
   regenerateUnlockedSystem,
 } from "../domain/generation";
+import {
+  applyGateRhythmPreset,
+  inferGateRhythmPreset,
+  type GateRhythmPresetId,
+} from "../domain/rhythm";
 import { createId } from "../domain/serialization/ids";
 import {
   LocalCompositionRepository,
@@ -54,10 +60,16 @@ import {
 } from "../ui/export/downloads";
 import { FocusView } from "../ui/focus/FocusView";
 import { PlanetInspector } from "../ui/inspector/PlanetInspector";
+import {
+  formatOrbitLoop,
+  ORBIT_RATE_OPTIONS,
+  parseOrbitRate,
+} from "../ui/inspector/orbitRateOptions";
 import { LibraryPanel } from "../ui/library/LibraryPanel";
 import { MacroControls } from "../ui/macros/MacroControls";
 import { ProjectMenu } from "../ui/menu/ProjectMenu";
 import { Onboarding } from "../ui/onboarding/Onboarding";
+import { ScenePolishOverlay } from "../ui/scene/ScenePolishOverlay";
 import { TransportBar } from "../ui/transport/TransportBar";
 
 type OpenPanel = "menu" | "add" | "library" | "export" | "mobile-editor" | null;
@@ -222,7 +234,8 @@ export function App() {
   const sharedLoadedRef = useRef(false);
   const initializedRef = useRef(false);
   const exportAbortRef = useRef<AbortController | null>(null);
-  const [pulse, setPulse] = useState<VisualPulse | null>(null);
+  const pulseQueueRef = useRef<VisualPulse[]>([]);
+  const [pulseRevision, setPulseRevision] = useState(0);
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [focusOpen, setFocusOpen] = useState(false);
   const [saves, setSaves] = useState<CompositionSummary[]>([]);
@@ -232,27 +245,48 @@ export function App() {
     "idle" | "working" | "error"
   >("idle");
   const [exportMessage, setExportMessage] = useState("");
-  const [repetitions, setRepetitions] = useState<2 | 4 | 8>(4);
+  const [repetitions, setRepetitions] = useState<1 | 2 | 4>(1);
+  const superLoopBars = getCompositionSuperLoop(composition).bars;
 
   const handleVisualEvent = useCallback((event: ScheduledVisualEvent) => {
-    setPulse({
+    pulseQueueRef.current.push({
+      occurrenceId: event.occurrenceId,
       entityId: event.trackId,
       eventId: event.eventId,
       scheduledTick: event.startTick,
+      scheduledAudioTime: event.scheduledAudioTime,
       velocity: event.velocity,
     });
+    if (pulseQueueRef.current.length > 128) {
+      pulseQueueRef.current.splice(0, pulseQueueRef.current.length - 128);
+    }
+    setPulseRevision((revision) => revision + 1);
   }, []);
+
+  const handleAudioHealthFailure = useCallback(() => {
+    setPlaying(false);
+    setAudioStatus("ready");
+    setToast("Audio paused to prevent an overload. Press Play to recover.");
+  }, [setAudioStatus, setPlaying]);
+
+  const drainVisualPulses = useCallback(
+    () => pulseQueueRef.current.splice(0),
+    [],
+  );
 
   const ensureAudioEngine = useCallback((): Promise<AudioEngine> => {
     if (audioRef.current) return Promise.resolve(audioRef.current);
     audioLoadRef.current ??= import("../audio").then(({ AudioEngine }) => {
-      const engine = new AudioEngine({ onVisualEvent: handleVisualEvent });
+      const engine = new AudioEngine({
+        onVisualEvent: handleVisualEvent,
+        onHealthFailure: handleAudioHealthFailure,
+      });
       engine.setComposition(useAppStore.getState().compositionHistory.present);
       audioRef.current = engine;
       return engine;
     });
     return audioLoadRef.current;
-  }, [handleVisualEvent]);
+  }, [handleAudioHealthFailure, handleVisualEvent]);
 
   useEffect(
     () => () => {
@@ -510,6 +544,21 @@ export function App() {
     }
   };
 
+  const setGateRhythm = (presetId: GateRhythmPresetId) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetPlanetPattern",
+      planetId: selectedPlanet.id,
+      pattern: applyGateRhythmPreset(
+        selectedPlanet.pattern,
+        selectedPlanet.role,
+        presetId,
+        selectedPlanet.id,
+      ),
+    });
+    setToast(`${selectedPlanet.name} gates set to ${presetId}.`);
+  };
+
   const addRing = () => {
     if (!selectedPlanet || selectedPlanet.ring) return;
     dispatch({
@@ -625,13 +674,13 @@ export function App() {
     (planetId: string, loopBars: LoopBars) => {
       selectObject(planetId);
       dispatch({ type: "SetPlanetLoopBars", planetId, loopBars });
-      if (ui.onboardingStep === "orbit") {
+      if (useAppStore.getState().ui.onboardingStep === "orbit") {
         setOnboardingStep("complete");
         localStorage.setItem("cosmic-onboarding-version", "1");
         setToast("You made your first cosmic groove.");
       }
     },
-    [dispatch, selectObject, setOnboardingStep, ui.onboardingStep],
+    [dispatch, selectObject, setOnboardingStep],
   );
 
   const handleScenePhaseChange = useCallback(
@@ -643,7 +692,7 @@ export function App() {
   );
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-reduced-motion={ui.reducedEffects}>
       <TransportBar
         name={composition.name}
         bpm={composition.bpm}
@@ -687,12 +736,19 @@ export function App() {
                 reducedFlash: ui.reducedFlash,
               }}
               readTransportTicks={readTransportTicks}
-              pulse={pulse}
+              pulseRevision={pulseRevision}
+              drainVisualPulses={drainVisualPulses}
               onSelect={selectObject}
               onOrbitLoopBarsChange={handleSceneOrbitChange}
               onOrbitPhaseChange={handleScenePhaseChange}
             />
           </Suspense>
+          <ScenePolishOverlay
+            selectedPlanetRole={selectedPlanet?.role}
+            selectedPlanetName={selectedPlanet?.name}
+            isPlaying={ui.isPlaying}
+            isLocked={selectedPlanet?.locked}
+          />
           <div className="scene-status">
             <span className={ui.isPlaying ? "playing" : ""} />
             {ui.isPlaying ? "In orbit" : "Ready"} · {composition.bpm} BPM
@@ -709,7 +765,7 @@ export function App() {
           {ui.onboardingStep === "orbit" ? (
             <div className="coachmark" role="status">
               <strong>Give it a different orbit</strong>
-              <span>Choose ½, 1, 2, or 4 bars in the inspector.</span>
+              <span>Choose a faster or slower rate in the inspector.</span>
             </div>
           ) : null}
           <button
@@ -722,10 +778,17 @@ export function App() {
         </section>
         <PlanetInspector
           planet={selectedPlanet}
+          superLoopBars={superLoopBars}
           onMute={toggleSelectedMute}
           onSolo={toggleSelectedSolo}
           onLock={toggleSelectedLock}
           onOrbit={setOrbit}
+          gateRhythmPreset={
+            selectedPlanet
+              ? inferGateRhythmPreset(selectedPlanet.pattern)
+              : "custom"
+          }
+          onGateRhythmPreset={setGateRhythm}
           onPattern={openPatternEditor}
           onRing={addRing}
           onDuplicate={duplicateSelectedPlanet}
@@ -754,7 +817,7 @@ export function App() {
             <strong>{selectedPlanet?.name ?? "Select a planet"}</strong>
             <small>
               {selectedPlanet
-                ? `${selectedPlanet.role} · ${selectedPlanet.orbit.loopBars} bar loop`
+                ? `${selectedPlanet.role} · ${formatOrbitLoop(selectedPlanet.orbit.loopBars)}`
                 : "Use the object list to edit"}
             </small>
           </span>
@@ -766,16 +829,18 @@ export function App() {
           <label className="mobile-orbit-control">
             <span>Orbit</span>
             <select
-              aria-label="Orbit length"
+              aria-label="Orbit rate"
               value={selectedPlanet.orbit.loopBars}
-              onChange={(event) =>
-                setOrbit(Number(event.target.value) as LoopBars)
-              }
+              onChange={(event) => {
+                const orbit = parseOrbitRate(event.target.value);
+                if (orbit !== undefined) setOrbit(orbit);
+              }}
             >
-              <option value="0.5">½ bar</option>
-              <option value="1">1 bar</option>
-              <option value="2">2 bars</option>
-              <option value="4">4 bars</option>
+              {ORBIT_RATE_OPTIONS.map((orbit) => (
+                <option key={orbit.bars} value={orbit.bars}>
+                  {orbit.label}
+                </option>
+              ))}
             </select>
           </label>
         ) : null}
@@ -855,6 +920,9 @@ export function App() {
         <ExportPanel
           status={exportStatus}
           message={exportMessage}
+          superLoopBars={superLoopBars}
+          bpm={composition.bpm}
+          beatsPerBar={composition.beatsPerBar}
           repetitions={repetitions}
           onRepetitions={setRepetitions}
           onWav={exportWav}
@@ -895,11 +963,18 @@ export function App() {
           />
           <PlanetInspector
             planet={selectedPlanet}
+            superLoopBars={superLoopBars}
             headingId="mobile-inspector-heading"
             onMute={toggleSelectedMute}
             onSolo={toggleSelectedSolo}
             onLock={toggleSelectedLock}
             onOrbit={setOrbit}
+            gateRhythmPreset={
+              selectedPlanet
+                ? inferGateRhythmPreset(selectedPlanet.pattern)
+                : "custom"
+            }
+            onGateRhythmPreset={setGateRhythm}
             onPattern={openPatternEditor}
             onRing={addRing}
             onDuplicate={duplicateSelectedPlanet}

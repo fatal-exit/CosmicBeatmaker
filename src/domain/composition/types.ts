@@ -1,5 +1,7 @@
 export const CURRENT_SCHEMA_VERSION = 1 as const;
 
+import type { SupportedLoopBars } from "./loopRates";
+
 export type SchemaVersion = typeof CURRENT_SCHEMA_VERSION;
 export type EntityId = string;
 export type StarPresetId =
@@ -22,7 +24,7 @@ export type DrumVoiceId =
 export type ChordAction = "strike" | "hold" | "release";
 
 export type PlanetRole = "beat" | "bass" | "chords" | "melody" | "texture";
-export type LoopBars = 0.5 | 1 | 2 | 4;
+export type LoopBars = SupportedLoopBars;
 
 export interface Composition {
   schemaVersion: SchemaVersion;
@@ -91,6 +93,7 @@ export interface OrbitState {
   loopBars: LoopBars;
   phase: number;
   inclination: number;
+  /** @deprecated Scene orbit lanes are derived from all planet rates. */
   shellIndex: number;
   direction: 1;
 }

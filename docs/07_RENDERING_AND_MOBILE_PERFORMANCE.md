@@ -33,6 +33,7 @@ Default:
 - Limited zoom range
 - Limited rotation
 - Smooth focus transitions
+- Automatic framing that can fit one unique orbit lane per planet
 
 Do not use a free-fly camera.
 
@@ -63,6 +64,7 @@ Scene
 - Solo state reduces unrelated visual prominence.
 - Locked objects show a small clear icon or ring mark.
 - Selection uses outline, halo, or orbit emphasis rather than color alone.
+- Essential star and planet silhouette outlines remain visible when expanded lane counts require zooming out; optional additive glow is a separate quality effect.
 
 ## Picking and touch
 
@@ -72,7 +74,7 @@ Minimum hit behavior:
 
 - Planet hit area larger than visible mesh
 - Moon hit area substantially larger than visible mesh
-- Orbit shell hit area wide enough for touch
+- Selected orbit path and radial rate-control hit area wide enough for touch
 - Pattern nodes enlarged in Focus View
 - Object selection resolvable even when visuals overlap
 
@@ -90,9 +92,11 @@ When multiple objects are under a tap:
 Map pointer movement to the system plane.
 
 - Determine candidate orbit radius.
-- Snap to supported shells.
+- Map the gesture to the ordered supported rate catalog.
 - Show preview label such as “1 bar.”
 - Commit one undoable action on release.
+
+After the rate change, derive a unique compact lane for every planet by rate order and stable composition order or ID. Duplicate-rate planets use adjacent distinct lanes. Lane radius is not musical duration, and changing rate must not mutate camera zoom or rotation.
 
 ### Tangential drag
 
@@ -222,6 +226,8 @@ Initial safe limits:
 
 - 1 star
 - 8 primary planets
+- 8 unique derived planet lanes
+- 24 bars maximum supported active super-loop
 - 3 moons per planet
 - 1 ring per planet
 - 1 asteroid belt

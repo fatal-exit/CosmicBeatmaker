@@ -6,7 +6,21 @@ export function ticksPerBar(beatsPerBar = 4): number {
 }
 
 export function ticksForBars(bars: number, beatsPerBar = 4): number {
-  return Math.round(bars * ticksPerBar(beatsPerBar));
+  const quarterBarUnits = bars * 4;
+  const ticksPerQuarterBar = ticksPerBar(beatsPerBar) / 4;
+  if (
+    !Number.isSafeInteger(quarterBarUnits) ||
+    quarterBarUnits <= 0 ||
+    !Number.isSafeInteger(ticksPerQuarterBar) ||
+    ticksPerQuarterBar <= 0
+  ) {
+    throw new Error("Bar durations must resolve to exact quarter-bar ticks.");
+  }
+  const ticks = quarterBarUnits * ticksPerQuarterBar;
+  if (!Number.isSafeInteger(ticks)) {
+    throw new Error("Bar duration exceeds the safe integer timing range.");
+  }
+  return ticks;
 }
 
 export function ticksToSeconds(ticks: number, bpm: number): number {

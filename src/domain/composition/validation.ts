@@ -4,10 +4,15 @@ import {
   CURRENT_SCHEMA_VERSION,
   type Composition,
   type EntityId,
+  type LoopBars,
 } from "./types";
+import { LOOP_BAR_RATES, isLoopBars } from "./loopRates";
 
 const normalized = z.number().finite().min(0).max(1);
 const normalizedPhase = z.number().finite().min(0).lt(1);
+const loopBarsSchema = z.custom<LoopBars>(isLoopBars, {
+  message: `Loop length must be one of: ${LOOP_BAR_RATES.join(", ")} bars.`,
+});
 
 const pitchIntentSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -49,6 +54,13 @@ const patternSchema = z
     humanize: normalized,
   })
   .superRefine((pattern, context) => {
+    if (pattern.events.length > pattern.gridSize) {
+      context.addIssue({
+        code: "custom",
+        message: `Pattern has more than ${pattern.gridSize} events.`,
+        path: ["events"],
+      });
+    }
     for (const event of pattern.events) {
       if (event.step >= pattern.gridSize) {
         context.addIssue({
@@ -108,15 +120,10 @@ const planetSchema = z.object({
   name: z.string().min(1).max(80),
   soundPresetId: z.string().min(1),
   orbit: z.object({
-    loopBars: z.union([
-      z.literal(0.5),
-      z.literal(1),
-      z.literal(2),
-      z.literal(4),
-    ]),
+    loopBars: loopBarsSchema,
     phase: normalizedPhase,
     inclination: z.number().min(-1).max(1),
-    shellIndex: z.number().int().min(0).max(3),
+    shellIndex: z.number().int().min(0).max(7),
     direction: z.literal(1),
   }),
   pattern: patternSchema,
@@ -238,16 +245,16 @@ export const compositionSchema = z
           ...moon.pattern.events.map((event) => event.id),
         ]),
       );
-      if (planet.ring) ids.push(planet.ring.id);
-
-      const expectedShellIndex = [0.5, 1, 2, 4].indexOf(planet.orbit.loopBars);
-      if (planet.orbit.shellIndex !== expectedShellIndex) {
-        context.addIssue({
-          code: "custom",
-          message: `Planet ${planet.id} has an orbit shell that does not match its loop length.`,
-          path: ["planets"],
-        });
+      for (const moon of planet.moons) {
+        if (!isLoopBars(planet.orbit.loopBars / moon.orbitRatio)) {
+          context.addIssue({
+            code: "custom",
+            message: `Moon ${moon.id} must resolve to a supported exact loop length.`,
+            path: ["planets"],
+          });
+        }
       }
+      if (planet.ring) ids.push(planet.ring.id);
 
       for (const event of planet.pattern.events) {
         if (planet.role === "beat" && !event.drumVoice) {
@@ -272,6 +279,16 @@ export const compositionSchema = z
         composition.asteroidBelt.id,
         ...composition.asteroidBelt.events.map((event) => event.id),
       );
+      if (
+        composition.asteroidBelt.events.length >
+        composition.asteroidBelt.gridSize
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: `Asteroid belt has more than ${composition.asteroidBelt.gridSize} events.`,
+          path: ["asteroidBelt", "events"],
+        });
+      }
       for (const event of composition.asteroidBelt.events) {
         if (event.step >= composition.asteroidBelt.gridSize) {
           context.addIssue({

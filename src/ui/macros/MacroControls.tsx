@@ -32,10 +32,17 @@ export function MacroControls({
   onCommit,
 }: MacroControlsProps) {
   return (
-    <section className="macro-bar" aria-labelledby="macro-heading">
+    <section
+      className="macro-bar"
+      aria-labelledby="macro-heading"
+      aria-describedby="macro-live-help"
+    >
       <div className="macro-heading">
         <p className="panel-label">Shape the whole system</p>
         <h2 id="macro-heading">Performance controls</h2>
+        <small id="macro-live-help">
+          Changes reshape the playing loop live without replacing your pattern.
+        </small>
       </div>
       <div className="macro-controls">
         {MACROS.map((macro) => (
@@ -50,6 +57,7 @@ export function MacroControls({
               max="1"
               step="0.01"
               value={macros[macro.key]}
+              aria-describedby="macro-live-help"
               onPointerDown={() => onBegin(macro.key)}
               onChange={(event) =>
                 onChange(macro.key, Number(event.target.value))

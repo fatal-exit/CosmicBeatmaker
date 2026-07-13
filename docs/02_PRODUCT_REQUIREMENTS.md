@@ -29,7 +29,7 @@ A polished Build Week web application that works well on desktop and modern mobi
 ### B. Musical system
 
 - **MUST** support one global transport with play, pause, stop, and tempo.
-- **MUST** default to a four-bar system.
+- **MUST** default to a four-bar harmony phrase and derive the complete active super-loop from its orbit rates.
 - **MUST** provide five planet roles:
   - Beat
   - Bass
@@ -47,7 +47,8 @@ A polished Build Week web application that works well on desktop and modern mobi
 - **MUST** provide a central star.
 - **MUST** allow adding, selecting, muting, soloing, duplicating, and deleting planets.
 - **MUST** show a circular representation of each pattern.
-- **MUST** allow changing loop length through quantized orbit shells.
+- **MUST** allow changing a planet's visible and musical period through the exact 0.25-, 0.5-, 1-, 1.5-, 2-, 3-, 4-, 6-, and 8-bar orbit-rate catalog.
+- **MUST** give every planet a distinct derived spatial lane, including planets with the same musical rate.
 - **MUST** support moons as parent-linked embellishments.
 - **MUST** support one ring per eligible planet for regular rhythmic texture.
 - **MUST** support one asteroid belt for probabilistic percussion.
@@ -88,7 +89,7 @@ A polished Build Week web application that works well on desktop and modern mobi
 
 ### G. Export
 
-- **MUST** export a stereo WAV of a defined number of loops.
+- **MUST** export a stereo WAV of one or more complete active super-loops, defaulting to one.
 - **MUST** export a multitrack MIDI file with one track per musical role or planet.
 - **MUST** name exported tracks clearly.
 - **MUST** preserve tempo, note timing, duration, and velocity in MIDI.
@@ -140,4 +141,4 @@ Cut these before compromising timing, accessibility, or mobile stability:
 4. Hardware MIDI
 5. PWA installation
 6. Complex synthesis panels
-7. Eight-bar and unusual-time-signature systems
+7. Eight-bar harmonic phrases and unusual-time-signature systems; an 8-bar planet orbit remains supported inside the four-bar-phrase polymetric system

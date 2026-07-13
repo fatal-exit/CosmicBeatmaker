@@ -3,6 +3,14 @@ import type {
   PatternEvent,
   PatternState,
 } from "../domain/composition/types";
+import {
+  isLoopBars,
+  leastCommonMultipleIntegers,
+} from "../domain/composition/loopRates";
+import {
+  derivePerformancePattern,
+  performanceHumanizeOffsetSteps,
+} from "../domain/rhythm/performanceMacros";
 import { resolveMidiNotes } from "./harmony";
 import { shouldPlayProbability } from "./probability";
 import { applySwing, normalizePhase, ticksForBars } from "./timing";
@@ -14,8 +22,9 @@ import type {
 } from "./types";
 
 export interface CompileCompositionOptions {
+  /** Number of complete polymetric super-loops to compile. */
   loops?: number;
-  /** Absolute composition-loop index used for deterministic probability. */
+  /** Absolute super-loop index used for deterministic probability. */
   startLoopIndex?: number;
   /** Live scheduling defers the probability decision until its callback fires. */
   probabilityMode?: "resolve" | "defer";
@@ -28,6 +37,49 @@ interface TrackSource {
   loopTicks: number;
   phase: number;
   probability: number;
+}
+
+export interface CompiledLiveCycleEvent {
+  /** Stable within the source's smallest exact musical template. */
+  occurrenceKey: string;
+  eventId: string;
+  trackId: string;
+  role: CompiledTrack["role"];
+  sourceKind: CompiledTrack["sourceKind"];
+  startOffsetTicks: number;
+  durationTicks: number;
+  velocity: number;
+  probability: number;
+  midiNotes: readonly number[];
+  drumVoice?: ScheduledOccurrence["drumVoice"];
+}
+
+export interface CompiledLiveCycle {
+  localCycleIndex: number;
+  events: readonly CompiledLiveCycleEvent[];
+}
+
+export interface CompiledLiveSource {
+  track: CompiledTrack;
+  loopTicks: number;
+  /** LCM of this source period and the canonical four-bar harmony phrase. */
+  musicalTemplateTicks: number;
+  cycles: readonly CompiledLiveCycle[];
+}
+
+export interface CompiledLiveSchedule {
+  ppq: number;
+  bpm: number;
+  beatsPerBar: number;
+  superLoopTicks: number;
+  sources: readonly CompiledLiveSource[];
+}
+
+export interface CompositionSuperLoop {
+  /** Exact integer duration on the shared PPQ timeline. */
+  ticks: number;
+  /** Derived display value; the LCM itself is always computed from integers. */
+  bars: number;
 }
 
 function assertOptions(options: CompileCompositionOptions): {
@@ -103,7 +155,12 @@ function gatherTrackSources(
         pan: planet.mix.pan,
         filter: planet.mix.filter,
       },
-      pattern: planet.pattern,
+      pattern: derivePerformancePattern(
+        planet.pattern,
+        planet.role,
+        planet.id,
+        composition.macros,
+      ),
       loopTicks,
       phase: planet.orbit.phase,
       probability: 1,
@@ -123,8 +180,16 @@ function gatherTrackSources(
           pan: planet.mix.pan,
           filter: planet.mix.filter,
         },
-        pattern: moon.pattern,
-        loopTicks: Math.max(1, Math.round(loopTicks / moon.orbitRatio)),
+        pattern: derivePerformancePattern(
+          moon.pattern,
+          planet.role,
+          moon.id,
+          composition.macros,
+        ),
+        loopTicks: ticksForBars(
+          resolveMoonLoopBars(planet.orbit.loopBars, moon.orbitRatio),
+          composition.beatsPerBar,
+        ),
         phase: normalizePhase(planet.orbit.phase + moon.phase),
         probability: moon.probability,
       });
@@ -189,85 +254,171 @@ function gatherTrackSources(
   return sources;
 }
 
-function compileSourceLoop(
+function resolveMoonLoopBars(parentLoopBars: number, orbitRatio: number) {
+  if (!Number.isFinite(orbitRatio) || orbitRatio <= 0) {
+    throw new Error("Moon orbit ratio must be a positive finite number.");
+  }
+  const loopBars = parentLoopBars / orbitRatio;
+  if (!isLoopBars(loopBars)) {
+    throw new Error(
+      "Moon orbit ratio must resolve to a supported exact loop rate.",
+    );
+  }
+  return loopBars;
+}
+
+function superLoopForSources(
+  composition: Composition,
+  sources: readonly TrackSource[],
+): CompositionSuperLoop {
+  // The four-bar composition/harmony phrase remains a musical period even
+  // when every active orbit is shorter than it.
+  const canonicalLoopTicks = ticksForBars(
+    composition.bars,
+    composition.beatsPerBar,
+  );
+  const ticks = leastCommonMultipleIntegers([
+    canonicalLoopTicks,
+    ...sources.map(({ loopTicks }) => loopTicks),
+  ]);
+  return {
+    ticks,
+    bars: ticks / ticksForBars(1, composition.beatsPerBar),
+  };
+}
+
+/** Exact active-source project period used by playback and both exporters. */
+export function getCompositionSuperLoop(
+  composition: Composition,
+  options: Pick<CompileCompositionOptions, "includeMuted"> = {},
+): CompositionSuperLoop {
+  return superLoopForSources(
+    composition,
+    gatherTrackSources(composition, options.includeMuted ?? false),
+  );
+}
+
+function compileLiveCycle(
   composition: Composition,
   source: TrackSource,
-  localLoopIndex: number,
-  absoluteLoopIndex: number,
-  compositionLoopTicks: number,
-  probabilityMode: "resolve" | "defer",
-): ScheduledOccurrence[] {
-  const occurrences: ScheduledOccurrence[] = [];
-  const exportLoopStart = localLoopIndex * compositionLoopTicks;
+  localCycleIndex: number,
+): CompiledLiveCycle {
+  const events: CompiledLiveCycleEvent[] = [];
+  const cycleStart = localCycleIndex * source.loopTicks;
   const phaseTicks = Math.round(
     normalizePhase(source.phase) * source.loopTicks,
   );
 
-  for (
-    let cycleStart = 0, cycleIndex = 0;
-    cycleStart < compositionLoopTicks;
-    cycleStart += source.loopTicks, cycleIndex += 1
-  ) {
-    for (const event of source.pattern.events) {
-      const probability = Math.max(
-        0,
-        Math.min(1, event.probability * source.probability),
-      );
-      if (
-        probabilityMode === "resolve" &&
-        !shouldPlayProbability(
-          composition.seed,
-          event.id,
-          absoluteLoopIndex,
-          probability,
-        )
-      ) {
-        continue;
-      }
-      if (probabilityMode === "defer" && probability <= 0) continue;
+  for (const event of source.pattern.events) {
+    const probability = Math.max(
+      0,
+      Math.min(1, event.probability * source.probability),
+    );
+    if (probability <= 0) continue;
 
-      const stepTicks = Math.round(
-        (event.step / source.pattern.gridSize) * source.loopTicks,
-      );
-      const tickInCycle = (stepTicks + phaseTicks) % source.loopTicks;
-      const unswungStart = cycleStart + tickInCycle;
-      if (unswungStart >= compositionLoopTicks) continue;
-
-      const startWithinComposition = applySwing(
-        unswungStart,
-        composition.swing,
-      );
-      const startTick = exportLoopStart + startWithinComposition;
-      const durationTicks = Math.max(
-        1,
-        Math.round(
-          (event.durationSteps / source.pattern.gridSize) * source.loopTicks,
-        ),
-      );
-      occurrences.push({
-        occurrenceId: `${event.id}@${absoluteLoopIndex}:${cycleIndex}`,
+    const stepTicks = Math.round(
+      (event.step / source.pattern.gridSize) * source.loopTicks,
+    );
+    const tickInCycle = (stepTicks + phaseTicks) % source.loopTicks;
+    const unswungStart = cycleStart + tickInCycle;
+    const swungStart = applySwing(unswungStart, composition.swing);
+    const humanizeTicks = Math.round(
+      (performanceHumanizeOffsetSteps(
+        source.pattern,
+        composition.seed,
+        event,
+        localCycleIndex,
+      ) /
+        source.pattern.gridSize) *
+        source.loopTicks,
+    );
+    const cycleEnd = cycleStart + source.loopTicks - 1;
+    const startInTemplate = Math.max(
+      cycleStart,
+      Math.min(cycleEnd, swungStart + humanizeTicks),
+    );
+    const durationTicks = Math.max(
+      1,
+      Math.round(
+        (event.durationSteps / source.pattern.gridSize) * source.loopTicks,
+      ),
+    );
+    events.push(
+      Object.freeze({
+        occurrenceKey: `${source.track.id}:${localCycleIndex}:${event.id}`,
         eventId: event.id,
         trackId: source.track.id,
         role: source.track.role,
         sourceKind: source.track.sourceKind,
-        startTick,
+        startOffsetTicks: startInTemplate - cycleStart,
         durationTicks,
         velocity: Math.max(0, Math.min(1, event.velocity)),
         probability,
-        loopIndex: absoluteLoopIndex,
         midiNotes: resolveMidiNotes(
           composition,
           source.track.role,
-          startWithinComposition,
+          startInTemplate,
           event.pitch,
           event.drumVoice,
         ),
         ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
-      });
-    }
+      }),
+    );
   }
 
-  return occurrences;
+  return Object.freeze({
+    localCycleIndex,
+    events: Object.freeze(events),
+  });
+}
+
+function compileLiveSources(
+  composition: Composition,
+  sources: readonly TrackSource[],
+): CompiledLiveSource[] {
+  const canonicalLoopTicks = ticksForBars(
+    composition.bars,
+    composition.beatsPerBar,
+  );
+  return sources.map((source) => {
+    const musicalTemplateTicks = leastCommonMultipleIntegers([
+      canonicalLoopTicks,
+      source.loopTicks,
+    ]);
+    const cycleCount = musicalTemplateTicks / source.loopTicks;
+    if (!Number.isSafeInteger(cycleCount) || cycleCount <= 0) {
+      throw new Error("Live source template does not contain exact cycles.");
+    }
+    return Object.freeze({
+      track: Object.freeze({ ...source.track }),
+      loopTicks: source.loopTicks,
+      musicalTemplateTicks,
+      cycles: Object.freeze(
+        Array.from({ length: cycleCount }, (_, localCycleIndex) =>
+          compileLiveCycle(composition, source, localCycleIndex),
+        ),
+      ),
+    });
+  });
+}
+
+/** Immutable bounded templates for real-time source-cycle scheduling. */
+export function compileLiveSchedule(
+  composition: Composition,
+  options: Pick<CompileCompositionOptions, "includeMuted"> = {},
+): CompiledLiveSchedule {
+  const sources = gatherTrackSources(
+    composition,
+    options.includeMuted ?? false,
+  );
+  const superLoop = superLoopForSources(composition, sources);
+  return Object.freeze({
+    ppq: AUDIO_PPQ,
+    bpm: composition.bpm,
+    beatsPerBar: composition.beatsPerBar,
+    superLoopTicks: superLoop.ticks,
+    sources: Object.freeze(compileLiveSources(composition, sources)),
+  });
 }
 
 /**
@@ -279,29 +430,49 @@ export function compileComposition(
   options: CompileCompositionOptions = {},
 ): CompiledSequence {
   const { loops, startLoopIndex, probabilityMode } = assertOptions(options);
-  const compositionLoopTicks = ticksForBars(
-    composition.bars,
-    composition.beatsPerBar,
-  );
-  const sources = gatherTrackSources(
-    composition,
-    options.includeMuted ?? false,
-  );
+  const liveSchedule = compileLiveSchedule(composition, options);
+  const superLoopTicks = liveSchedule.superLoopTicks;
   const occurrences: ScheduledOccurrence[] = [];
 
   for (let localLoopIndex = 0; localLoopIndex < loops; localLoopIndex += 1) {
     const absoluteLoopIndex = startLoopIndex + localLoopIndex;
-    for (const source of sources) {
-      occurrences.push(
-        ...compileSourceLoop(
-          composition,
-          source,
-          localLoopIndex,
-          absoluteLoopIndex,
-          compositionLoopTicks,
-          probabilityMode,
-        ),
-      );
+    const loopStartTick = localLoopIndex * superLoopTicks;
+    for (const source of liveSchedule.sources) {
+      const sourceCycles = superLoopTicks / source.loopTicks;
+      if (!Number.isSafeInteger(sourceCycles)) {
+        throw new Error("Super-loop does not contain exact source cycles.");
+      }
+      for (let cycleIndex = 0; cycleIndex < sourceCycles; cycleIndex += 1) {
+        const cycle = source.cycles[cycleIndex % source.cycles.length];
+        const cycleStartTick = loopStartTick + cycleIndex * source.loopTicks;
+        for (const event of cycle.events) {
+          if (
+            probabilityMode === "resolve" &&
+            !shouldPlayProbability(
+              composition.seed,
+              event.eventId,
+              absoluteLoopIndex,
+              event.probability,
+            )
+          ) {
+            continue;
+          }
+          occurrences.push({
+            occurrenceId: `${event.eventId}@${absoluteLoopIndex}:${cycleIndex}`,
+            eventId: event.eventId,
+            trackId: event.trackId,
+            role: event.role,
+            sourceKind: event.sourceKind,
+            startTick: cycleStartTick + event.startOffsetTicks,
+            durationTicks: event.durationTicks,
+            velocity: event.velocity,
+            probability: event.probability,
+            loopIndex: absoluteLoopIndex,
+            midiNotes: event.midiNotes,
+            ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
+          });
+        }
+      }
     }
   }
 
@@ -316,10 +487,10 @@ export function compileComposition(
     ppq: AUDIO_PPQ,
     bpm: composition.bpm,
     beatsPerBar: composition.beatsPerBar,
-    barsPerLoop: composition.bars,
+    barsPerLoop: superLoopTicks / ticksForBars(1, composition.beatsPerBar),
     loopCount: loops,
-    totalTicks: compositionLoopTicks * loops,
-    tracks: sources.map((source) => source.track),
+    totalTicks: superLoopTicks * loops,
+    tracks: liveSchedule.sources.map((source) => source.track),
     occurrences,
   };
 }

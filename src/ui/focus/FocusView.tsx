@@ -49,6 +49,7 @@ export function FocusView({ planet, onChange, onClose }: FocusViewProps) {
         ];
     onChange({
       ...planet.pattern,
+      templateId: undefined,
       events: events.sort((left, right) => left.step - right.step),
     });
   };
@@ -64,7 +65,10 @@ export function FocusView({ planet, onChange, onClose }: FocusViewProps) {
         <div>
           <p className="panel-label">Orbit Lab</p>
           <h2 id="focus-heading">{planet.name} pattern</h2>
-          <p>Tap a step to add or remove an event.</p>
+          <p>
+            Fine-tune individual orbit gates. A bright gate pulses when its
+            event plays.
+          </p>
         </div>
         <button
           ref={closeRef}

@@ -1,6 +1,12 @@
-import { getTransport, start as unlockTone } from "tone";
+import { Context, getTransport, setContext, start as unlockTone } from "tone";
 
 import { AUDIO_PPQ } from "./constants";
+import {
+  applySchedulingProfile,
+  selectAudioRuntimeProfile,
+  toneContextOptionsFor,
+  type AudioRuntimeProfile,
+} from "./AudioRuntimeProfile";
 
 export type TransportPlaybackState = "playing" | "paused" | "stopped";
 
@@ -77,7 +83,9 @@ export class TransportController {
     if (!Number.isFinite(bpm) || bpm < 70 || bpm > 140) {
       throw new Error("Tempo must be between 70 and 140 BPM.");
     }
-    this.adapter.bpm = bpm;
+    // App state updates unrelated to tempo are frequent. Avoid adding redundant
+    // Tone Param work to the transport automation timeline on every update.
+    if (Math.abs(this.adapter.bpm - bpm) > 0.001) this.adapter.bpm = bpm;
   }
 
   private requireUnlocked(): void {
@@ -89,7 +97,23 @@ export class TransportController {
   }
 }
 
-export function createToneTransportController(): TransportController {
+let installedToneContext: Context | undefined;
+
+function ensureToneRuntimeContext(profile: AudioRuntimeProfile): Context {
+  if (!installedToneContext || installedToneContext.disposed) {
+    installedToneContext = new Context(toneContextOptionsFor(profile));
+    // This runs before the project's first getTransport()/Tone node creation.
+    // The old global is Tone's inert DummyContext in normal startup.
+    setContext(installedToneContext, true);
+  }
+  applySchedulingProfile(installedToneContext, profile);
+  return installedToneContext;
+}
+
+export function createToneTransportController(
+  profile: AudioRuntimeProfile = selectAudioRuntimeProfile(),
+): TransportController {
+  ensureToneRuntimeContext(profile);
   const transport = getTransport();
   transport.loop = false;
   transport.swing = 0;
