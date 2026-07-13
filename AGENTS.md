@@ -76,6 +76,10 @@ For each milestone:
 
 - The canonical repository is `/Users/gugogon/Documents/GitHub/CosmicBeatmaker`.
 - Create and maintain a public GitHub repository for the project.
+- Keep `.github/workflows/deploy-pages.yml` enabled for every push to `main`; it verifies the project, builds the Vite app, and redeploys GitHub Pages.
+- Every completed checkpoint commit on `main` must be pushed immediately after the required checks pass so the Pages deployment runs. A local commit alone cannot trigger GitHub Actions.
+- Keep production builds compatible with the `/CosmicBeatmaker/` repository base path. Runtime-loaded public assets must resolve through that base rather than the domain root.
+- After each checkpoint push, monitor the Pages workflow to completion and smoke-test `https://fatal-exit.github.io/CosmicBeatmaker/` before claiming deployment success.
 - After each milestone, inspect the complete diff and run the milestone's required quality checks before committing and pushing it.
 - After the milestone sequence, commit and push each later major coherent change after review and relevant verification.
 - Use intentional commit messages that describe the delivered behavior; do not batch unrelated changes.
