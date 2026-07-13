@@ -1,0 +1,412 @@
+# State and Data Model
+
+## Goals
+
+The composition model must be:
+
+- Serializable
+- Versioned
+- Deterministic
+- Independent of rendering and audio libraries
+- Suitable for undo and redo
+- Suitable for local saving and URL sharing
+- Sufficient for live playback, offline audio, and MIDI export
+
+## Top-level model
+
+```ts
+export interface Composition {
+  schemaVersion: number;
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+
+  seed: string;
+  bars: 4 | 8;
+  beatsPerBar: 4;
+  bpm: number;
+  swing: number;
+
+  star: StarState;
+  harmony: HarmonyState;
+  macros: MacroState;
+  mix: MasterMixState;
+
+  planets: PlanetState[];
+  asteroidBelt?: AsteroidBeltState;
+
+  generation: GenerationState;
+}
+```
+
+For the MVP, new compositions default to four bars.
+
+## Identifiers
+
+Use stable opaque IDs for:
+
+- Composition
+- Star
+- Planet
+- Moon
+- Ring
+- Pattern event
+- Saved preset instance
+
+IDs must survive save, load, undo, redo, and export.
+
+## Star state
+
+```ts
+export interface StarState {
+  id: string;
+  presetId: StarPresetId;
+  visualSeed: number;
+  intensity: number;
+  locked: boolean;
+}
+```
+
+Star preset definitions live in content data, not inside saved compositions.
+
+## Harmony state
+
+```ts
+export interface HarmonyState {
+  rootMidi: number;
+  scaleId: ScaleId;
+  progressionId: ProgressionId;
+  customProgression?: ChordDegree[];
+  safeHarmony: boolean;
+  voicingId: VoicingPresetId;
+}
+```
+
+Store musical intent rather than only resolved pitches. Resolve concrete note values during scheduling and export.
+
+## Macro state
+
+```ts
+export interface MacroState {
+  energy: number; // 0..1
+  density: number; // 0..1
+  groove: number; // 0..1
+  space: number; // 0..1
+  complexity: number; // 0..1
+}
+```
+
+Macros are user-visible state. Their transformations should be deterministic and should not cause uncontrolled mutation on every render.
+
+Preferred model:
+
+- Macro value changes update derived playback parameters.
+- Explicit “Apply variation” or generation commands alter stored events.
+- Avoid silently rewriting patterns every time a macro slider moves unless the behavior is defined and undoable.
+
+## Planet state
+
+```ts
+export type PlanetRole = "beat" | "bass" | "chords" | "melody" | "texture";
+
+export interface PlanetState {
+  id: string;
+  role: PlanetRole;
+  name: string;
+  soundPresetId: string;
+
+  orbit: OrbitState;
+  pattern: PatternState;
+  mix: TrackMixState;
+  appearance: PlanetAppearanceState;
+
+  moons: MoonState[];
+  ring?: RingState;
+
+  muted: boolean;
+  soloed: boolean;
+  locked: boolean;
+}
+```
+
+## Orbit state
+
+```ts
+export interface OrbitState {
+  loopBars: 0.5 | 1 | 2 | 4 | 8;
+  phase: number; // normalized 0..<1
+  inclination: number; // visual and optional pan mapping
+  shellIndex: number;
+  direction: 1 | -1;
+}
+```
+
+For the MVP, direction should default to forward. Reverse may be advanced or stretch.
+
+## Pattern state
+
+Prefer events over a fixed global 64-step grid.
+
+```ts
+export interface PatternState {
+  gridSize: 8 | 16 | 32;
+  events: PatternEvent[];
+  templateId?: string;
+  humanize: number;
+}
+```
+
+```ts
+export interface PatternEvent {
+  id: string;
+  step: number;
+  velocity: number;
+  probability: number;
+  durationSteps: number;
+
+  pitch?: PitchIntent;
+  drumVoice?: DrumVoiceId;
+  chordAction?: ChordAction;
+}
+```
+
+`step` is relative to the track's own loop and must satisfy:
+
+```ts
+0 <= step < gridSize;
+```
+
+## Pitch intent
+
+Store role-aware intent when possible.
+
+```ts
+export type PitchIntent =
+  | { kind: "scaleDegree"; degree: number; octaveOffset: number }
+  | { kind: "chordTone"; index: number; octaveOffset: number }
+  | { kind: "root"; octaveOffset: number }
+  | { kind: "fifth"; octaveOffset: number }
+  | { kind: "absoluteMidi"; note: number };
+```
+
+In Safe Harmony mode, generated melodic content should avoid `absoluteMidi`.
+
+## Moons
+
+```ts
+export interface MoonState {
+  id: string;
+  behaviorPresetId: MoonBehaviorPresetId;
+  pattern: PatternState;
+  orbitRatio: number;
+  phase: number;
+  level: number;
+  probability: number;
+  appearanceSeed: number;
+  muted: boolean;
+  locked: boolean;
+}
+```
+
+Moons inherit parent harmony and sound family unless an advanced setting overrides them.
+
+## Rings
+
+```ts
+export interface RingState {
+  id: string;
+  type: "hat" | "shaker" | "perc" | "gate" | "delay" | "filter";
+  segments: 8 | 16;
+  active: boolean[];
+  phase: number;
+  velocityVariation: number;
+  probability: number;
+  soundPresetId: string;
+  level: number;
+}
+```
+
+The `active` array length must equal `segments`.
+
+## Asteroid belt
+
+```ts
+export interface AsteroidBeltState {
+  id: string;
+  materialPresetId: string;
+  gridSize: 16 | 32;
+  events: PatternEvent[];
+  population: number;
+  clustering: number;
+  turbulence: number;
+  accentChance: number;
+  level: number;
+  locked: boolean;
+  visualSeed: number;
+}
+```
+
+The belt's musical events are authoritative. Asteroid positions are generated to visually correspond to those events.
+
+## Mix state
+
+```ts
+export interface TrackMixState {
+  level: number;
+  pan: number;
+  filter: number;
+  reverbSend: number;
+  delaySend: number;
+}
+
+export interface MasterMixState {
+  level: number;
+  brightness: number;
+  limiterEnabled: true;
+}
+```
+
+All values should be normalized and validated.
+
+## Generation state
+
+```ts
+export interface GenerationState {
+  revision: number;
+  generatorVersion: string;
+  lockedDomains: Array<
+    | "star"
+    | "harmony"
+    | "beat"
+    | "bass"
+    | "chords"
+    | "melody"
+    | "texture"
+    | "moons"
+    | "ring"
+    | "asteroids"
+  >;
+}
+```
+
+Changing generator logic must not silently alter already saved compositions because saved state contains resolved patterns. The generator version is useful for debugging and intentional regeneration.
+
+## Commands
+
+All meaningful edits should be represented as typed commands.
+
+Examples:
+
+- `AddPlanet`
+- `RemovePlanet`
+- `DuplicatePlanet`
+- `MovePlanetToOrbitShell`
+- `RotatePattern`
+- `SetPatternEvent`
+- `SetMacro`
+- `SetHarmony`
+- `AddMoon`
+- `SetRingSegment`
+- `GenerateSystem`
+- `RegeneratePlanet`
+- `SetLock`
+- `RenameComposition`
+
+A command should contain enough information to:
+
+- Validate the edit
+- Apply it
+- Describe it for UI feedback
+- Undo it, either through inverse data or state snapshots
+
+## Undo and redo
+
+For Build Week, use bounded immutable snapshots if command inversion becomes a time risk.
+
+Requirements:
+
+- Keep at least 50 meaningful actions.
+- Exclude ephemeral selection and camera changes.
+- Coalesce continuous slider input into one history entry.
+- Clear redo after a new divergent edit.
+- Generation and delete actions must be undoable.
+- Loading a different project resets history.
+
+## Deterministic generation
+
+Use a deterministic PRNG with derived sub-seeds.
+
+Example namespace strategy:
+
+```text
+<root seed>/star
+<root seed>/harmony
+<root seed>/planet/beat/0
+<root seed>/planet/bass/0
+<root seed>/moon/<parent id>/0
+<root seed>/ring/<planet id>
+<root seed>/asteroids
+```
+
+This allows one unlocked domain to regenerate without altering locked domains.
+
+Do not rely on object iteration order or `Math.random()` inside generation logic.
+
+## Serialization
+
+Serialized composition must:
+
+- Include `schemaVersion`
+- Include all audible state
+- Include all share-relevant visual state
+- Exclude runtime and transient state
+- Be validated after decoding
+- Be migratable
+
+Use a runtime schema validator or explicit validation functions.
+
+## Migrations
+
+```ts
+export type CompositionMigration = (
+  input: unknown,
+) => Composition | MigrationResult;
+```
+
+At minimum:
+
+- Reject future unsupported versions with a useful error.
+- Migrate older known versions.
+- Preserve a backup when migrating local data.
+- Test fixtures for every schema version introduced.
+
+## Derived selectors
+
+Examples:
+
+- `selectAudiblePlanets`
+- `selectResolvedChordAtBar`
+- `selectResolvedEventsForWindow`
+- `selectOrbitPhaseAtTransportTime`
+- `selectExportTrackList`
+- `selectPerformanceBudget`
+- `selectCanUndo`
+- `selectCanRedo`
+
+Keep expensive derived calculations memoized where useful.
+
+## Validation invariants
+
+- BPM within allowed range
+- Exactly one star
+- Planet count within supported maximum
+- No duplicate IDs
+- Every event step inside pattern bounds
+- Ring segment count matches active array
+- Values normalized
+- Safe Harmony pitch intents valid
+- Loop lengths supported
+- Moon count within limit
+- At least one audible primary planet in generated systems
+- Serialized size below the chosen share limit

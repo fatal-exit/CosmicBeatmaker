@@ -1,0 +1,328 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: oklch(0.94 0.01 43.2);
+  background: oklch(0.09 0 0);
+  font-synthesis: none;
+  --bg: oklch(0.09 0 0);
+  --surface: oklch(0.145 0.012 43.2);
+  --surface-raised: oklch(0.19 0.016 43.2);
+  --ink: oklch(0.94 0.01 43.2);
+  --muted: oklch(0.72 0.025 43.2);
+  --primary: oklch(0.695 0.205 43.2);
+  --accent: oklch(0.78 0.15 195);
+  --focus: oklch(0.86 0.12 91);
+  --border: oklch(0.31 0.025 43.2);
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg);
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  min-width: 44px;
+  min-height: 44px;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  min-height: 84px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.product-mark,
+.panel-label {
+  margin: 0 0 4px;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+}
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+h1 {
+  margin-bottom: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+h2 {
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.transport button,
+.bottom-sheet button {
+  padding: 0 16px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.transport button:not(:disabled):hover {
+  background: oklch(0.25 0.025 43.2);
+}
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.transport label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.transport output {
+  min-width: 70px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+.transport input {
+  accent-color: var(--primary);
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr) 280px;
+}
+.object-panel,
+.inspector {
+  padding: 20px;
+  background: var(--surface);
+}
+.object-panel {
+  border-right: 1px solid var(--border);
+}
+.inspector {
+  border-left: 1px solid var(--border);
+}
+.object-row {
+  width: 100%;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+.object-row:hover,
+.object-row.selected {
+  background: var(--surface-raised);
+}
+.object-row span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.object-row strong {
+  text-transform: capitalize;
+}
+.object-row small {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-symbol {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  border-radius: 50%;
+}
+.star-symbol {
+  background: var(--primary);
+  box-shadow: 0 0 7px oklch(0.695 0.205 43.2 / 0.7);
+}
+.planet-symbol {
+  background: var(--accent);
+}
+
+.scene-panel {
+  position: relative;
+  min-height: 520px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: oklch(0.075 0 0);
+}
+.placeholder-cosmos {
+  position: relative;
+  width: min(70vw, 540px);
+  aspect-ratio: 1;
+}
+.placeholder-star,
+.placeholder-orbit,
+.placeholder-planet {
+  position: absolute;
+  display: block;
+}
+.placeholder-star {
+  inset: 50% auto auto 50%;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--primary);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px oklch(0.695 0.205 43.2 / 0.8);
+}
+.placeholder-orbit {
+  inset: 13%;
+  border: 1px solid oklch(0.6 0.03 43.2 / 0.5);
+  border-radius: 50%;
+  transform: rotateX(58deg);
+}
+.placeholder-planet {
+  top: 28%;
+  right: 20%;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.scene-copy {
+  position: absolute;
+  bottom: 22px;
+  left: 22px;
+}
+.scene-copy p {
+  margin-bottom: 3px;
+  font-weight: 720;
+}
+.scene-copy span,
+.inspector p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.diagnostic {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.diagnostic code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+.bottom-sheet {
+  display: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 850px) {
+  .topbar {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+  .topbar > div:first-child {
+    max-width: 42%;
+  }
+  .transport label,
+  .transport input,
+  .transport output,
+  .transport button:nth-of-type(2),
+  .transport button:nth-of-type(4) {
+    display: none;
+  }
+  .workspace {
+    display: block;
+  }
+  .object-panel,
+  .inspector {
+    display: none;
+  }
+  .scene-panel {
+    min-height: calc(100dvh - 168px);
+  }
+  .placeholder-cosmos {
+    width: min(92vw, 520px);
+  }
+  .bottom-sheet {
+    min-height: 84px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .bottom-sheet > div {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .bottom-sheet > div > span:last-child {
+    display: grid;
+  }
+  .bottom-sheet small {
+    color: var(--muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
