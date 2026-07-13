@@ -3,6 +3,7 @@ dist
 playwright-report
 test-results
 coverage
+.playwright-cli
+output/playwright
 .DS_Store
 *.local
-

@@ -19,19 +19,44 @@ export interface EphemeralUiState {
   announcement: string;
   quality: "auto" | "low" | "balanced" | "high";
   reducedEffects: boolean;
+  reducedFlash: boolean;
+  onboardingStep: "enter" | "mood" | "add-bass" | "orbit" | "complete";
+  audioStatus: "locked" | "loading" | "ready" | "error";
+  isPlaying: boolean;
+}
+
+export interface SaveStatus {
+  state: "idle" | "dirty" | "saving" | "saved" | "error";
+  message?: string;
+}
+
+interface HistoryGroup {
+  key: string;
+  description: string;
+  origin: Composition;
 }
 
 export interface AppStore {
   compositionHistory: HistoryState<Composition>;
   ui: EphemeralUiState;
+  saveStatus: SaveStatus;
+  historyGroup: HistoryGroup | null;
   dispatch: (command: CompositionCommand) => void;
   undo: () => void;
   redo: () => void;
   replaceComposition: (composition: Composition) => void;
+  beginHistoryGroup: (key: string, description: string) => void;
+  commitHistoryGroup: () => void;
+  cancelHistoryGroup: () => void;
   selectObject: (id: string | null) => void;
   setInspectorExpanded: (expanded: boolean) => void;
   setQuality: (quality: EphemeralUiState["quality"]) => void;
   setReducedEffects: (reduced: boolean) => void;
+  setReducedFlash: (reduced: boolean) => void;
+  setOnboardingStep: (step: EphemeralUiState["onboardingStep"]) => void;
+  setAudioStatus: (status: EphemeralUiState["audioStatus"]) => void;
+  setPlaying: (playing: boolean) => void;
+  setSaveStatus: (status: SaveStatus) => void;
 }
 
 const starter = createStarterComposition();
@@ -44,7 +69,13 @@ export const useAppStore = create<AppStore>((set) => ({
     announcement: "First Light is ready.",
     quality: "auto",
     reducedEffects: false,
+    reducedFlash: false,
+    onboardingStep: "enter",
+    audioStatus: "locked",
+    isPlaying: false,
   },
+  saveStatus: { state: "idle" },
+  historyGroup: null,
   dispatch: (command) =>
     set((state) => {
       const result = applyCompositionCommand(
@@ -52,11 +83,11 @@ export const useAppStore = create<AppStore>((set) => ({
         command,
       );
       return {
-        compositionHistory: commitHistory(
-          state.compositionHistory,
-          result.composition,
-        ),
+        compositionHistory: state.historyGroup
+          ? { ...state.compositionHistory, present: result.composition }
+          : commitHistory(state.compositionHistory, result.composition),
         ui: { ...state.ui, announcement: result.description },
+        saveStatus: { state: "dirty" },
       };
     }),
   undo: () =>
@@ -77,7 +108,49 @@ export const useAppStore = create<AppStore>((set) => ({
         selectedObjectId: composition.planets[0]?.id ?? null,
         announcement: `${composition.name} loaded.`,
       },
+      saveStatus: { state: "saved" },
+      historyGroup: null,
     })),
+  beginHistoryGroup: (key, description) =>
+    set((state) =>
+      state.historyGroup
+        ? state
+        : {
+            historyGroup: {
+              key,
+              description,
+              origin: state.compositionHistory.present,
+            },
+          },
+    ),
+  commitHistoryGroup: () =>
+    set((state) => {
+      if (!state.historyGroup) return state;
+      const { origin, description } = state.historyGroup;
+      const present = state.compositionHistory.present;
+      if (Object.is(origin, present)) return { historyGroup: null };
+      return {
+        compositionHistory: {
+          present,
+          past: [...state.compositionHistory.past, origin].slice(-50),
+          future: [],
+        },
+        ui: { ...state.ui, announcement: description },
+        historyGroup: null,
+      };
+    }),
+  cancelHistoryGroup: () =>
+    set((state) =>
+      state.historyGroup
+        ? {
+            compositionHistory: {
+              ...state.compositionHistory,
+              present: state.historyGroup.origin,
+            },
+            historyGroup: null,
+          }
+        : state,
+    ),
   selectObject: (id) =>
     set((state) => ({ ui: { ...state.ui, selectedObjectId: id } })),
   setInspectorExpanded: (expanded) =>
@@ -85,4 +158,13 @@ export const useAppStore = create<AppStore>((set) => ({
   setQuality: (quality) => set((state) => ({ ui: { ...state.ui, quality } })),
   setReducedEffects: (reducedEffects) =>
     set((state) => ({ ui: { ...state.ui, reducedEffects } })),
+  setReducedFlash: (reducedFlash) =>
+    set((state) => ({ ui: { ...state.ui, reducedFlash } })),
+  setOnboardingStep: (onboardingStep) =>
+    set((state) => ({ ui: { ...state.ui, onboardingStep } })),
+  setAudioStatus: (audioStatus) =>
+    set((state) => ({ ui: { ...state.ui, audioStatus } })),
+  setPlaying: (isPlaying) =>
+    set((state) => ({ ui: { ...state.ui, isPlaying } })),
+  setSaveStatus: (saveStatus) => set({ saveStatus }),
 }));
