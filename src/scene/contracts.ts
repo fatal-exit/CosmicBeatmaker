@@ -39,6 +39,7 @@ export interface SceneEventDescriptor {
 }
 
 export interface RingSegmentSceneDescriptor {
+  sourceEntityId: string;
   eventId: string;
   active: boolean;
   phase: number;

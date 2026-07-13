@@ -26,6 +26,7 @@ export type MelodyContour = "ascending" | "alternating" | "descending";
 
 export type PlanetRole = "beat" | "bass" | "chords" | "melody" | "texture";
 export type LoopBars = SupportedLoopBars;
+export type PatternGridSize = 8 | 12 | 16 | 24 | 32;
 
 export interface Composition {
   schemaVersion: SchemaVersion;
@@ -114,7 +115,7 @@ export interface OrbitState {
 }
 
 export interface PatternState {
-  gridSize: 8 | 16 | 32;
+  gridSize: PatternGridSize;
   events: PatternEvent[];
   templateId?: string;
   humanize: number;

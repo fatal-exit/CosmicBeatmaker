@@ -170,7 +170,7 @@ Prefer events over a fixed global 64-step grid.
 
 ```ts
 export interface PatternState {
-  gridSize: 8 | 16 | 32;
+  gridSize: 8 | 12 | 16 | 24 | 32;
   events: PatternEvent[];
   templateId?: string;
   humanize: number;
@@ -196,6 +196,12 @@ export interface PatternEvent {
 ```ts
 0 <= step < gridSize;
 ```
+
+Planet rate edits into the 1.5- or 3-bar polymetric choices use only 12- or
+24-step grids. The command preserves the pattern's existing detail tier by
+simplifying 16 steps to 12 and 32 steps to 24, retaining events that remain in
+bounds and omitting overflow deterministically. Eight-step moon and auxiliary
+patterns remain valid; this rule applies to primary planet rate edits.
 
 ## Pitch intent
 
@@ -248,6 +254,8 @@ export interface RingState {
 ```
 
 The `active` array length must equal `segments`.
+
+Ring density remains derived from the number of `true` entries in `active`; it is not stored as a parallel field. Changing density deterministically rewrites that visible segment array in a parent-role-aware order. Playback derives melody ghost notes, chord arpeggios, bass octave pickups, or percussive texture from the parent role plus this existing ring state, so no duplicate hidden sequencer or schema field is required.
 
 ## Asteroid belt
 
@@ -427,6 +435,7 @@ Keep expensive derived calculations memoized where useful.
 - Planet count within supported maximum
 - No duplicate IDs
 - Every event step inside pattern bounds
+- Planet rate edits to 1.5 or 3 bars produce a 12- or 24-step pattern grid
 - Ring segment count matches active array
 - Values normalized
 - Safe Harmony pitch intents valid

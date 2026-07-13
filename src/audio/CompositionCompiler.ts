@@ -1,6 +1,5 @@
 import type {
   Composition,
-  PatternEvent,
   PatternState,
   PlanetExpressionState,
 } from "../domain/composition/types";
@@ -13,6 +12,7 @@ import {
   derivePerformancePattern,
   performanceHumanizeOffsetSteps,
 } from "../domain/rhythm/performanceMacros";
+import { deriveRingPattern } from "../domain/rhythm/ringPatterns";
 import { resolveMidiNotes } from "./harmony";
 import { shouldPlayProbability } from "./probability";
 import { applySwing, normalizePhase, ticksForBars } from "./timing";
@@ -105,34 +105,6 @@ function assertOptions(options: CompileCompositionOptions): {
   };
 }
 
-function ringPattern(
-  ringId: string,
-  active: readonly boolean[],
-  probability: number,
-  velocityVariation: number,
-  drumVoice: "closed-hat" | "open-hat" | "perc",
-): PatternState {
-  const events: PatternEvent[] = [];
-  for (let step = 0; step < active.length; step += 1) {
-    if (!active[step]) continue;
-    const alternatingVelocity =
-      step % 2 === 0 ? 1 : 1 - velocityVariation * 0.3;
-    events.push({
-      id: `${ringId}:segment:${step}`,
-      step,
-      velocity: 0.72 * alternatingVelocity,
-      probability,
-      durationSteps: 0.5,
-      drumVoice,
-    });
-  }
-  return {
-    gridSize: active.length as 8 | 16,
-    events,
-    humanize: 0,
-  };
-}
-
 function gatherTrackSources(
   composition: Composition,
   includeMuted: boolean,
@@ -147,31 +119,35 @@ function gatherTrackSources(
       planet.orbit.loopBars,
       composition.beatsPerBar,
     );
-    sources.push({
-      track: {
-        id: planet.id,
-        name: `${planet.name} · ${planet.role}`,
-        role: planet.role,
-        sourceKind: "planet",
-        soundPresetId: planet.soundPresetId,
-        level: planet.mix.level,
-        pan: planet.mix.pan,
-        filter: planet.mix.filter,
-      },
-      pattern: applyPlanetExpression(
-        derivePerformancePattern(
-          planet.pattern,
-          planet.role,
-          planet.id,
-          composition.macros,
-        ),
-        planet.expression,
+    const performancePattern = applyPlanetExpression(
+      derivePerformancePattern(
+        planet.pattern,
+        planet.role,
+        planet.id,
+        composition.macros,
       ),
-      loopTicks,
-      phase: planet.orbit.phase,
-      probability: 1,
-      expression: planet.expression,
-    });
+      planet.expression,
+    );
+    const chordUsesRing = planet.role === "chords" && Boolean(planet.ring);
+    if (!chordUsesRing) {
+      sources.push({
+        track: {
+          id: planet.id,
+          name: `${planet.name} · ${planet.role}`,
+          role: planet.role,
+          sourceKind: "planet",
+          soundPresetId: planet.soundPresetId,
+          level: planet.mix.level,
+          pan: planet.mix.pan,
+          filter: planet.mix.filter,
+        },
+        pattern: performancePattern,
+        loopTicks,
+        phase: planet.orbit.phase,
+        probability: 1,
+        expression: planet.expression,
+      });
+    }
 
     for (const moon of planet.moons) {
       if (!includeMuted && moon.muted) continue;
@@ -210,34 +186,45 @@ function gatherTrackSources(
       const ring = planet.ring;
       const isPercussion =
         ring.type === "hat" || ring.type === "shaker" || ring.type === "perc";
-      if (isPercussion) {
+      const isTonalRing =
+        planet.role === "bass" ||
+        planet.role === "chords" ||
+        planet.role === "melody";
+      if (isPercussion || isTonalRing) {
+        const ringRole =
+          planet.role === "beat" || planet.role === "texture"
+            ? "beat"
+            : planet.role;
+        const ringBehavior =
+          planet.role === "melody"
+            ? "ghost-note"
+            : planet.role === "chords"
+              ? "arpeggio"
+              : planet.role === "bass"
+                ? "octave-pickup"
+                : ring.type;
         sources.push({
           track: {
             id: ring.id,
             parentId: planet.id,
-            name: `${planet.name} · ${ring.type} ring`,
-            role: "beat",
+            name: `${planet.name} · ${ringBehavior} ring`,
+            role: ringRole,
             sourceKind: "ring",
-            soundPresetId: ring.soundPresetId,
-            level: planet.mix.level * ring.level,
+            soundPresetId: isTonalRing
+              ? planet.soundPresetId
+              : ring.soundPresetId,
+            level:
+              planet.role === "chords"
+                ? planet.mix.level
+                : planet.mix.level * ring.level,
             pan: planet.mix.pan,
             filter: planet.mix.filter,
           },
-          pattern: ringPattern(
-            ring.id,
-            ring.active,
-            ring.probability,
-            ring.velocityVariation,
-            ring.type === "hat"
-              ? "closed-hat"
-              : ring.type === "shaker"
-                ? "open-hat"
-                : "perc",
-          ),
+          pattern: deriveRingPattern(planet, performancePattern, ring),
           loopTicks,
           phase: normalizePhase(planet.orbit.phase + ring.phase),
           probability: 1,
-          expression: { kind: "default" },
+          expression: isTonalRing ? planet.expression : { kind: "default" },
         });
       }
     }

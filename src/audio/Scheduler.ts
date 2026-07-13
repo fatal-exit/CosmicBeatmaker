@@ -1,7 +1,11 @@
 import { getTransport, immediate } from "tone";
 
 import type { Composition } from "../domain/composition/types";
-import { compileLiveSchedule } from "./CompositionCompiler";
+import {
+  compileLiveSchedule,
+  type CompiledLiveSchedule,
+  type CompiledLiveSource,
+} from "./CompositionCompiler";
 import {
   AudioHealthGuard,
   DEFAULT_AUDIO_HEALTH_LIMITS,
@@ -34,6 +38,14 @@ export interface SchedulerOptions {
   onHealthFailure?: (failure: AudioHealthFailure) => void;
 }
 
+export interface SchedulerSetCompositionOptions {
+  /**
+   * While transport is running, schedule the unsounded remainder of each
+   * source's current cycle instead of waiting for its next repeat boundary.
+   */
+  continueFromTick?: number;
+}
+
 /**
  * Registers audio-clock callbacks from the canonical compiler. Render frames may
  * consume visual messages, but have no API through which they can schedule audio.
@@ -61,11 +73,32 @@ export class Scheduler {
     });
   }
 
-  setComposition(composition: Composition): void {
+  setComposition(
+    composition: Composition,
+    options: SchedulerSetCompositionOptions = {},
+  ): void {
     this.assertActive();
     this.clear();
     const revision = this.revision;
     const template = compileLiveSchedule(composition);
+    if (
+      options.continueFromTick !== undefined &&
+      !Number.isFinite(options.continueFromTick)
+    ) {
+      throw new Error("A live continuation tick must be finite.");
+    }
+    const continuationAudioTime =
+      options.continueFromTick === undefined
+        ? undefined
+        : this.backend.getCurrentAudioTime();
+    const continuationTick =
+      continuationAudioTime === undefined
+        ? undefined
+        : Math.max(
+            0,
+            Math.round(options.continueFromTick ?? 0),
+            Math.round(this.backend.getTicksAtTime(continuationAudioTime)),
+          );
     const maximumEventsScheduledPerCycle = template.sources.reduce(
       (total, source) =>
         total +
@@ -90,81 +123,39 @@ export class Scheduler {
             Math.round(scheduledTick / source.loopTicks),
           );
           const cycleStartTick = sourceCycleNumber * source.loopTicks;
-          const localCycleIndex = sourceCycleNumber % source.cycles.length;
-          const templateRepeatIndex = Math.floor(
-            sourceCycleNumber / source.cycles.length,
-          );
-          const loopIndex = Math.floor(
-            cycleStartTick / template.superLoopTicks,
-          );
-          const currentAudioTime = this.backend.getCurrentAudioTime();
-          const admission = this.health.inspect({
-            occurrenceKey: `${source.track.id}:${localCycleIndex}`,
-            repeatIndex: templateRepeatIndex,
+          this.scheduleSourceCycle(
+            composition,
+            template,
+            source,
+            sourceCycleNumber,
             scheduledAudioTime,
-            currentAudioTime,
-          });
-          if (admission.status === "tripped") {
-            this.haltForHealthFailure(admission.failure);
-            return;
-          }
-          if (admission.status !== "accepted") return;
-
-          const cycle = source.cycles[localCycleIndex];
-          for (const event of cycle.events) {
-            if (
-              !shouldPlayProbability(
-                composition.seed,
-                event.eventId,
-                loopIndex,
-                event.probability,
-              )
-            ) {
-              continue;
-            }
-            const eventAudioTime =
-              scheduledAudioTime +
-              ticksToSeconds(event.startOffsetTicks, template.bpm);
-            const concrete: ScheduledOccurrence = {
-              occurrenceId: `${event.eventId}@${loopIndex}:${sourceCycleNumber}`,
-              eventId: event.eventId,
-              trackId: event.trackId,
-              role: event.role,
-              sourceKind: event.sourceKind,
-              startTick: cycleStartTick + event.startOffsetTicks,
-              durationTicks: event.durationTicks,
-              velocity: event.velocity,
-              probability: event.probability,
-              loopIndex,
-              midiNotes: event.midiNotes,
-              ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
-            };
-            try {
-              this.trigger(concrete, eventAudioTime);
-              this.health.recordTriggerSuccess();
-            } catch {
-              const failure = this.health.recordTriggerError(
-                eventAudioTime,
-                currentAudioTime,
-              );
-              if (failure) {
-                this.haltForHealthFailure(failure);
-                return;
-              }
-              continue;
-            }
-            this.scheduleVisualEvent(
-              concrete,
-              eventAudioTime,
-              currentAudioTime,
-              revision,
-            );
-          }
+            cycleStartTick,
+            cycleStartTick,
+            revision,
+          );
         },
         source.loopTicks,
         0,
       );
       this.scheduledIds.add(id);
+
+      if (
+        continuationTick === undefined ||
+        continuationAudioTime === undefined
+      ) {
+        continue;
+      }
+      const sourceCycleNumber = Math.floor(continuationTick / source.loopTicks);
+      this.scheduleSourceCycle(
+        composition,
+        template,
+        source,
+        sourceCycleNumber,
+        continuationAudioTime,
+        continuationTick,
+        continuationTick,
+        revision,
+      );
     }
   }
 
@@ -181,6 +172,11 @@ export class Scheduler {
     this.clearVisualTimeouts();
     this.health.reset();
     this.healthTripped = false;
+  }
+
+  /** Pause hook: discard lookahead visuals without resetting audio admission. */
+  cancelPendingVisualEvents(): void {
+    this.clearVisualTimeouts();
   }
 
   get scheduledRegistrationCount(): number {
@@ -204,6 +200,90 @@ export class Scheduler {
   private assertActive(): void {
     if (this.disposed)
       throw new Error("A disposed scheduler cannot be reused.");
+  }
+
+  private scheduleSourceCycle(
+    composition: Composition,
+    template: CompiledLiveSchedule,
+    source: CompiledLiveSource,
+    sourceCycleNumber: number,
+    scheduledAudioTime: number,
+    audioAnchorTick: number,
+    eventFloorTick: number,
+    revision: number,
+  ): void {
+    if (this.disposed || revision !== this.revision) return;
+    const cycleStartTick = sourceCycleNumber * source.loopTicks;
+    const localCycleIndex = sourceCycleNumber % source.cycles.length;
+    const templateRepeatIndex = Math.floor(
+      sourceCycleNumber / source.cycles.length,
+    );
+    const loopIndex = Math.floor(cycleStartTick / template.superLoopTicks);
+    const currentAudioTime = this.backend.getCurrentAudioTime();
+    const admission = this.health.inspect({
+      occurrenceKey: `${source.track.id}:${localCycleIndex}`,
+      repeatIndex: templateRepeatIndex,
+      scheduledAudioTime,
+      currentAudioTime,
+    });
+    if (admission.status === "tripped") {
+      this.haltForHealthFailure(admission.failure);
+      return;
+    }
+    if (admission.status !== "accepted") return;
+
+    const cycle = source.cycles[localCycleIndex];
+    for (const event of cycle.events) {
+      const startTick = cycleStartTick + event.startOffsetTicks;
+      if (startTick < eventFloorTick) continue;
+      if (
+        !shouldPlayProbability(
+          composition.seed,
+          event.eventId,
+          loopIndex,
+          event.probability,
+        )
+      ) {
+        continue;
+      }
+      const eventAudioTime =
+        scheduledAudioTime +
+        ticksToSeconds(startTick - audioAnchorTick, template.bpm);
+      const concrete: ScheduledOccurrence = {
+        occurrenceId: `${event.eventId}@${loopIndex}:${sourceCycleNumber}`,
+        eventId: event.eventId,
+        trackId: event.trackId,
+        role: event.role,
+        sourceKind: event.sourceKind,
+        startTick,
+        durationTicks: event.durationTicks,
+        velocity: event.velocity,
+        probability: event.probability,
+        loopIndex,
+        midiNotes: event.midiNotes,
+        ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
+      };
+      try {
+        this.trigger(concrete, eventAudioTime);
+        this.health.recordTriggerSuccess();
+      } catch {
+        const failure = this.health.recordTriggerError(
+          eventAudioTime,
+          currentAudioTime,
+        );
+        if (failure) {
+          this.haltForHealthFailure(failure);
+          return;
+        }
+        continue;
+      }
+      this.scheduleVisualEvent(
+        concrete,
+        eventAudioTime,
+        currentAudioTime,
+        revision,
+      );
+    }
   }
 
   private scheduleVisualEvent(

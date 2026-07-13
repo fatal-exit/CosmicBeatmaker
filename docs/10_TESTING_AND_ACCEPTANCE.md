@@ -43,9 +43,12 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Swing calculation remains bounded.
 - Probability decisions are deterministic for seed, loop, and event.
 - Rings maintain segment-array invariants.
+- Ring density deterministically activates the requested number of visible segments in a role-safe order.
+- Melody rings produce quieter pitch-matched notes adjacent to motif notes, chord rings replace sustained parent voicings with articulated single-note arpeggios, and bass rings produce syncopated octave pickups. A chord ring added during playback joins the remainder of the current cycle without waiting for a full orbit boundary.
 - Asteroid clustering stays within configured density limits.
 - The exact orbit catalog is `[0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8]` bars and round-trips without floating approximation.
 - Quarter-bar integer LCM yields 12 bars for 3 + 4, 24 bars for 6 + 8, and never exceeds 24 bars for the supported catalog.
+- Changing a planet to 1.5 or 3 bars simplifies 16-step patterns to 12 and 32-step patterns to 24, keeps surviving event IDs and steps stable, and never leaves a previously active planet silent.
 
 ### State
 

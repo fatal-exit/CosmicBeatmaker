@@ -32,6 +32,7 @@ import {
 import {
   applyGateRhythmPreset,
   inferGateRhythmPreset,
+  ringActiveSegmentsForDensity,
   type GateRhythmPresetId,
 } from "../domain/rhythm";
 import { createId } from "../domain/serialization/ids";
@@ -96,21 +97,39 @@ function bytesToBlob(bytes: Uint8Array, type: string): Blob {
 function ringTypeForRole(role: PlanetRole): RingState["type"] {
   if (role === "beat") return "hat";
   if (role === "texture") return "shaker";
-  return "perc";
+  if (role === "melody") return "delay";
+  return "gate";
 }
 
-function makeRing(role: PlanetRole): RingState {
-  return {
+function defaultRingDensity(role: PlanetRole): number {
+  if (role === "chords") return 1;
+  if (role === "bass") return 0.25;
+  if (role === "melody" || role === "texture") return 0.375;
+  return 0.5;
+}
+
+function makeRing(parent: PlanetState): RingState {
+  const ring: RingState = {
     id: createId("ring"),
-    type: ringTypeForRole(role),
+    type: ringTypeForRole(parent.role),
     segments: 16,
-    active: Array.from({ length: 16 }, (_, step) => step % 2 === 0),
+    active: Array.from({ length: 16 }, () => false),
     phase: 0,
     velocityVariation: 0.18,
     probability: 1,
-    soundPresetId: "orbital-hat",
-    level: 0.34,
+    soundPresetId:
+      parent.role === "beat" || parent.role === "texture"
+        ? "orbital-hat"
+        : parent.soundPresetId,
+    level:
+      parent.role === "chords" ? 1 : parent.role === "melody" ? 0.26 : 0.32,
   };
+  ring.active = ringActiveSegmentsForDensity(
+    parent,
+    ring,
+    defaultRingDensity(parent.role),
+  );
+  return ring;
 }
 
 function makeAsteroidBelt(): AsteroidBeltState {
@@ -606,9 +625,18 @@ export function App() {
     dispatch({
       type: "SetRing",
       planetId: selectedPlanet.id,
-      ring: makeRing(selectedPlanet.role),
+      ring: makeRing(selectedPlanet),
     });
     setOpenPanel(null);
+  };
+
+  const setRingDensity = (density: number) => {
+    if (!selectedPlanet?.ring) return;
+    dispatch({
+      type: "SetRingDensity",
+      planetId: selectedPlanet.id,
+      density,
+    });
   };
 
   const addMoon = () => {
@@ -753,7 +781,9 @@ export function App() {
         saveState={saveStatus.state}
         onPlayPause={playPause}
         onStop={stop}
+        onTempoBegin={() => beginHistoryGroup("tempo", "Changed tempo")}
         onTempo={(bpm) => dispatch({ type: "SetTempo", bpm })}
+        onTempoCommit={commitHistoryGroup}
         onRename={(name) => dispatch({ type: "RenameComposition", name })}
         onUndo={undo}
         onRedo={redo}
@@ -778,6 +808,7 @@ export function App() {
             <SceneCanvas
               composition={composition}
               selectedId={ui.selectedObjectId}
+              isPlaying={ui.isPlaying}
               visualPreferences={{
                 quality: ui.quality,
                 reducedMotion: ui.reducedEffects,
@@ -844,6 +875,15 @@ export function App() {
           onGateRhythmPreset={setGateRhythm}
           onPattern={openPatternEditor}
           onRing={addRing}
+          onRingDensityBegin={() =>
+            selectedPlanet &&
+            beginHistoryGroup(
+              `ring-density-${selectedPlanet.id}`,
+              "Changed ring density",
+            )
+          }
+          onRingDensityChange={setRingDensity}
+          onRingDensityCommit={commitHistoryGroup}
           onDuplicate={duplicateSelectedPlanet}
           onDelete={deleteSelectedPlanet}
           canDelete={composition.planets.length > 1}
@@ -941,6 +981,7 @@ export function App() {
       {openPanel === "add" ? (
         <AddObjectPanel
           selectedHasRing={Boolean(selectedPlanet?.ring)}
+          selectedRole={selectedPlanet?.role}
           selectedCanAddMoon={
             Boolean(selectedPlanet) && (selectedPlanet?.moons.length ?? 3) < 3
           }
@@ -1035,6 +1076,15 @@ export function App() {
             onGateRhythmPreset={setGateRhythm}
             onPattern={openPatternEditor}
             onRing={addRing}
+            onRingDensityBegin={() =>
+              selectedPlanet &&
+              beginHistoryGroup(
+                `ring-density-${selectedPlanet.id}`,
+                "Changed ring density",
+              )
+            }
+            onRingDensityChange={setRingDensity}
+            onRingDensityCommit={commitHistoryGroup}
             onDuplicate={duplicateSelectedPlanet}
             onDelete={deleteSelectedPlanet}
             canDelete={composition.planets.length > 1}

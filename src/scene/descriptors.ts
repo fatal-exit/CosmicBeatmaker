@@ -89,7 +89,9 @@ export function compositionToSceneDescriptor(
         soloed: planet.soloed,
         locked: planet.locked,
         events: describePatternEvents(
-          performancePattern,
+          planet.role === "chords" && planet.ring
+            ? { ...performancePattern, events: [] }
+            : performancePattern,
           planet.orbit.phase,
           planet.orbit.phase,
         ),
@@ -117,6 +119,7 @@ export function compositionToSceneDescriptor(
         }),
         ringSegments: planet.ring
           ? planet.ring.active.map((active, index) => ({
+              sourceEntityId: planet.ring!.id,
               eventId: `${planet.ring?.id}:segment:${index}`,
               active,
               phase: normalizePhase(

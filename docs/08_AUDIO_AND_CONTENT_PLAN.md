@@ -248,6 +248,8 @@ Authored tonal sources use C roots: low assets map from C2 (MIDI 36), mid assets
 
 These are replaceable content mappings rather than composition-schema choices, so a more suitable future sample can replace any assignment without invalidating saves or changing pattern data.
 
+Melody, chord, and bass rings reuse the parent's pitched preset rather than auxiliary percussion samples. Melody rings emit quiet adjacent ghosts, chord rings replace the parent voicing track with a full-orbit single-note arpeggio at the parent's level, and bass rings emit syncopated octave or occasional fifth pickups. The existing dedicated hat, shaker, and percussion assets remain assigned to beat and texture rings. When a live pattern rebuild occurs during playback, the scheduler admits the remaining events in the current source cycle immediately so a new ring does not wait for the next orbit boundary.
+
 ### Future arrivals
 
 The authored processor is intentionally inventory-agnostic. New first-party WAVs can be added to the ignored input directory and incorporated by rerunning the same command. Procedural arrivals are added as versioned renderer definitions and regenerated through the separate command. Stable ID collision checks across both sets, generated metadata, stale-output cleanup, and manifest/runtime alignment tests keep the pack scalable; assigning any new asset to a sound preset remains an intentional reviewed content decision.
@@ -266,8 +268,11 @@ Moon voice
   -> parent-family bus
   -> quieter track gain
 
-Ring and asteroid voices
+Beat/texture ring and asteroid voices
   -> percussion texture bus
+
+Melody/chord/bass ring voices
+  -> quieter parent-family bus
 
 All buses
   -> master compressor or glue

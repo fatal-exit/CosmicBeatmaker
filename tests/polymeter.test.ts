@@ -25,6 +25,7 @@ import {
   serializeComposition,
 } from "../src/domain/serialization/codec";
 import { orbitPhaseAtTick as sceneOrbitPhaseAtTick } from "../src/scene/phase";
+import { applyCompositionCommand } from "../src/state/commands";
 
 const NEUTRAL_MACROS = {
   energy: 0.5,
@@ -175,6 +176,57 @@ describe("exact polymeter rates", () => {
     expect(superLoopBarsForRates([0.25, 1.5])).toBe(1.5);
     expect(superLoopBarsForRates([0.5, 1.5, 2])).toBe(6);
     expect(superLoopBarsForRates(LOOP_BAR_RATES)).toBe(24);
+  });
+
+  it("changes the pattern grid with the selected polymetric orbit rate", () => {
+    const composition = createStarterComposition("polymeter-grid-command");
+    const planetId = composition.planets[0].id;
+    const oneAndAHalfBars = applyCompositionCommand(composition, {
+      type: "SetPlanetLoopBars",
+      planetId,
+      loopBars: 1.5,
+      timestamp: composition.updatedAt,
+    }).composition;
+    const densePlanet = planetAtRate(4, 1);
+    densePlanet.pattern = {
+      ...densePlanet.pattern,
+      gridSize: 32,
+      events: [0, 8, 16, 24].map((step) => ({
+        ...densePlanet.pattern.events[0],
+        id: `dense-polymeter-${step}`,
+        step,
+      })),
+    };
+    const denseComposition = {
+      ...composition,
+      planets: [densePlanet],
+    };
+    const threeBars = applyCompositionCommand(denseComposition, {
+      type: "SetPlanetLoopBars",
+      planetId: densePlanet.id,
+      loopBars: 3,
+      timestamp: denseComposition.updatedAt,
+    }).composition;
+
+    expect(oneAndAHalfBars.planets[0].orbit.loopBars).toBe(1.5);
+    expect(oneAndAHalfBars.planets[0].pattern.gridSize).toBe(12);
+    expect(
+      oneAndAHalfBars.planets[0].pattern.events.map(({ step }) => step),
+    ).toEqual([0, 4, 8]);
+    expect(validateComposition(oneAndAHalfBars).success).toBe(true);
+    expect(
+      deserializeComposition(serializeComposition(oneAndAHalfBars)),
+    ).toEqual({ success: true, composition: oneAndAHalfBars });
+    expect(threeBars.planets[0].orbit.loopBars).toBe(3);
+    expect(threeBars.planets[0].pattern.gridSize).toBe(24);
+    expect(threeBars.planets[0].pattern.events.map(({ step }) => step)).toEqual(
+      [0, 8, 16],
+    );
+    expect(validateComposition(threeBars).success).toBe(true);
+    expect(deserializeComposition(serializeComposition(threeBars))).toEqual({
+      success: true,
+      composition: threeBars,
+    });
   });
 });
 

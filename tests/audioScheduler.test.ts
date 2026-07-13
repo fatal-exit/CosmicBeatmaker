@@ -6,6 +6,7 @@ import { RuntimeVoiceRegistry } from "../src/audio/RuntimeVoiceRegistry";
 import type { RuntimeVoice } from "../src/audio/VoiceFactory";
 import type { ScheduledOccurrence } from "../src/audio/types";
 import { createStarterComposition } from "../src/domain/composition/starter";
+import { generateCompleteSystem } from "../src/domain/generation";
 
 class FakeSchedulerBackend implements SchedulerBackend {
   callbacks = new Map<number, (time: number) => void>();
@@ -65,6 +66,83 @@ describe("audio scheduler", () => {
       expect.objectContaining({ loopIndex: 1 }),
     );
     vi.useRealTimers();
+  });
+
+  it("cancels lookahead visual events immediately without clearing audio registrations", () => {
+    vi.useFakeTimers();
+    const backend = new FakeSchedulerBackend();
+    const trigger = vi.fn();
+    const onVisualEvent = vi.fn();
+    const scheduler = new Scheduler(backend, trigger, { onVisualEvent });
+    scheduler.setComposition(createStarterComposition("pause-visuals"));
+
+    backend.currentAudioTime = 1;
+    backend.tickAtTime = 0;
+    for (const callback of backend.callbacks.values()) callback(1.15);
+    expect(trigger).toHaveBeenCalled();
+
+    const registrationCount = scheduler.scheduledRegistrationCount;
+    scheduler.cancelPendingVisualEvents();
+    vi.runAllTimers();
+
+    expect(onVisualEvent).not.toHaveBeenCalled();
+    expect(scheduler.scheduledRegistrationCount).toBe(registrationCount);
+    vi.useRealTimers();
+  });
+
+  it("joins a newly rebuilt chord arpeggio to the current transport cycle", () => {
+    const backend = new FakeSchedulerBackend();
+    backend.currentAudioTime = 4;
+    backend.tickAtTime = 600;
+    const triggered: Array<{
+      occurrence: ScheduledOccurrence;
+      scheduledAudioTime: number;
+    }> = [];
+    const scheduler = new Scheduler(
+      backend,
+      (occurrence, scheduledAudioTime) => {
+        triggered.push({ occurrence, scheduledAudioTime });
+      },
+    );
+    const composition = generateCompleteSystem("live-chord-arp");
+    composition.swing = 0;
+    const chords = composition.planets.find(
+      (planet) => planet.role === "chords",
+    )!;
+    chords.orbit.loopBars = 4;
+    chords.orbit.phase = 0;
+    chords.ring = {
+      id: "live-chord-ring",
+      type: "gate",
+      segments: 16,
+      active: Array.from({ length: 16 }, () => true),
+      phase: 0,
+      velocityVariation: 0.18,
+      probability: 1,
+      soundPresetId: chords.soundPresetId,
+      level: 1,
+    };
+
+    scheduler.setComposition(composition, { continueFromTick: 600 });
+
+    const arpCalls = triggered.filter(
+      ({ occurrence }) => occurrence.trackId === chords.ring!.id,
+    );
+    expect(arpCalls.length).toBeGreaterThan(0);
+    expect(
+      triggered.some(({ occurrence }) => occurrence.trackId === chords.id),
+    ).toBe(false);
+    expect(arpCalls[0].occurrence).toMatchObject({
+      sourceKind: "ring",
+      startTick: 960,
+      midiNotes: [expect.any(Number)],
+    });
+    expect(arpCalls[0].scheduledAudioTime).toBeGreaterThan(
+      backend.currentAudioTime,
+    );
+    expect(
+      arpCalls.every(({ occurrence }) => occurrence.startTick >= 600),
+    ).toBe(true);
   });
 
   it("keeps callbacks and runtime voices bounded through thousands of macro rebuilds", () => {

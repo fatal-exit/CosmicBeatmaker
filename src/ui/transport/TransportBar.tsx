@@ -11,7 +11,9 @@ export interface TransportBarProps {
   saveState: string;
   onPlayPause: () => void | Promise<void>;
   onStop: () => void;
+  onTempoBegin: () => void;
   onTempo: (bpm: number) => void;
+  onTempoCommit: () => void;
   onRename: (name: string) => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -66,7 +68,18 @@ export function TransportBar(props: TransportBarProps) {
             min="70"
             max="140"
             value={props.bpm}
-            onChange={(event) => props.onTempo(Number(event.target.value))}
+            onPointerDown={props.onTempoBegin}
+            onChange={(event) => {
+              // Keyboard-driven ranges fire change only after their native
+              // value moves. Starting the group here avoids a synchronous
+              // keydown render resetting that value before the browser acts.
+              props.onTempoBegin();
+              props.onTempo(Number(event.target.value));
+            }}
+            onPointerUp={props.onTempoCommit}
+            onPointerCancel={props.onTempoCommit}
+            onKeyUp={props.onTempoCommit}
+            onBlur={props.onTempoCommit}
           />
           <output htmlFor={tempoId}>{props.bpm}</output>
         </div>

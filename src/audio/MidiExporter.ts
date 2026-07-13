@@ -18,7 +18,11 @@ const ROLE_ORDER: Record<CompiledTrack["role"], number> = {
 };
 
 function trackOrder(track: CompiledTrack): number {
-  if (track.sourceKind === "ring" || track.sourceKind === "asteroid") return 1;
+  if (
+    track.sourceKind === "asteroid" ||
+    (track.sourceKind === "ring" && track.role === "beat")
+  )
+    return 1;
   if (track.sourceKind === "moon") return 6;
   return ROLE_ORDER[track.role];
 }

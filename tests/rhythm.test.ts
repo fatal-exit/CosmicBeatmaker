@@ -5,11 +5,13 @@ import {
   RHYTHM_TEMPLATES,
   type RhythmTemplateId,
 } from "../src/content/rhythmTemplates";
+import type { PatternState } from "../src/domain/composition";
 import {
   calculateSwingOffset,
   getRhythmAnchorKeys,
   instantiateRhythmTemplate,
   rotatePattern,
+  simplifyPatternForPolymeter,
 } from "../src/domain/rhythm";
 
 describe("rhythm templates", () => {
@@ -66,6 +68,82 @@ describe("rhythm templates", () => {
     expect(backward.events.map((event) => event.step)).toContain(14);
     expect(pattern.events.map((event) => event.step)).toContain(0);
     expect(() => rotatePattern(pattern, 0.5)).toThrow(/whole-step/);
+  });
+
+  it("simplifies 16- and 32-step patterns for polymetric orbits", () => {
+    const sixteenStepPattern: PatternState = {
+      gridSize: 16,
+      humanize: 0,
+      templateId: "backbeat",
+      events: [0, 4, 8, 12, 15].map((step) => ({
+        id: `sixteen-${step}`,
+        step,
+        velocity: 0.8,
+        probability: 1,
+        durationSteps: 1,
+        drumVoice: "kick" as const,
+      })),
+    };
+    const thirtyTwoStepPattern: PatternState = {
+      ...sixteenStepPattern,
+      gridSize: 32,
+      events: [0, 8, 16, 24, 31].map((step) => ({
+        id: `thirty-two-${step}`,
+        step,
+        velocity: 0.8,
+        probability: 1,
+        durationSteps: 1,
+        drumVoice: "kick" as const,
+      })),
+    };
+
+    const oneAndAHalfBars = simplifyPatternForPolymeter(
+      sixteenStepPattern,
+      1.5,
+    );
+    const threeBars = simplifyPatternForPolymeter(thirtyTwoStepPattern, 3);
+
+    expect(oneAndAHalfBars.gridSize).toBe(12);
+    expect(oneAndAHalfBars.events.map(({ step }) => step)).toEqual([0, 4, 8]);
+    expect(oneAndAHalfBars.events.map(({ id }) => id)).toEqual([
+      "sixteen-0",
+      "sixteen-4",
+      "sixteen-8",
+    ]);
+    expect(oneAndAHalfBars.templateId).toBeUndefined();
+    expect(threeBars.gridSize).toBe(24);
+    expect(threeBars.events.map(({ step }) => step)).toEqual([0, 8, 16]);
+    expect(threeBars.events.map(({ id }) => id)).toEqual([
+      "thirty-two-0",
+      "thirty-two-8",
+      "thirty-two-16",
+    ]);
+    expect(threeBars.templateId).toBeUndefined();
+    expect(sixteenStepPattern.events).toHaveLength(5);
+    expect(thirtyTwoStepPattern.events).toHaveLength(5);
+  });
+
+  it("retains one event when polymeter simplification would empty a pattern", () => {
+    const pattern: PatternState = {
+      gridSize: 16,
+      humanize: 0,
+      events: [
+        {
+          id: "late-event",
+          step: 14,
+          velocity: 0.8,
+          probability: 1,
+          durationSteps: 1,
+          drumVoice: "kick" as const,
+        },
+      ],
+    };
+
+    expect(simplifyPatternForPolymeter(pattern, 1.5)).toMatchObject({
+      gridSize: 12,
+      events: [{ id: "late-event", step: 2 }],
+    });
+    expect(simplifyPatternForPolymeter(pattern, 2)).toBe(pattern);
   });
 
   it("bounds swing and moves only off subdivisions", () => {

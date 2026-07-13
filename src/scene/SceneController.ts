@@ -100,6 +100,11 @@ interface PulseWindow {
   scheduledPhase?: number;
 }
 
+export interface TransientPulseFrame {
+  strength: number;
+  progress: number;
+}
+
 export interface SceneCameraView {
   zoomPercent: number;
   rotationDegrees: number;
@@ -132,6 +137,11 @@ const CAMERA_MAX_FIT_SCALE = 2.7;
 const CAMERA_ROTATION_STEP = Math.PI / 12;
 const CAMERA_DRAG_PIXELS_PER_TURN = 960;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+const STAR_GLOW_BASE_SCALE = 1.42;
+const STAR_SCALE_PULSE_AMPLITUDE = 0.1;
+const STAR_GLOW_PULSE_AMPLITUDE = 0.12;
+const STAR_SURFACE_INTENSITY_PULSE = 0.22;
+const STAR_GLOW_INTENSITY_PULSE = 0.36;
 
 export const SCENE_CAMERA_ZOOM_MIN = 0.6;
 export const SCENE_CAMERA_ZOOM_MAX = 1.8;
@@ -153,6 +163,51 @@ export function pulseDelayMsFromTicks(
   }
   const ticksUntilSound = Math.max(0, scheduledTick - currentTick);
   return (ticksUntilSound / SCENE_TICKS_PER_BEAT) * (60_000 / bpm);
+}
+
+/**
+ * A per-quarter-note visual envelope derived only from authoritative transport
+ * ticks. The instant expansion marks the beat; the quartic tail returns the
+ * star smoothly to rest before the next quarter note.
+ */
+export function quarterNotePulseAtTick(
+  transportTicks: number,
+  ticksPerBeat = SCENE_TICKS_PER_BEAT,
+): number {
+  if (
+    !Number.isFinite(transportTicks) ||
+    !Number.isFinite(ticksPerBeat) ||
+    ticksPerBeat <= 0
+  ) {
+    return 0;
+  }
+  const ticksIntoBeat =
+    ((transportTicks % ticksPerBeat) + ticksPerBeat) % ticksPerBeat;
+  const beatProgress = ticksIntoBeat / ticksPerBeat;
+  return (1 - beatProgress) ** 4;
+}
+
+/** Smooth one-shot energy shared by the planet hit and its reusable gate ripple. */
+export function transientPulseFrame(
+  startsAt: number,
+  expiresAt: number,
+  now: number,
+): TransientPulseFrame {
+  if (
+    !Number.isFinite(startsAt) ||
+    !Number.isFinite(expiresAt) ||
+    !Number.isFinite(now) ||
+    expiresAt <= startsAt ||
+    now < startsAt ||
+    now >= expiresAt
+  ) {
+    return { strength: 0, progress: 0 };
+  }
+  const progress = clamp((now - startsAt) / (expiresAt - startsAt), 0, 1);
+  return {
+    strength: (1 - progress) ** 3,
+    progress,
+  };
 }
 
 /**
@@ -326,6 +381,38 @@ function colorFromHue(hue: number, lightness = 0.62): THREE.Color {
   return color;
 }
 
+function attachGateRipple(
+  gate: THREE.Mesh,
+  geometry: THREE.BufferGeometry,
+  color: THREE.ColorRepresentation,
+): void {
+  const ripple = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  ripple.name = "gate-passage-ripple";
+  ripple.renderOrder = 4;
+  ripple.visible = false;
+  ripple.scale.setScalar(1.08);
+  gate.add(ripple);
+  gate.userData.passageRipple = ripple;
+}
+
+function gateRippleFor(
+  gate: THREE.Mesh,
+): THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null {
+  const ripple = gate.userData.passageRipple as unknown;
+  return ripple instanceof THREE.Mesh
+    ? (ripple as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>)
+    : null;
+}
+
 export function disposeObject(object: THREE.Object3D): void {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
@@ -365,6 +452,7 @@ export class SceneController {
   private preferences = defaultPreferences;
   private qualityProfile: QualityProfile = "balanced";
   private tempoBpm = 120;
+  private playbackActive = false;
   private pulseWindows = new Map<string, PulseWindow[]>();
   private eventPulseWindows = new Map<string, PulseWindow[]>();
   private destructionEffects = new Set<RuntimePlanetDestructionEffect>();
@@ -499,6 +587,14 @@ export class SceneController {
     if (Number.isFinite(bpm) && bpm > 0) this.tempoBpm = bpm;
   }
 
+  setPlaybackActive(active: boolean): void {
+    this.playbackActive = active;
+    if (!active) {
+      this.pulseWindows.clear();
+      this.eventPulseWindows.clear();
+    }
+  }
+
   zoomIn(): void {
     this.setCameraZoom(this.cameraZoom + SCENE_CAMERA_ZOOM_STEP);
   }
@@ -529,6 +625,7 @@ export class SceneController {
   }
 
   enqueuePulse(pulse: VisualPulse): void {
+    if (!this.playbackActive) return;
     const runtime = this.runtimeForPulse(pulse.entityId, pulse.eventId);
     const gate = runtime?.eventNodes.get(pulse.eventId);
     const startsAt =
@@ -760,7 +857,7 @@ export class SceneController {
     );
     body.renderOrder = 2;
     body.userData.entityId = descriptor.star.id;
-    glow.scale.setScalar(1.42);
+    glow.scale.setScalar(STAR_GLOW_BASE_SCALE);
     glow.renderOrder = 1;
     glow.visible = this.starGlowEnabled();
     glow.userData.entityId = descriptor.star.id;
@@ -870,6 +967,11 @@ export class SceneController {
         node.userData.entityId = descriptor.id;
         node.userData.eventId = event.eventId;
         node.userData.orbitGate = true;
+        attachGateRipple(
+          node,
+          nodeGeometry,
+          colorFromHue(descriptor.hue + 30, 0.9),
+        );
         eventNodes.set(event.eventId, node);
         group.add(node);
       }
@@ -958,6 +1060,11 @@ export class SceneController {
           gate.userData.moonPhase = moonDescriptor.phase;
           gate.userData.orbitRatio = moonDescriptor.orbitRatio;
           gate.userData.moonOrbitRadius = moonOrbitRadius;
+          attachGateRipple(
+            gate,
+            moonGateGeometry,
+            colorFromHue(descriptor.hue + 62, 0.88),
+          );
           eventNodes.set(event.eventId, gate);
           body.add(gate);
         }
@@ -985,6 +1092,7 @@ export class SceneController {
         );
         fragment.rotation.y = -angle;
         fragment.userData.entityId = descriptor.id;
+        fragment.userData.sourceEntityId = segment.sourceEntityId;
         fragment.userData.eventId = segment.eventId;
         eventNodes.set(segment.eventId, fragment);
         body.add(fragment);
@@ -1450,25 +1558,38 @@ export class SceneController {
         runtime.descriptor.orbitRadius,
         runtime.descriptor.inclination,
       );
-      const pulsing = Boolean(
-        this.activePulseWindow(this.pulseWindows, id, now),
+      const planetPulseWindow = this.activePulseWindow(
+        this.pulseWindows,
+        id,
+        now,
       );
+      const planetPulse = planetPulseWindow
+        ? transientPulseFrame(
+            planetPulseWindow.startsAt,
+            planetPulseWindow.expiresAt,
+            now,
+          ).strength
+        : 0;
+      const planetMotionPulse = this.preferences.reducedMotion
+        ? 0
+        : planetPulse;
+      const planetBrightnessPulse = this.preferences.reducedFlash
+        ? 0
+        : planetPulse;
       const selectedScale = id === this.selectedId ? 1.08 : 1;
       runtime.body.scale.setScalar(
-        pulsing && !this.preferences.reducedFlash
-          ? selectedScale * 1.16
-          : selectedScale,
+        selectedScale * (1 + planetMotionPulse * 0.14),
       );
       updatePlanetSurfaceMaterial(runtime.body.material, {
         time: this.preferences.reducedMotion ? 0 : ticks,
-        pulse: pulsing && !this.preferences.reducedFlash ? 1 : 0,
+        pulse: planetBrightnessPulse,
         selected: id === this.selectedId,
         muted: runtime.descriptor.muted,
         detail: this.shaderDetail(),
         roughness: runtime.descriptor.roughness,
       });
       updateCelestialOutlineMaterial(runtime.outline.material, {
-        pulse: pulsing && !this.preferences.reducedFlash ? 1 : 0,
+        pulse: planetBrightnessPulse,
         selected: id === this.selectedId,
         muted: runtime.descriptor.muted,
       });
@@ -1484,7 +1605,7 @@ export class SceneController {
           moon.orbitRadius,
         );
       }
-      const pulsingNodes = new Set<THREE.Mesh>();
+      const pulsingNodes = new Map<THREE.Mesh, TransientPulseFrame>();
       for (const [eventId, node] of runtime.eventNodes) {
         const pulseWindow = this.activePulseWindow(
           this.eventPulseWindows,
@@ -1492,7 +1613,14 @@ export class SceneController {
           now,
         );
         if (pulseWindow) {
-          pulsingNodes.add(node);
+          pulsingNodes.set(
+            node,
+            transientPulseFrame(
+              pulseWindow.startsAt,
+              pulseWindow.expiresAt,
+              now,
+            ),
+          );
           if (
             node.userData.orbitGate &&
             pulseWindow.scheduledPhase !== undefined
@@ -1518,14 +1646,18 @@ export class SceneController {
         }
       }
       for (const node of new Set(runtime.eventNodes.values())) {
-        const isPulsing = pulsingNodes.has(node);
+        const pulse = pulsingNodes.get(node);
+        const isPulsing = Boolean(pulse && pulse.strength > 0);
+        const motionStrength = this.preferences.reducedMotion
+          ? 0
+          : (pulse?.strength ?? 0);
         node.scale.setScalar(
-          isPulsing && !this.preferences.reducedFlash
+          isPulsing
             ? node.userData.orbitGate
-              ? 1.42
+              ? 1 + motionStrength * 0.52
               : node.userData.moonOrbitGate
-                ? 1.55
-                : 1.9
+                ? 1 + motionStrength * 0.65
+                : 1 + motionStrength * 0.9
             : 1,
         );
         if (node.userData.orbitGate || node.userData.moonOrbitGate) {
@@ -1533,12 +1665,26 @@ export class SceneController {
           material.opacity = isPulsing
             ? this.preferences.reducedFlash
               ? 0.72
-              : 1
+              : 0.72 + (pulse?.strength ?? 0) * 0.28
             : runtime.descriptor.muted
               ? 0.18
               : node.userData.moonOrbitGate
                 ? 0.5
                 : 0.52;
+          const ripple = gateRippleFor(node);
+          if (ripple) {
+            ripple.visible = isPulsing;
+            if (isPulsing && pulse) {
+              const rippleExpansion = this.preferences.reducedMotion
+                ? 0.14
+                : pulse.progress * 1.45;
+              ripple.scale.setScalar(1.08 + rippleExpansion);
+              ripple.material.opacity =
+                pulse.strength * (this.preferences.reducedFlash ? 0.18 : 0.74);
+            } else {
+              ripple.material.opacity = 0;
+            }
+          }
         }
       }
       if (runtime.spawnMarker) {
@@ -1568,26 +1714,42 @@ export class SceneController {
     this.updatePlanetDestructions(now);
     if (this.star) {
       const materialTime = this.preferences.reducedMotion ? 0 : ticks;
-      const stellarPulse = this.preferences.reducedFlash
+      const quarterNotePulse = this.playbackActive
+        ? quarterNotePulseAtTick(ticks)
+        : 0;
+      const stellarScalePulse = this.preferences.reducedMotion
         ? 0
-        : Math.max(0, Math.sin((ticks / SCENE_TICKS_PER_BEAT) * Math.PI)) *
-          0.18;
+        : quarterNotePulse;
+      const stellarBrightnessPulse = this.preferences.reducedFlash
+        ? 0
+        : quarterNotePulse * (this.preferences.reducedMotion ? 0.35 : 1);
+      const baseStarScale = 0.9 + this.star.descriptor.intensity * 0.24;
+      this.star.group.scale.setScalar(
+        baseStarScale * (1 + stellarScalePulse * STAR_SCALE_PULSE_AMPLITUDE),
+      );
+      this.star.glow.scale.setScalar(
+        STAR_GLOW_BASE_SCALE + stellarScalePulse * STAR_GLOW_PULSE_AMPLITUDE,
+      );
       updateStarSurfaceMaterial(this.star.body.material, {
         time: materialTime,
-        pulse: stellarPulse,
+        pulse: stellarBrightnessPulse,
         selected: this.star.descriptor.id === this.selectedId,
         detail: this.shaderDetail(),
-        intensity: this.star.descriptor.intensity,
+        intensity:
+          this.star.descriptor.intensity +
+          stellarBrightnessPulse * STAR_SURFACE_INTENSITY_PULSE,
       });
       updateStarGlowMaterial(this.star.glow.material, {
         time: materialTime,
-        pulse: stellarPulse,
+        pulse: stellarBrightnessPulse,
         selected: this.star.descriptor.id === this.selectedId,
         detail: this.shaderDetail(),
-        intensity: this.starGlowIntensity(this.star.descriptor.intensity),
+        intensity:
+          this.starGlowIntensity(this.star.descriptor.intensity) *
+          (1 + stellarBrightnessPulse * STAR_GLOW_INTENSITY_PULSE),
       });
       updateCelestialOutlineMaterial(this.star.outline.material, {
-        pulse: stellarPulse,
+        pulse: stellarBrightnessPulse,
         selected: this.star.descriptor.id === this.selectedId,
       });
       if (!this.preferences.reducedMotion) {

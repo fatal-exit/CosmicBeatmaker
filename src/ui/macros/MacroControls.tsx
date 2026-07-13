@@ -44,33 +44,39 @@ export function MacroControls({
           Changes reshape the playing loop live without replacing your pattern.
         </small>
       </div>
-      <div className="macro-controls">
-        {MACROS.map((macro) => (
-          <label className="macro-control" key={macro.key}>
-            <span>
-              <strong>{macro.label}</strong>
-              <output>{Math.round(macros[macro.key] * 100)}</output>
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={macros[macro.key]}
-              aria-describedby="macro-live-help"
-              onPointerDown={() => onBegin(macro.key)}
-              onChange={(event) =>
-                onChange(macro.key, Number(event.target.value))
-              }
-              onPointerUp={onCommit}
-              onKeyUp={onCommit}
-            />
-            <small>
-              <span>{macro.low}</span>
-              <span>{macro.high}</span>
-            </small>
-          </label>
-        ))}
+      <p className="macro-scroll-hint">
+        Scroll sideways for more controls <span aria-hidden="true">→</span>
+      </p>
+      <div className="macro-scroll-viewport">
+        <div className="macro-controls">
+          {MACROS.map((macro) => (
+            <label className="macro-control" key={macro.key}>
+              <span>
+                <strong>{macro.label}</strong>
+                <output>{Math.round(macros[macro.key] * 100)}</output>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={macros[macro.key]}
+                aria-describedby="macro-live-help"
+                onPointerDown={() => onBegin(macro.key)}
+                onChange={(event) => {
+                  onBegin(macro.key);
+                  onChange(macro.key, Number(event.target.value));
+                }}
+                onPointerUp={onCommit}
+                onKeyUp={onCommit}
+              />
+              <small>
+                <span>{macro.low}</span>
+                <span>{macro.high}</span>
+              </small>
+            </label>
+          ))}
+        </div>
       </div>
     </section>
   );

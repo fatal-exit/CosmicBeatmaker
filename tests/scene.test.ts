@@ -27,10 +27,12 @@ import {
   normalizeSceneRotation,
   phaseFromTangentialDrag,
   pulseDelayMsFromTicks,
+  quarterNotePulseAtTick,
   quantizeLoopBarsFromRadialDrag,
   sceneRotationFromDrag,
   sceneZoomFromPinch,
   sceneZoomFromWheel,
+  transientPulseFrame,
 } from "../src/scene/SceneController";
 import {
   compositionToSceneDescriptor,
@@ -152,6 +154,67 @@ describe("scene contracts", () => {
     expect(pulseDelayMsFromTicks(960, 720, 0)).toBe(0);
   });
 
+  it("derives a quick quarter-note star dance from authoritative ticks", () => {
+    expect(quarterNotePulseAtTick(0)).toBe(1);
+    expect(quarterNotePulseAtTick(120)).toBeCloseTo(0.3164, 4);
+    expect(quarterNotePulseAtTick(240)).toBeCloseTo(0.0625, 4);
+    expect(quarterNotePulseAtTick(480)).toBe(1);
+    expect(quarterNotePulseAtTick(960)).toBe(1);
+    expect(quarterNotePulseAtTick(Number.NaN)).toBe(0);
+  });
+
+  it("shapes a gate passage into a smooth expanding one-shot", () => {
+    expect(transientPulseFrame(100, 300, 99)).toEqual({
+      strength: 0,
+      progress: 0,
+    });
+    expect(transientPulseFrame(100, 300, 100)).toEqual({
+      strength: 1,
+      progress: 0,
+    });
+    expect(transientPulseFrame(100, 300, 200)).toEqual({
+      strength: 0.125,
+      progress: 0.5,
+    });
+    expect(transientPulseFrame(100, 300, 300)).toEqual({
+      strength: 0,
+      progress: 0,
+    });
+  });
+
+  it("clears active planet pulses and rejects queued pulses while playback is paused", () => {
+    const controller = new SceneController({ readTransportTicks: () => 0 });
+    const internals = controller as unknown as {
+      pulseWindows: Map<string, unknown[]>;
+      eventPulseWindows: Map<string, unknown[]>;
+    };
+    const pendingPulseCount = () =>
+      [
+        ...internals.pulseWindows.values(),
+        ...internals.eventPulseWindows.values(),
+      ].flat().length;
+    const pulse = {
+      occurrenceId: "event@0:0",
+      entityId: "planet-one",
+      eventId: "event-one",
+      scheduledTick: 0,
+      scheduledAudioTime: 0,
+      velocity: 0.8,
+    };
+
+    controller.enqueuePulse(pulse);
+    expect(pendingPulseCount()).toBe(0);
+
+    controller.setPlaybackActive(true);
+    controller.enqueuePulse(pulse);
+    expect(pendingPulseCount()).toBe(2);
+
+    controller.setPlaybackActive(false);
+    expect(pendingPulseCount()).toBe(0);
+    controller.enqueuePulse(pulse);
+    expect(pendingPulseCount()).toBe(0);
+  });
+
   it("creates stable descriptors and idempotent plans", () => {
     const descriptor = compositionToSceneDescriptor(
       createStarterComposition("scene"),
@@ -254,6 +317,7 @@ describe("scene contracts", () => {
       ),
     ).toBeCloseTo(descriptor.planets[0].moons[0].events[0].gatePhase);
     expect(descriptor.planets[0].ringSegments[0]).toEqual({
+      sourceEntityId: "ring-one",
       eventId: "ring-one:segment:0",
       active: true,
       phase: 0,
@@ -330,6 +394,7 @@ describe("scene contracts", () => {
         occurrence.trackId === "moon-render" &&
         occurrence.eventId === "moon-render-event-0",
     )!;
+    controller.setPlaybackActive(true);
     controller.enqueuePulse({
       occurrenceId: admittedOccurrence.occurrenceId,
       entityId: admittedOccurrence.trackId,

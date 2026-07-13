@@ -126,6 +126,21 @@ test("restores visual comfort preferences", async ({ page }) => {
   ).toBeChecked();
 });
 
+test("updates tempo continuously while the slider moves", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+
+  const tempo = page.getByLabel("Tempo");
+  await expect(tempo).toBeVisible();
+  await tempo.focus();
+  await tempo.press("ArrowRight");
+
+  await expect(tempo).toHaveValue("116");
+  await expect(page.locator(".tempo-control output")).toHaveText("116");
+});
+
 test("offers the full semantic editor on mobile", async ({
   page,
 }, testInfo) => {
@@ -136,12 +151,12 @@ test("offers the full semantic editor on mobile", async ({
     page.getByRole("heading", { name: "Objects and controls" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /^Undertow, bass/ }).click();
+  await page.getByRole("button", { name: /, bass role,/ }).click();
   const mute = page.getByRole("button", { name: "Mute", exact: true });
   await mute.click();
   await expect(mute).toHaveAttribute("aria-pressed", "true");
   await expect(
-    page.getByRole("button", { name: /Undertow, bass.*muted/ }),
+    page.getByRole("button", { name: /, bass role,.*muted/ }),
   ).toBeVisible();
 });
 
@@ -158,10 +173,7 @@ test("shapes chord voicing and melody direction in the semantic inspector", asyn
   const chordComplexity = inspector.getByLabel("Chord complexity");
   await expect(voicing).toBeVisible();
   await expect(chordComplexity).toBeVisible();
-  await voicing.evaluate((input: HTMLInputElement) => {
-    input.value = "1";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  await voicing.press("End");
   await expect(voicing).toHaveValue("1");
   await expect(
     inspector.locator(`output[for="${await voicing.getAttribute("id")}"]`),
@@ -170,15 +182,38 @@ test("shapes chord voicing and melody direction in the semantic inspector", asyn
   await objectScope.getByRole("button", { name: /, melody role,/ }).click();
   const pitchVariety = inspector.getByLabel("Pitch variety");
   await expect(pitchVariety).toBeVisible();
-  await pitchVariety.evaluate((input: HTMLInputElement) => {
-    input.value = "1";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  await pitchVariety.press("End");
   await expect(pitchVariety).toHaveValue("1");
   await inspector.getByRole("button", { name: "Descend" }).click();
   await expect(
     inspector.getByRole("button", { name: "Descend" }),
   ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("controls the density of a selected planet ring", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  let inspector = await visibleInspector(page, testInfo.project.name);
+  const objectScope =
+    testInfo.project.name === "mobile-chrome" ? inspector : page;
+
+  await objectScope.getByRole("button", { name: /, chords role,/ }).click();
+  await inspector.getByRole("button", { name: "Add rhythmic ring" }).click();
+  if (testInfo.project.name === "mobile-chrome") {
+    inspector = await visibleInspector(page, testInfo.project.name);
+  }
+
+  const density = inspector.getByLabel("Ring density");
+  await expect(density).toBeVisible();
+  await expect(density).toHaveValue("16");
+  await density.press("ArrowLeft");
+  await expect(density).toHaveValue("15");
+  await density.fill("4");
+  await expect(density).toHaveValue("4");
+  await expect(inspector.locator(".ring-density-control output")).toHaveText(
+    "4",
+  );
 });
 
 test("deletes a planet with clear feedback and restores it with undo", async ({

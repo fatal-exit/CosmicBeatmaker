@@ -106,6 +106,7 @@ export class AudioEngine {
     this.assertActive();
     this.transport.pause();
     this.voices.releaseAll();
+    this.scheduler?.cancelPendingVisualEvents();
   }
 
   stop(): void {
@@ -132,17 +133,24 @@ export class AudioEngine {
     if (!this.master || !this.scheduler || !this.composition) return;
     const template = compileLiveSchedule(this.composition);
     const nextScheduleKey = createLiveScheduleKey(this.composition, template);
-    if (nextScheduleKey !== this.scheduleKey) {
+    const scheduleChanged = nextScheduleKey !== this.scheduleKey;
+    if (scheduleChanged) {
       // Any sources already admitted inside Tone's lookahead belong to the old
       // pattern. Release them before replacing future transport callbacks.
       this.voices.releaseAll();
-      this.scheduler.setComposition(this.composition);
-      this.scheduleKey = nextScheduleKey;
     }
     this.voices.reconcile(
       template.sources.map((source) => source.track),
       (track) => createLiveVoice(track, this.master as Gain),
     );
+    if (scheduleChanged) {
+      this.scheduler.setComposition(this.composition, {
+        ...(this.transport.state === "playing"
+          ? { continueFromTick: this.transport.positionTick }
+          : {}),
+      });
+      this.scheduleKey = nextScheduleKey;
+    }
     const masterTarget =
       Math.max(0, Math.min(1, this.composition.mix.level)) *
       AUDIO_OUTPUT_SAFETY.masterHeadroom;

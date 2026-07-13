@@ -227,6 +227,14 @@ A track stores:
 - Phase offset
 - Role-specific note data
 
+When a planet changes to a 1.5- or 3-bar polymetric orbit, its pattern grid
+must use 12 or 24 steps rather than 16 or 32. Preserve the current detail
+tier by simplifying 16 steps to 12 and 32 steps to 24. Keep events that still
+fit the shorter grid and deterministically omit overflow; if every event would
+be omitted, wrap the earliest event into the new grid so the planet does not
+become silent. Both supported polymeter grids divide each polymetric period
+into a whole number of subdivisions per bar.
+
 The planet completes one visual orbit per musical pattern loop. Live scheduling, orbit phase, WAV, and MIDI all consume the same rate and derived super-loop boundary.
 
 ### Pattern rotation
@@ -265,7 +273,7 @@ Examples:
 
 ## Rings
 
-A ring is regular and legible.
+A ring is segmented, legible, and interpreted through its parent planet's musical role. Every active segment retains one stable event ID so its audible event can flash the corresponding visible fragment.
 
 Default behavior:
 
@@ -283,6 +291,13 @@ Ring types:
 - Delay tap
 - Filter pulse
 
+Role-aware behavior:
+
+- Beat and texture rings retain regular high-percussion pulses.
+- Melody rings place short, quieter pitch-matched ghost notes immediately before or after nearby motif notes.
+- Chord rings switch the parent from sustained chord hits to articulated single-note chord tones across active segments. The two modes never play on top of one another.
+- Bass rings favor syncopated octave pickups, with a restrained occasional fifth for variation.
+
 Controls:
 
 - Density
@@ -290,6 +305,8 @@ Controls:
 - Velocity variation
 - Sound
 - Probability, limited by default
+
+Density changes the deterministic count and role-safe fill order of the stored active segments. It does not add hidden runtime events or replace the segment array with a second pattern.
 
 ## Asteroid belt
 

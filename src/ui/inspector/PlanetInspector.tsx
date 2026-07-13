@@ -44,22 +44,14 @@ export interface PlanetInspectorProps {
   onGateRhythmPreset: (presetId: GateRhythmPresetId) => void;
   onPattern: () => void;
   onRing: () => void;
+  onRingDensityBegin: () => void;
+  onRingDensityChange: (density: number) => void;
+  onRingDensityCommit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   canDelete: boolean;
   headingId?: string;
 }
-
-const RANGE_KEYS = [
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "End",
-  "Home",
-  "PageDown",
-  "PageUp",
-] as const;
 
 function voicingLabel(spread: number): string {
   if (spread < 0.25) return "Closed";
@@ -81,6 +73,7 @@ function varietyLabel(variety: number): string {
 
 export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   const gateRhythmId = useId();
+  const ringDensityId = useId();
   const deleteHintId = useId();
   const voicingId = useId();
   const chordComplexityId = useId();
@@ -102,6 +95,17 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   );
   const melodyExpression =
     planet.expression.kind === "melody" ? planet.expression : undefined;
+  const ringActiveCount = planet.ring?.active.filter(Boolean).length ?? 0;
+  const ringBehavior =
+    planet.role === "melody"
+      ? "Quiet ghost notes appear just before and after motif notes."
+      : planet.role === "chords"
+        ? "The ring replaces chord hits with an arpeggio throughout the orbit."
+        : planet.role === "bass"
+          ? "The ring adds syncopated octave pickups and occasional fifths."
+          : planet.role === "texture"
+            ? "The ring adds a light, regular shaker texture."
+            : "The ring adds a regular high-percussion pulse.";
 
   return (
     <aside className="inspector" aria-labelledby={headingId}>
@@ -165,19 +169,14 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
               step="0.5"
               value={planet.expression.voicingSpread}
               onPointerDown={() => actions.onExpressionBegin("voicing")}
-              onInput={(event) =>
+              onInput={(event) => {
+                actions.onExpressionBegin("voicing");
                 actions.onChordExpression({
                   voicingSpread: Number(event.currentTarget.value),
-                })
-              }
+                });
+              }}
               onPointerUp={actions.onExpressionCommit}
               onPointerCancel={actions.onExpressionCommit}
-              onKeyDown={(event) => {
-                if (
-                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
-                )
-                  actions.onExpressionBegin("voicing");
-              }}
               onKeyUp={actions.onExpressionCommit}
               onBlur={actions.onExpressionCommit}
             />
@@ -203,19 +202,14 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
               onPointerDown={() =>
                 actions.onExpressionBegin("chord-complexity")
               }
-              onInput={(event) =>
+              onInput={(event) => {
+                actions.onExpressionBegin("chord-complexity");
                 actions.onChordExpression({
                   chordComplexity: Number(event.currentTarget.value),
-                })
-              }
+                });
+              }}
               onPointerUp={actions.onExpressionCommit}
               onPointerCancel={actions.onExpressionCommit}
-              onKeyDown={(event) => {
-                if (
-                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
-                )
-                  actions.onExpressionBegin("chord-complexity");
-              }}
               onKeyUp={actions.onExpressionCommit}
               onBlur={actions.onExpressionCommit}
             />
@@ -245,19 +239,14 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
               step="0.01"
               value={melodyExpression.pitchVariety}
               onPointerDown={() => actions.onExpressionBegin("pitch-variety")}
-              onInput={(event) =>
+              onInput={(event) => {
+                actions.onExpressionBegin("pitch-variety");
                 actions.onMelodyExpression({
                   pitchVariety: Number(event.currentTarget.value),
-                })
-              }
+                });
+              }}
               onPointerUp={actions.onExpressionCommit}
               onPointerCancel={actions.onExpressionCommit}
-              onKeyDown={(event) => {
-                if (
-                  RANGE_KEYS.includes(event.key as (typeof RANGE_KEYS)[number])
-                )
-                  actions.onExpressionBegin("pitch-variety");
-              }}
               onKeyUp={actions.onExpressionCommit}
               onBlur={actions.onExpressionCommit}
             />
@@ -390,14 +379,47 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Fine-tune individual orbit gates
         </small>
       </button>
-      <button
-        type="button"
-        className="secondary-panel-action"
-        onClick={actions.onRing}
-        disabled={Boolean(planet.ring)}
-      >
-        {planet.ring ? "Rhythmic ring added" : "Add rhythmic ring"}
-      </button>
+      {planet.ring ? (
+        <div className="ring-density-control">
+          <label htmlFor={ringDensityId}>
+            <span>Ring density</span>
+            <output>{ringActiveCount}</output>
+          </label>
+          <p id={`${ringDensityId}-hint`}>{ringBehavior}</p>
+          <input
+            id={ringDensityId}
+            type="range"
+            min="0"
+            max={planet.ring.segments}
+            step="1"
+            value={ringActiveCount}
+            aria-describedby={`${ringDensityId}-hint`}
+            aria-valuetext={`${ringActiveCount} of ${planet.ring.segments} ring segments active`}
+            onPointerDown={actions.onRingDensityBegin}
+            onChange={(event) => {
+              actions.onRingDensityBegin();
+              actions.onRingDensityChange(
+                Number(event.target.value) / planet.ring!.segments,
+              );
+            }}
+            onPointerUp={actions.onRingDensityCommit}
+            onKeyUp={actions.onRingDensityCommit}
+            onBlur={actions.onRingDensityCommit}
+          />
+          <small>
+            <span>Open</span>
+            <span>Full</span>
+          </small>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="secondary-panel-action"
+          onClick={actions.onRing}
+        >
+          Add rhythmic ring
+        </button>
+      )}
       <div className="inspector-footer">
         <button type="button" onClick={actions.onDuplicate}>
           Duplicate

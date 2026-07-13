@@ -11,6 +11,7 @@ import type { VisualPreferences, VisualPulse } from "../../scene/contracts";
 export interface SceneCanvasProps {
   composition: Composition;
   selectedId: string | null;
+  isPlaying: boolean;
   visualPreferences: VisualPreferences;
   readTransportTicks: () => number;
   pulseRevision: number;
@@ -23,6 +24,7 @@ export interface SceneCanvasProps {
 export function SceneCanvas({
   composition,
   selectedId,
+  isPlaying,
   visualPreferences,
   readTransportTicks,
   pulseRevision,
@@ -95,6 +97,10 @@ export function SceneCanvas({
   useEffect(
     () => controller.setVisualPreferences(visualPreferences),
     [controller, visualPreferences],
+  );
+  useEffect(
+    () => controller.setPlaybackActive(isPlaying),
+    [controller, isPlaying],
   );
   useEffect(() => {
     for (const pulse of drainVisualPulses()) controller.enqueuePulse(pulse);

@@ -12,6 +12,8 @@ import type {
   StarPresetId,
   TrackMixState,
 } from "../domain/composition/types";
+import { simplifyPatternForPolymeter } from "../domain/rhythm/polymeterPatterns";
+import { ringActiveSegmentsForDensity } from "../domain/rhythm/ringPatterns";
 
 type ChordExpression = Extract<PlanetExpressionState, { kind: "chords" }>;
 type MelodyExpression = Extract<PlanetExpressionState, { kind: "melody" }>;
@@ -78,6 +80,12 @@ export type CompositionCommand =
   | { type: "AddMoon"; planetId: string; moon: MoonState; timestamp?: string }
   | { type: "RemoveMoon"; planetId: string; moonId: string; timestamp?: string }
   | { type: "SetRing"; planetId: string; ring?: RingState; timestamp?: string }
+  | {
+      type: "SetRingDensity";
+      planetId: string;
+      density: number;
+      timestamp?: string;
+    }
   | {
       type: "ToggleRingSegment";
       planetId: string;
@@ -246,6 +254,10 @@ export function applyCompositionCommand(
                     ...planet.orbit,
                     loopBars: command.loopBars,
                   },
+                  pattern: simplifyPatternForPolymeter(
+                    planet.pattern,
+                    command.loopBars,
+                  ),
                 }
               : planet,
           ),
@@ -424,6 +436,29 @@ export function applyCompositionCommand(
         description: command.ring
           ? "Added a rhythmic ring"
           : "Removed the rhythmic ring",
+      };
+    case "SetRingDensity":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId && planet.ring
+              ? {
+                  ...planet,
+                  ring: {
+                    ...planet.ring,
+                    active: ringActiveSegmentsForDensity(
+                      planet,
+                      planet.ring,
+                      command.density,
+                    ),
+                  },
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed ring density",
       };
     case "ToggleRingSegment":
       return {

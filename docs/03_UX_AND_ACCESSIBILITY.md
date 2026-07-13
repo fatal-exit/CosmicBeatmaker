@@ -143,6 +143,7 @@ Visible after selecting an object:
 - Duplicate
 - Delete
 - Lock
+- Ring density when the selected planet has a ring
 
 Sound and visual surface labels must remain distinct. Material names such as “Harmonic strata” describe appearance only and must not be presented as, or confused with, the selected sound preset.
 
@@ -209,6 +210,8 @@ The first choice is the musical role:
 After role selection, present three recommended sound cards. Include a small “More sounds” action.
 
 The celestial appearance can be generated from the role and sound preset. Users should not need to select planet geology before understanding the musical consequence.
+
+When a selected planet has a ring, the inspector exposes one plain-language Density control. Its active-segment count and role-specific musical result are described in text, and the visible fragments update with the control.
 
 ## Focus View
 

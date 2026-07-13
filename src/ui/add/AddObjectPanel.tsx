@@ -22,6 +22,7 @@ const ROLES: Array<{
 
 export interface AddObjectPanelProps {
   selectedHasRing: boolean;
+  selectedRole?: PlanetRole;
   selectedCanAddMoon: boolean;
   canAddAsteroids: boolean;
   onRole: (role: PlanetRole) => void;
@@ -32,6 +33,17 @@ export interface AddObjectPanelProps {
 }
 
 export function AddObjectPanel(props: AddObjectPanelProps) {
+  const ringDescription =
+    props.selectedRole === "melody"
+      ? "Adds quiet ghost notes around the melody"
+      : props.selectedRole === "chords"
+        ? "Replaces chord hits with a flowing arpeggio"
+        : props.selectedRole === "bass"
+          ? "Adds syncopated octave pickups"
+          : props.selectedRole === "texture"
+            ? "Adds a regular shaker texture"
+            : "Adds a regular high-percussion pulse";
+
   return (
     <section
       className="side-sheet add-sheet"
@@ -88,13 +100,15 @@ export function AddObjectPanel(props: AddObjectPanelProps) {
         <button
           type="button"
           onClick={props.onRing}
-          disabled={props.selectedHasRing}
+          disabled={props.selectedHasRing || !props.selectedRole}
         >
           <span>Planetary ring</span>
           <small>
             {props.selectedHasRing
               ? "Selected planet already has one"
-              : "A regular 16-step pulse"}
+              : props.selectedRole
+                ? ringDescription
+                : "Select a planet to add its role-aware ring"}
           </small>
         </button>
         <button

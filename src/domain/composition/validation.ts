@@ -49,7 +49,13 @@ const patternEventSchema = z.object({
 
 const patternSchema = z
   .object({
-    gridSize: z.union([z.literal(8), z.literal(16), z.literal(32)]),
+    gridSize: z.union([
+      z.literal(8),
+      z.literal(12),
+      z.literal(16),
+      z.literal(24),
+      z.literal(32),
+    ]),
     events: z.array(patternEventSchema),
     templateId: z.string().optional(),
     humanize: normalized,
