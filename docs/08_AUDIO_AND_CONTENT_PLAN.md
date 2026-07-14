@@ -233,11 +233,11 @@ The generated manifest retains processing, byte-size, source, output, level, lic
 
 ### Live playback and export boundary
 
-- Authored and procedural sample voices load lazily for the active track preset after audio unlock.
+- Authored and procedural sample voices load lazily for the active track preset after audio unlock. A page-lifetime cache coalesces each resolved first-party URL to one in-flight or decoded buffer handle across disposable voice generations.
 - While a sample is loading, or after a fetch, decode, or trigger failure, the same scheduled event uses the synthesized fallback voice.
 - A baked sample that is ready before its first event does not construct a fallback synth graph. If loading required synthesis, that graph remains idle after readiness until normal voice disposal so already-scheduled fallback events cannot be disconnected before their audio time.
 - Runtime URLs resolve below the Vite repository base path rather than the domain root.
-- Live playback may use the first-party samples, but offline WAV rendering remains synth-only for this pilot.
+- Live playback may use the first-party samples, but offline WAV rendering remains synth-only for this pilot. Export uses a dedicated bounded shared instrument set per track; the per-occurrence cancellable instrument model is live-playback-only and must never allocate a complete long render up front.
 - MIDI export remains on the existing canonical note-event path and has no sample dependency.
 
 This boundary keeps live playback resilient and preserves the existing deterministic WAV and MIDI export paths while sample compatibility is proven.
@@ -301,11 +301,11 @@ All buses
 
 - Use Tone's balanced worker clock with 120 ms lookahead / 30 ms cadence on desktop and 180 ms / 45 ms on mobile.
 - Treat callbacks more than 80 ms late on desktop or 120 ms late on mobile as stale; skip them rather than replaying an audible catch-up burst.
-- Admit each compiled source-cycle occurrence once per repeat, bound the occurrence ledger to 4,096 entries, and trip on unsafe callback bursts, timeline regression, invalid time, 16 consecutive late callbacks, or four consecutive voice-trigger errors.
-- Reuse compatible runtime voices across pattern and mix edits; rebuild transport registrations only when captured scheduling data changes.
-- Cap overlap at six sources per unique drum sample and sixteen per pitched sample voice.
+- Keep one repeating callback per source cycle, but retain every later event as a cancellable absolute-tick Tone Transport one-shot until that event's own callback. Admit each `trackId:eventId` and source-cycle occurrence once, bound the occurrence ledger to 4,096 entries, and trip on unsafe callback bursts, timeline regression, invalid time, 16 consecutive late callbacks, or four consecutive voice-trigger errors.
+- Keep tempo and mix-only updates on direct runtime paths. When captured structural scheduling data changes, revoke all repeats and pending exact-tick one-shots, cancel only event-owned voice attacks still strictly ahead of the raw audible clock, and directly admit the replacement pattern across Tone's processed lookahead frontier. Reuse compatible voices and track strips; removed or preset-incompatible voices reject new attacks but retain already-started notes through their natural tails. Reserve generation-gate fades for pause, stop, and health failure.
+- Cap overlap at six sources per unique drum voice and sixteen per pitched sample voice. Event-owned reservations are released immediately when a future attack is cancelled, so rapid edits cannot create phantom polyphony pressure.
 - Keep master gain at 72% of the requested composition level before a -3 dB limiter.
-- On a health trip, clear scheduling, fade to silence over 15 ms, release voices, and pause. Explicit play may attempt a clean rebuild; a health failure must never sustain an overload tone.
+- On pause, stop, or health failure, clear scheduling, fade master and generation output to silence over 15 ms, retire the current voice generation, and cancel pending visual messages. Explicit play rebuilds from the raw non-lookahead tick after pause or tick zero after stop; no invalidated event may survive into the next epoch.
 - Bound visual-event timeouts independently. Dropping an overloaded visual pulse must not drop or reschedule audio.
 
 This profile prioritizes stable authored playback over minimum monitoring latency because the MVP has no live note-entry surface. It does not replace physical iOS/Android listening, interruption/resume, Bluetooth-route, or thermal-throttling tests.
@@ -314,20 +314,28 @@ This profile prioritizes stable authored playback over minimum monitoring latenc
 
 Immediate but smoothed:
 
+- Tempo
 - Level
 - Filter
 - Effects
 - Pan
 
-Quantized to beat or bar where needed:
+Playhead-relative live replacement:
 
-- Instrument replacement
-- Pattern replacement
-- Harmony change
-- Loop length
+- Macro-derived patterns
+- Chord and melody expression
+- Pattern steps
+- Ring segments and density
+- Instrument and pattern replacement
+- Harmony and loop-length changes
+
+These edits never pause or rewind transport. Removed future steps are revoked, newly enabled future steps trigger once when the playhead reaches them, and edits behind the playhead take effect on the next orbit.
+
+Explicit whole-project replacement:
+
 - Major regeneration
 
-This avoids clicks and confusing mid-note changes.
+Major regeneration is a discrete project action rather than a continuous performance control. It still invalidates future scheduled work before the replacement composition takes over; already-started notes may finish their natural tails.
 
 ## WAV export
 

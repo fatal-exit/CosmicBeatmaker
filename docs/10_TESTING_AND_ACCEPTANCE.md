@@ -92,9 +92,13 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Audio continues correctly during artificial render slowdown.
 - Desktop/mobile runtime profiles apply their exact lookahead, cadence, and late-event thresholds.
 - Duplicate and stale callbacks cannot retrigger the same source or replay an audible backlog.
+- Future within-cycle events remain transport-owned exact-tick one-shots until their own callbacks; replacing a schedule clears those one-shots and retained callbacks are revision-fenced.
+- Rapid tempo sweeps do not rebuild registrations or voices. Rapid global-macro, chord-expression, melody-expression, primary-step, ring-step, ring-density, and source-topology edits retain one transport epoch and output gate, cancel only future per-event handles, and never release an already-started note.
+- Live pattern edits preserve the current transport tick and playing state. Newly enabled steps ahead of the playhead trigger once at their tick, including across the already-processed lookahead frontier; removed future steps do not trigger, and edited past steps wait for the next source cycle.
+- Pause and stop clear repeats, pending one-shots, and pending visuals, synchronously remove the current voice generation from routing, fade its isolated gate, and prevent immediate resume from exposing a pre-pause attack; stop restarts probability and scheduling from tick zero.
 - Callback bursts, ledger overflow, timeline regression, and repeated trigger errors fail silent within bounded state.
-- Runtime voice reconciliation reuses compatible sample/synth nodes and disposes only incompatible or removed voices.
-- Scheduled sample overlap never exceeds the six-source drum or sixteen-source pitched budgets.
+- Runtime voice reconciliation reuses compatible track strips and voices across structural edits. Removed or preset-incompatible voices reject new attacks and dispose only after active natural tails; preset changes re-admit unsounded lookahead hits into the replacement voice. Per-URL decoded sample caching bounds event-owned samplers to one fetch/decode per first-party asset.
+- Scheduled sample overlap never exceeds the six-source drum or sixteen-source pitched budgets, and cancelling/rescheduling more than the budget capacity releases every stale reservation immediately.
 - The master applies 0.72 headroom before a -3 dB limiter and health failure fades to zero over 15 ms.
 
 ### Sample content pipeline
@@ -107,7 +111,7 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - The generated TypeScript inventory and manifest agree on every procedural ID, URL, duration, category, attack, and release value.
 - Unsafe IDs, stale procedural paths, non-finite or silent PCM, duration/format drift, and excessive encoded size fail before promotion.
 - Until runtime preset integration is complete, unmapped patches continue using synth voices. Once mapped, loading and forced sample failures still trigger the same scheduled event through the synth fallback.
-- Offline WAV output remains deterministic and synth-based; MIDI remains independent of sample availability.
+- Offline WAV output remains deterministic and synth-based through bounded shared track voices; a real browser WAV download completes without allocating one instrument graph per compiled occurrence. MIDI remains independent of sample availability.
 
 ### Scene reconciliation
 

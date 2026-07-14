@@ -80,29 +80,58 @@ function compositionAtRates(...rates: LoopBars[]) {
 
 class RecordingSchedulerBackend implements SchedulerBackend {
   readonly schedules: Array<{
+    id: number;
     callback: (time: number) => void;
     intervalTicks: number;
     startTick: number;
   }> = [];
+  readonly oneShots: Array<{
+    id: number;
+    callback: (time: number) => void;
+    absoluteTick: number;
+  }> = [];
   tickAtTime = 0;
   currentAudioTime = 0;
+  private nextId = 1;
 
   scheduleRepeat(
     callback: (time: number) => void,
     intervalTicks: number,
     startTick: number,
   ): number {
-    this.schedules.push({ callback, intervalTicks, startTick });
-    return this.schedules.length;
+    const id = this.nextId;
+    this.nextId += 1;
+    this.schedules.push({ id, callback, intervalTicks, startTick });
+    return id;
   }
 
-  clear(): void {}
+  scheduleOnce(callback: (time: number) => void, absoluteTick: number): number {
+    const id = this.nextId;
+    this.nextId += 1;
+    this.oneShots.push({ id, callback, absoluteTick });
+    return id;
+  }
+
+  clear(id: number): void {
+    const scheduleIndex = this.schedules.findIndex(
+      (schedule) => schedule.id === id,
+    );
+    if (scheduleIndex >= 0) this.schedules.splice(scheduleIndex, 1);
+    const oneShotIndex = this.oneShots.findIndex(
+      (oneShot) => oneShot.id === id,
+    );
+    if (oneShotIndex >= 0) this.oneShots.splice(oneShotIndex, 1);
+  }
 
   getTicksAtTime(): number {
     return this.tickAtTime;
   }
 
   getCurrentAudioTime(): number {
+    return this.currentAudioTime;
+  }
+
+  getSchedulingAudioTime(): number {
     return this.currentAudioTime;
   }
 }
@@ -394,7 +423,7 @@ describe("polymetric compilation and scheduling", () => {
     ]);
   });
 
-  it("registers one bounded live callback per source and offsets exact event times", () => {
+  it("registers one bounded source callback and delegates future event ticks to the transport", () => {
     const backend = new RecordingSchedulerBackend();
     const trigger = vi.fn();
     const scheduler = new Scheduler(backend, trigger);
@@ -413,6 +442,12 @@ describe("polymetric compilation and scheduling", () => {
     backend.tickAtTime = 23_040;
     backend.currentAudioTime = 1;
     backend.schedules.forEach(({ callback }) => callback(1));
+    expect(trigger).toHaveBeenCalledTimes(1);
+    expect(backend.oneShots).toHaveLength(1);
+    expect(backend.oneShots[0].absoluteTick).toBe(24_480);
+
+    backend.currentAudioTime = 2.5;
+    backend.oneShots[0].callback(2.5);
     expect(trigger).toHaveBeenCalledTimes(2);
     const first = trigger.mock.calls.find(
       ([occurrence]) =>
@@ -454,6 +489,13 @@ describe("polymetric compilation and scheduling", () => {
     expect(scheduler.scheduledRegistrationCount).toBe(8);
     expect(scheduler.scheduledRegistrationCount).toBeLessThanOrEqual(41);
     backend.schedules.forEach(({ callback }) => callback(0));
+    for (const oneShot of [...backend.oneShots].sort(
+      (left, right) => left.absoluteTick - right.absoluteTick,
+    )) {
+      const audioTime = oneShot.absoluteTick / (AUDIO_PPQ * 2);
+      backend.currentAudioTime = audioTime;
+      oneShot.callback(audioTime);
+    }
     expect(trigger).toHaveBeenCalledTimes(8 * 32);
   });
 });

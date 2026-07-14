@@ -263,6 +263,8 @@ export function App() {
 
   const audioRef = useRef<AudioEngine | null>(null);
   const audioLoadRef = useRef<Promise<AudioEngine> | null>(null);
+  const audioGenerationRef = useRef(0);
+  const pendingAutoPlayCompositionRef = useRef<Composition | null>(null);
   const sharedLoadedRef = useRef(false);
   const initializedRef = useRef(false);
   const exportAbortRef = useRef<AbortController | null>(null);
@@ -308,30 +310,73 @@ export function App() {
 
   const ensureAudioEngine = useCallback((): Promise<AudioEngine> => {
     if (audioRef.current) return Promise.resolve(audioRef.current);
-    audioLoadRef.current ??= import("../audio").then(({ AudioEngine }) => {
-      const engine = new AudioEngine({
-        onVisualEvent: handleVisualEvent,
-        onHealthFailure: handleAudioHealthFailure,
+    if (!audioLoadRef.current) {
+      const generation = audioGenerationRef.current;
+      const load = import("../audio").then(({ AudioEngine }) => {
+        if (generation !== audioGenerationRef.current) {
+          throw new Error("Audio engine initialization was cancelled.");
+        }
+        const engine = new AudioEngine({
+          onVisualEvent: handleVisualEvent,
+          onHealthFailure: handleAudioHealthFailure,
+        });
+        try {
+          engine.setComposition(
+            useAppStore.getState().compositionHistory.present,
+          );
+          if (generation !== audioGenerationRef.current) {
+            throw new Error("Audio engine initialization was cancelled.");
+          }
+          audioRef.current = engine;
+          return engine;
+        } catch (error) {
+          engine.dispose();
+          throw error;
+        }
       });
-      engine.setComposition(useAppStore.getState().compositionHistory.present);
-      audioRef.current = engine;
-      return engine;
-    });
+      audioLoadRef.current = load;
+      void load.catch(() => {
+        if (audioLoadRef.current === load) audioLoadRef.current = null;
+      });
+    }
     return audioLoadRef.current;
   }, [handleAudioHealthFailure, handleVisualEvent]);
 
-  useEffect(
-    () => () => {
-      audioRef.current?.dispose();
+  useEffect(() => {
+    const generation = audioGenerationRef.current + 1;
+    audioGenerationRef.current = generation;
+    return () => {
+      if (audioGenerationRef.current === generation) {
+        audioGenerationRef.current += 1;
+      }
+      pendingAutoPlayCompositionRef.current = null;
+      const engine = audioRef.current;
+      const loading = audioLoadRef.current;
       audioRef.current = null;
       audioLoadRef.current = null;
-    },
-    [],
-  );
+      engine?.dispose();
+      void loading?.then(
+        (resolvedEngine) => {
+          if (resolvedEngine !== engine) resolvedEngine.dispose();
+        },
+        () => undefined,
+      );
+    };
+  }, []);
 
   useEffect(() => {
-    audioRef.current?.setComposition(composition);
-  }, [composition]);
+    const engine = audioRef.current;
+    engine?.setComposition(composition);
+    const pendingAutoPlay = pendingAutoPlayCompositionRef.current;
+    if (!pendingAutoPlay) return;
+    pendingAutoPlayCompositionRef.current = null;
+    if (pendingAutoPlay !== composition) return;
+    if (!engine) {
+      setPlaying(false);
+      return;
+    }
+    setPlaying(engine.play());
+  }, [composition, setPlaying]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -429,13 +474,16 @@ export function App() {
   );
 
   const unlockAudio = async () => {
+    const generation = audioGenerationRef.current;
     setAudioStatus("loading");
     try {
       const engine = await ensureAudioEngine();
       await engine.unlock();
+      if (generation !== audioGenerationRef.current) return false;
       setAudioStatus("ready");
       return true;
     } catch {
+      if (generation !== audioGenerationRef.current) return false;
       setAudioStatus("error");
       setToast("Audio could not start. Check browser audio permissions.");
       return false;
@@ -445,8 +493,7 @@ export function App() {
   const startOnboarding = async () => {
     const audioReady = await unlockAudio();
     if (sharedLoadedRef.current) {
-      if (audioReady) audioRef.current?.play();
-      setPlaying(audioReady);
+      setPlaying(audioReady ? (audioRef.current?.play() ?? false) : false);
       setOnboardingStep("complete");
     } else {
       setOnboardingStep("mood");
@@ -460,10 +507,9 @@ export function App() {
       name: showcase.name,
       starPresetId: showcase.starPresetId,
     });
+    pendingAutoPlayCompositionRef.current = audioReady ? demo : null;
     replaceComposition(demo);
-    audioRef.current?.setComposition(demo);
-    if (audioReady) audioRef.current?.play();
-    setPlaying(audioReady);
+    if (!audioReady) setPlaying(false);
     setOnboardingStep("complete");
     localStorage.setItem("cosmic-onboarding-version", "1");
   };
@@ -475,17 +521,16 @@ export function App() {
       createdAt: new Date().toISOString(),
     });
     replaceComposition(system);
-    audioRef.current?.setComposition(system);
     setOpenPanel(null);
     setToast(`${showcase.name} is ready to explore.`);
   };
 
   const chooseMood = (presetId: StarPresetId) => {
     const starter = starterForMood(presetId);
+    const shouldPlay = ui.audioStatus === "ready";
+    pendingAutoPlayCompositionRef.current = shouldPlay ? starter : null;
     replaceComposition(starter);
-    audioRef.current?.setComposition(starter);
-    if (ui.audioStatus === "ready") audioRef.current?.play();
-    setPlaying(ui.audioStatus === "ready");
+    if (!shouldPlay) setPlaying(false);
     setOnboardingStep("add-bass");
   };
 
@@ -497,8 +542,7 @@ export function App() {
       engine.pause();
       setPlaying(false);
     } else {
-      engine.play();
-      setPlaying(true);
+      setPlaying(engine.play());
     }
   };
 

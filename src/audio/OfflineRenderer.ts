@@ -4,7 +4,7 @@ import type { Composition } from "../domain/composition/types";
 import { compileComposition } from "./CompositionCompiler";
 import { ticksToSeconds } from "./timing";
 import type { CompiledSequence } from "./types";
-import { createFallbackVoice } from "./VoiceFactory";
+import { createOfflineFallbackVoice } from "./VoiceFactory";
 import { encodePcm16Wav } from "./WavEncoder";
 
 export type OfflineRenderPhase = "compiling" | "rendering" | "encoding";
@@ -78,7 +78,7 @@ export async function renderCompositionToWav(
       const voices = new Map(
         sequence.tracks.map((track) => [
           track.id,
-          createFallbackVoice(track, master),
+          createOfflineFallbackVoice(track, master),
         ]),
       );
       for (const occurrence of sequence.occurrences) {

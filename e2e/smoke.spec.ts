@@ -134,11 +134,32 @@ test("updates tempo continuously while the slider moves", async ({
 
   const tempo = page.getByLabel("Tempo");
   await expect(tempo).toBeVisible();
-  await tempo.focus();
-  await tempo.press("ArrowRight");
+  // Explore waits for the browser's audio unlock before installing the demo.
+  // Do not race a pointer edit against that intentional async handoff.
+  await expect(tempo).toHaveValue("115");
+  const bounds = await tempo.boundingBox();
+  if (!bounds) throw new Error("Tempo slider must have pointer bounds.");
+  const y = bounds.y + bounds.height / 2;
+  const currentX = bounds.x + bounds.width * ((115 - 70) / (140 - 70));
+  await page.mouse.move(currentX, y);
+  await page.mouse.down();
+  try {
+    await page.mouse.move(bounds.x + bounds.width * 0.78, y, { steps: 4 });
+    await expect.poll(() => tempo.inputValue()).not.toBe("115");
+    const firstLiveValue = await tempo.inputValue();
+    await expect(page.locator(".tempo-control output")).toHaveText(
+      firstLiveValue,
+    );
 
-  await expect(tempo).toHaveValue("116");
-  await expect(page.locator(".tempo-control output")).toHaveText("116");
+    // The second value must commit while the pointer is still held down.
+    await page.mouse.move(bounds.x + bounds.width * 0.9, y, { steps: 4 });
+    await expect.poll(() => tempo.inputValue()).not.toBe(firstLiveValue);
+    await expect(page.locator(".tempo-control output")).toHaveText(
+      await tempo.inputValue(),
+    );
+  } finally {
+    await page.mouse.up();
+  }
 });
 
 test("offers the full semantic editor on mobile", async ({
@@ -214,6 +235,81 @@ test("controls the density of a selected planet ring", async ({
   await expect(inspector.locator(".ring-density-control output")).toHaveText(
     "4",
   );
+});
+
+test("keeps the groove running through a live-control edit storm", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  const runtimeErrors: string[] = [];
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  const pause = page.getByRole("button", { name: "Pause composition" });
+  await expect(pause).toBeVisible();
+  await expect(page.locator(".scene-status")).toContainText("In orbit");
+
+  const streamRange = async (
+    slider: ReturnType<typeof page.locator>,
+    values: readonly string[],
+  ) => {
+    for (const value of values) await slider.fill(value);
+    await expect(pause).toBeVisible();
+  };
+
+  await streamRange(page.getByLabel("Tempo"), ["96", "128", "84", "121"]);
+  const macros = page.locator('.macro-control input[type="range"]');
+  await expect(macros).toHaveCount(5);
+  for (let index = 0; index < 5; index += 1) {
+    await streamRange(macros.nth(index), ["0.12", "0.88", "0.34", "0.67"]);
+  }
+
+  await page.getByRole("button", { name: /, chords role,/ }).click();
+  const inspector = page.locator(".inspector");
+  await streamRange(inspector.getByLabel("Chord complexity"), [
+    "0.1",
+    "0.9",
+    "0.25",
+    "0.75",
+  ]);
+  await streamRange(inspector.getByLabel("Voicing"), ["0", "1", "0.5"]);
+
+  await inspector
+    .getByRole("button", { name: "Edit circular pattern" })
+    .click();
+  const pattern = page.getByRole("dialog", { name: /pattern/ });
+  await pattern.getByRole("button", { name: /^Step 2(?:, active)?$/ }).click();
+  await pattern.getByRole("button", { name: /^Step 3(?:, active)?$/ }).click();
+  await pattern.getByRole("button", { name: /^Step 2(?:, active)?$/ }).click();
+  await pattern.getByRole("button", { name: /^Step 4(?:, active)?$/ }).click();
+  await expect(pause).toBeVisible();
+  await pattern.getByRole("button", { name: "Close pattern editor" }).click();
+
+  await inspector.getByRole("button", { name: "Add rhythmic ring" }).click();
+  await streamRange(inspector.getByLabel("Ring density"), [
+    "2",
+    "15",
+    "5",
+    "12",
+  ]);
+  await page.getByRole("button", { name: /, melody role,/ }).click();
+  await streamRange(inspector.getByLabel("Pitch variety"), [
+    "0.08",
+    "0.92",
+    "0.31",
+    "0.69",
+  ]);
+
+  await expect(page.locator(".scene-status")).toContainText("In orbit");
+  await pause.click();
+  await expect(
+    page.getByRole("button", { name: "Play composition" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Stop composition" }).click();
+  expect(runtimeErrors).toEqual([]);
 });
 
 test("deletes a planet with clear feedback and restores it with undo", async ({
@@ -306,6 +402,22 @@ test("shows a 3-bar orbit and exports one complete 12-bar sync", async ({
   await expect(
     exportDialog.getByRole("button", { name: "1×" }),
   ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("renders a real bounded WAV export in the browser", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  await page.getByRole("button", { name: "Open project menu" }).click();
+  await page.getByRole("button", { name: "Export audio or MIDI" }).click();
+
+  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+  await page.getByRole("button", { name: /WAV audio/ }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(/\.wav$/i);
+  expect(await download.failure()).toBeNull();
 });
 
 test("zooms the scene with a desktop wheel gesture", async ({

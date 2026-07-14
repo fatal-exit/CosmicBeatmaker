@@ -10,12 +10,14 @@ class FakeTransport implements TransportAdapter {
   ticks = 0;
   ppq = 192;
   bpm = 120;
+  readonly pauseTimes: Array<number | undefined> = [];
 
   start(): void {
     this.state = "started";
   }
 
-  pause(): void {
+  pause(audioTime?: number): void {
+    this.pauseTimes.push(audioTime);
     this.state = "paused";
   }
 
@@ -56,6 +58,59 @@ describe("transport controller", () => {
 
     expect(transport.state).toBe("stopped");
     expect(transport.positionTick).toBe(0);
+  });
+
+  it("pauses at the raw audio boundary instead of preserving lookahead ticks", async () => {
+    const adapter = new FakeTransport();
+    const transport = new TransportController(adapter, () => Promise.resolve());
+    await transport.unlock();
+    transport.play();
+    adapter.ticks = 1_100;
+
+    transport.pause({
+      audioTime: 2,
+      transportTick: 600,
+      schedulingAudioTime: 2.12,
+    });
+
+    expect(adapter.pauseTimes).toEqual([2.12]);
+    expect(transport.state).toBe("paused");
+    expect(transport.positionTick).toBe(600);
+  });
+
+  it("cancels a just-scheduled start at Tone's scheduling frontier", async () => {
+    class LookaheadTransport extends FakeTransport {
+      pendingStartAt = 0;
+      rawAudioTime = 0;
+
+      override start(): void {
+        this.pendingStartAt = 1.12;
+        this.state = "started";
+      }
+
+      override pause(audioTime?: number): void {
+        super.pause(audioTime);
+        if ((audioTime ?? this.rawAudioTime) >= this.pendingStartAt) {
+          this.pendingStartAt = 0;
+        }
+      }
+    }
+
+    const adapter = new LookaheadTransport();
+    const transport = new TransportController(adapter, () => Promise.resolve());
+    await transport.unlock();
+    transport.play();
+
+    transport.pause({
+      audioTime: 1,
+      transportTick: 480,
+      schedulingAudioTime: 1.12,
+    });
+
+    expect(adapter.pauseTimes).toEqual([1.12]);
+    expect(adapter.pendingStartAt).toBe(0);
+    expect(adapter.ticks).toBe(480);
+    expect(transport.state).toBe("paused");
   });
 
   it("rejects tempo values outside the MVP contract", async () => {

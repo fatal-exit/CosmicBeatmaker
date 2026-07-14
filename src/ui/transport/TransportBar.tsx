@@ -69,12 +69,12 @@ export function TransportBar(props: TransportBarProps) {
             max="140"
             value={props.bpm}
             onPointerDown={props.onTempoBegin}
-            onChange={(event) => {
-              // Keyboard-driven ranges fire change only after their native
+            onInput={(event) => {
+              // Keyboard-driven ranges fire input only after their native
               // value moves. Starting the group here avoids a synchronous
               // keydown render resetting that value before the browser acts.
               props.onTempoBegin();
-              props.onTempo(Number(event.target.value));
+              props.onTempo(Number(event.currentTarget.value));
             }}
             onPointerUp={props.onTempoCommit}
             onPointerCancel={props.onTempoCommit}

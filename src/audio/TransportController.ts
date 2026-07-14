@@ -16,11 +16,20 @@ export interface TransportAdapter {
   ppq: number;
   bpm: number;
   start(): void;
-  pause(): void;
+  pause(audioTime?: number): void;
   stop(): void;
 }
 
 export type AudioUnlock = () => Promise<void>;
+
+export interface TransportPausePosition {
+  /** Raw AudioContext time, deliberately excluding scheduling lookahead. */
+  audioTime: number;
+  /** Fractional transport position at that same raw AudioContext time. */
+  transportTick: number;
+  /** Tone's scheduling frontier, including its configured lookahead. */
+  schedulingAudioTime: number;
+}
 
 /** Explicit user-gesture and play/pause/stop contract, independently testable. */
 export class TransportController {
@@ -67,9 +76,31 @@ export class TransportController {
     if (this.adapter.state !== "started") this.adapter.start();
   }
 
-  pause(): void {
+  pause(position?: TransportPausePosition): void {
     this.requireUnlocked();
-    if (this.adapter.state === "started") this.adapter.pause();
+    if (position) {
+      if (
+        !Number.isFinite(position.audioTime) ||
+        !Number.isFinite(position.transportTick) ||
+        !Number.isFinite(position.schedulingAudioTime) ||
+        position.schedulingAudioTime < position.audioTime
+      ) {
+        throw new Error("A pause position must contain finite clock values.");
+      }
+    }
+    if (this.adapter.state === "started") {
+      // Tone schedules start/pause state at its lookahead frontier. Pausing at
+      // raw AudioContext time can precede a just-queued start and leave that
+      // start alive, so revoke it at the same scheduling frontier instead.
+      this.adapter.pause(position?.schedulingAudioTime);
+      // Tone's public `ticks` getter is evaluated at `now()` (including
+      // lookahead). Re-anchor the paused transport to the fractional raw
+      // playhead; the scheduler derives the first unsounded integer tick when
+      // playback resumes, avoiding both lookahead loss and a double advance.
+      if (position) {
+        this.adapter.ticks = Math.max(0, position.transportTick);
+      }
+    }
   }
 
   /** Stop is distinct from pause and always rewinds probability to loop zero. */
@@ -143,8 +174,8 @@ export function createToneTransportController(
     start() {
       transport.start();
     },
-    pause() {
-      transport.pause();
+    pause(audioTime) {
+      transport.pause(audioTime);
     },
     stop() {
       transport.stop();

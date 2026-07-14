@@ -396,13 +396,14 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
             aria-describedby={`${ringDensityId}-hint`}
             aria-valuetext={`${ringActiveCount} of ${planet.ring.segments} ring segments active`}
             onPointerDown={actions.onRingDensityBegin}
-            onChange={(event) => {
+            onInput={(event) => {
               actions.onRingDensityBegin();
               actions.onRingDensityChange(
-                Number(event.target.value) / planet.ring!.segments,
+                Number(event.currentTarget.value) / planet.ring!.segments,
               );
             }}
             onPointerUp={actions.onRingDensityCommit}
+            onPointerCancel={actions.onRingDensityCommit}
             onKeyUp={actions.onRingDensityCommit}
             onBlur={actions.onRingDensityCommit}
           />

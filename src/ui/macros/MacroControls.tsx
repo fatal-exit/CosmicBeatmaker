@@ -63,12 +63,14 @@ export function MacroControls({
                 value={macros[macro.key]}
                 aria-describedby="macro-live-help"
                 onPointerDown={() => onBegin(macro.key)}
-                onChange={(event) => {
+                onInput={(event) => {
                   onBegin(macro.key);
-                  onChange(macro.key, Number(event.target.value));
+                  onChange(macro.key, Number(event.currentTarget.value));
                 }}
                 onPointerUp={onCommit}
+                onPointerCancel={onCommit}
                 onKeyUp={onCommit}
+                onBlur={onCommit}
               />
               <small>
                 <span>{macro.low}</span>
