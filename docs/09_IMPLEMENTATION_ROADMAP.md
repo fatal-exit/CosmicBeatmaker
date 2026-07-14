@@ -205,9 +205,9 @@ Physical iOS and Android performance and listening checks remain an unverified r
 - An exact gate-collision pulse keyed by canonical event ID and scheduled audio-clock tick rather than render-frame intersection tests
 - Audio-clock spawn alignment that places a planet added during playback at its transport-derived position in the active super-loop instead of restarting its visual orbit
 - A transient highlighted spawn marker at the newly added planet's computed orbit position, adapted for quality, reduced-motion, and reduced-flash preferences
-- Semantic 44-by-44 CSS-pixel Zoom out, Reset view, Zoom in, Rotate left, and Rotate right controls available in desktop and mobile layouts
-- Zoom constrained to 60–180 percent through buttons, pointer wheel, or touch pinch, plus empty-space camera rotation that does not steal selected-object gestures
-- Renderer-owned camera orientation and zoom with an aspect-aware deterministic reset view and no composition-state, history, save, or share fields
+- Semantic 44-by-44 CSS-pixel Zoom out, Reset view, Zoom in, Rotate left, Rotate right, Tilt up, and Tilt down controls available in desktop and mobile layouts
+- Zoom constrained to 60–180 percent through buttons, pointer wheel, or touch pinch, plus bounded empty-space horizontal rotation and vertical tilt that do not steal selected-object gestures
+- Renderer-owned camera orientation, tilt, and zoom with an aspect-aware deterministic reset view and no composition-state, history, save, or share fields
 - Visual regression coverage for representative roles, star presets, gate patterns, quality profiles, and reduced-motion states
 
 ### Acceptance
@@ -229,12 +229,12 @@ Physical iOS and Android performance and listening checks remain an unverified r
 
 ### Camera navigation acceptance — complete
 
-- Desktop and mobile expose semantic buttons with the accessible names Zoom out, Reset view, Zoom in, Rotate left, and Rotate right; each remains keyboard operable and meets the 44-by-44 CSS-pixel touch target.
+- Desktop and mobile expose semantic buttons with the accessible names Zoom out, Reset view, Zoom in, Rotate left, Rotate right, Tilt up, and Tilt down; each remains keyboard operable and meets the 44-by-44 CSS-pixel touch target.
 - The buttons apply bounded increments across the 60–180 percent zoom range, and Reset view restores the aspect-appropriate default angle and zoom without changing selection, playback, or composition state.
-- Pointer-wheel and pinch gestures zoom within the same 60–180 percent bounds as the buttons. Dragging empty scene space rotates the constrained camera, while dragging a selected planet continues to edit that planet and never rotates the camera.
+- Pointer-wheel and pinch gestures zoom within the same 60–180 percent bounds as the buttons. Dragging empty scene space rotates and tilts the constrained camera, while dragging a selected planet continues to edit that planet and never changes the camera.
 - Camera input produces immediate feedback. Reduced motion removes animated camera interpolation without disabling any control or gesture.
-- Camera orientation, zoom, gesture state, and reset state remain renderer-only and are excluded from composition history, undo, save, share, JSON export, and schema migrations.
-- Desktop and mobile automated-browser coverage verifies the semantic buttons, wheel zoom, aspect-aware reset, and the unobstructed guided flow; pure unit coverage verifies bounded pinch and rotation math, while real-browser review verifies empty-space rotation and a clean console.
+- Camera orientation, tilt, zoom, gesture state, and reset state remain renderer-only and are excluded from composition history, undo, save, share, JSON export, and schema migrations.
+- Desktop and mobile automated-browser coverage verifies the semantic buttons, wheel zoom, aspect-aware reset, and the unobstructed guided flow; pure unit coverage verifies bounded pinch, rotation, and tilt math, while real-browser review verifies empty-space camera movement and a clean console.
 - At the 390-by-844 phone viewport, the corrected coachmark remains readable without obstructing the camera controls.
 
 ### Scope boundary
@@ -351,8 +351,8 @@ The renderer has produced 41 procedural Ogg assets and merged them with the 20 u
 - A dependency-free `scripts/render-procedural-samples.mjs` renderer invoked with `npm run samples:render`, and automatically after the default authored `npm run samples:build` stage
 - A transactional `scripts/build-samples.mjs` orchestrator that builds outside `public/`, accepts future authored inventory growth, validates the whole pack, and rolls back both pack and runtime inventory on promotion failure
 - Deterministic 48 kHz PCM16 synthesis keyed by stable definition/channel IDs and synthesis version, followed by fixed Ogg Vorbis quality-5 encoding arguments
-- 28 mono drum transients spanning four style families and seven voices each, plus four mono auxiliary transients
-- Eight stereo C4 tonal/texture assets and one stereo C2 drone, with runtime transposition from their declared roots after integration
+- 28 drum assets spanning four style families and seven voices each: eight mono low transients and 20 baked stereo upper-percussion replacements, plus two stereo and two mono auxiliary assets
+- Eight baked stereo C4 tonal/texture replacements and one stereo C2 drone, with runtime transposition from their declared roots after integration
 - A merged 61-entry manifest that retains the 20 authored outputs and records procedural synthesis version, channels, levels, envelope metadata, and a fixed-gain peak policy
 - A generated TypeScript runtime inventory refreshed from the same 41 definitions
 - Lazy sample loading after audio unlock with synth fallback constructed only when loading, fetch, decode, or trigger state requires it
@@ -361,7 +361,8 @@ The renderer has produced 41 procedural Ogg assets and merged them with the 20 u
 
 - Starting from the 20-entry authored manifest, running `npm run samples:render` with `ffmpeg`, `ffprobe`, and Xiph `oggenc` available produces exactly 41 procedural Ogg files and a 61-entry merged manifest.
 - Repeating the render under the same renderer and codec toolchain preserves stable IDs, inventory, channel counts, synthesis-version metadata, and encoded output.
-- The procedural set contains exactly 32 mono transient assets and nine stereo tonal/texture assets; all decode as 48 kHz Ogg Vorbis and remain below the encoded peak safety threshold.
+- The procedural set contains exactly 10 mono low/percussion assets and 31 stereo assets, including 30 spatialized replacements; all decode as 48 kHz Ogg Vorbis and remain below the encoded peak safety threshold.
+- Every spatial replacement records a Legacy Dry source label and distinct source ID, while the corresponding Legacy Dry asset/file is absent from the complete pack.
 - The tonal cache uses C4 (MIDI 60) for eight assets and C2 (MIDI 36) for the low drone; preset mappings transpose from those roots rather than baking composition notes into the files.
 - Runtime integration maps every intended remaining live patch without changing composition schema, timing, or preset IDs. Until an asset is ready, and after any sample failure, the same scheduled event uses the prior synth implementation.
 - A sample that is ready before its first event constructs no fallback synth. A loading fallback stops receiving events after readiness but remains valid until voice disposal so lookahead-scheduled notes cannot be disconnected prematurely.
@@ -376,6 +377,40 @@ This milestone does not add user sample import, a sample marketplace, streaming,
 ### Stopping condition
 
 The primary agent reruns both asset commands and the complete repository quality suite; verifies the exact 20 + 41 inventory, manifest/runtime alignment, C-root transposition, loading and forced-failure fallback, base-path URLs, and no-clipping policy; performs desktop and mobile listening review; then commits and deploys the coherent checkpoint. Physical iOS and Android listening remains a separate release task.
+
+## Milestone 11 — Desktop High Detail Rendering
+
+### Goal
+
+Make the optional desktop presentation tier materially richer, give mobile a lighter atmospheric backdrop, and keep the phone-first audio clock, interaction model, and serializable composition unchanged.
+
+### Deliverables
+
+- Wide-desktop Auto selection that also recognizes high-DPI PC and Mac displays, plus the existing explicit quality selector
+- Denser High-only planet and star geometry
+- Seeded role-specific procedural terrain normals layered over the existing displaced planet surfaces
+- Planet illumination colored by the active star preset
+- A restrained Three.js High-only bloom compositor with explicit render-target disposal
+- A seeded High-only deep-space shader with sparse star layers, domain-warped multi-scale nebula filaments, dust lanes, knots, and compact spiral-galaxy profiles
+- A separate inexpensive Low/Balanced sky shader with broad seeded wisps and one sparse star layer, but no High-only FBM, filament, galaxy, or bloom work
+- Reduced-effects attenuation, clean Low/Balanced fallback, and no new runtime dependency or composition-schema field
+
+### Acceptance
+
+- A 1440-pixel-wide desktop viewport in Auto renders High, including at device-pixel ratio 2; a 390-by-844 phone viewport in Auto renders Low with the lightweight backdrop but without bloom or the detailed deep-space shader.
+- The active star surface remains detailed under bloom rather than becoming a featureless glare source.
+- Planet terrain reads through both color and normal-shaped light, and the lit side takes on the active star's color.
+- The background shows layered filament, dust, star, and galaxy structure without reducing orbit, planet, gate, or inspector readability.
+- Switching repeatedly between High and lower profiles leaves one bounded scene, releases compositor targets, preserves camera and composition intent, and produces no WebGL or console errors.
+- Audio scheduling and audible-event causality remain independent from renderer frame time and visual quality.
+
+### Scope boundary
+
+This milestone does not add terrain simulation, physical shadow maps, WebGPU, composition-state lighting, user-authored environment controls, or mobile post-processing. Mobile receives only the bounded simple sky material; the detailed effects remain in the renderer-owned High option.
+
+### Stopping condition
+
+Format, typecheck, lint, unit tests, production build, and critical E2E pass; real-browser desktop High and phone Auto captures are inspected; profile switching and the console remain clean; and any remaining physical-device performance risk is reported without claiming it verified.
 
 ## Nine-day build sequence
 

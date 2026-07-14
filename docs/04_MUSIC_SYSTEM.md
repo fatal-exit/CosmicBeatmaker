@@ -215,7 +215,7 @@ The stored rate has one meaning: the planet completes one visible orbit and repe
 
 Represent rates in exact quarter-bar units `[1, 2, 4, 6, 8, 12, 16, 24, 32]`. Include the four-bar harmony phrase in the integer least-common-multiple calculation for active audible sources. This produces the complete super-loop: 3- and 4-bar parts resynchronize after 12 bars, 6- and 8-bar parts after 24, and no supported catalog combination exceeds 24 bars.
 
-Every planet receives a unique visual lane derived from rate order and stable composition order or ID. Duplicate-rate planets occupy neighboring lanes rather than sharing a path. Radial manipulation chooses a rate; lane placement is recalculated from the whole planet set. Camera fit and zoom remain renderer state, independent from rate.
+Every planet receives a unique visual lane derived from rate order and stable composition order or ID. Duplicate-rate planets occupy neighboring lanes rather than sharing a path. Lane center spacing also uses each planet's role-derived body, ring, gate, and moon envelope so a gas giant receives more clearance than a rocky or dwarf world without changing its musical period. Radial manipulation chooses a rate; lane placement is recalculated from the whole planet set. Camera fit and zoom remain renderer state, independent from rate.
 
 ### Pattern representation
 

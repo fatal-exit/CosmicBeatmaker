@@ -16,6 +16,7 @@ import {
   validatePackAssetIdentity,
 } from "../scripts/build-samples.mjs";
 import {
+  applySpaceReverb,
   validateEncodedContract,
   validateLevelStats,
   validatePreviousProceduralEntry,
@@ -93,6 +94,34 @@ describe("procedural sample renderer validation", () => {
         meanDb: -18,
       }),
     ).not.toThrow();
+  });
+
+  it("turns a legacy-dry mono impulse into a bounded decorrelated stereo tail", () => {
+    const dry = new Float32Array(4_800);
+    dry[0] = 0.7;
+    const rendered = applySpaceReverb([dry], {
+      preDelaySeconds: 0.018,
+      tailSeconds: 0.4,
+      roomSize: 0.72,
+      damping: 0.3,
+      dryGain: 1,
+      wetGain: 0.65,
+      inputGain: 0.32,
+    });
+
+    expect(rendered.channels).toHaveLength(2);
+    expect(rendered.channels[0]).toHaveLength(24_000);
+    expect(rendered.durationSeconds).toBe(0.5);
+    const lateLeft = rendered.channels[0].slice(dry.length);
+    const lateRight = rendered.channels[1].slice(dry.length);
+    expect(lateLeft.some((sample) => Math.abs(sample) > 1e-5)).toBe(true);
+    expect(lateRight.some((sample) => Math.abs(sample) > 1e-5)).toBe(true);
+    expect(Array.from(lateLeft)).not.toEqual(Array.from(lateRight));
+    for (const channel of rendered.channels) {
+      expect(
+        Math.max(...channel.map((sample) => Math.abs(sample))),
+      ).toBeLessThanOrEqual(0.68);
+    }
   });
 
   it("rejects non-finite PCM and silent renders", () => {

@@ -15,11 +15,15 @@ import {
   normalizeVisualSeed,
 } from "../src/scene/materials/profiles";
 import {
+  SCENE_CAMERA_TILT_DEFAULT,
+  SCENE_CAMERA_TILT_MAX,
+  SCENE_CAMERA_TILT_MIN,
   SCENE_CAMERA_ZOOM_MAX,
   SCENE_CAMERA_ZOOM_MIN,
   SceneController,
   cameraDistanceForView,
   classifyPlanetDrag,
+  clampSceneTilt,
   clampSceneZoom,
   disposeObject,
   highlightedSpawnId,
@@ -30,14 +34,12 @@ import {
   quarterNotePulseAtTick,
   quantizeLoopBarsFromRadialDrag,
   sceneRotationFromDrag,
+  sceneTiltFromDrag,
   sceneZoomFromPinch,
   sceneZoomFromWheel,
   transientPulseFrame,
 } from "../src/scene/SceneController";
-import {
-  compositionToSceneDescriptor,
-  orbitRadiusForShellIndex,
-} from "../src/scene/descriptors";
+import { compositionToSceneDescriptor } from "../src/scene/descriptors";
 import {
   deletedPlanetId,
   planetDestructionEffectProfile,
@@ -45,11 +47,19 @@ import {
 import { gatePhaseForTrigger, spawnPhaseAtTick } from "../src/scene/gates";
 import { orbitPhaseAtTick } from "../src/scene/phase";
 import {
+  QUALITY_BLOOM_SETTINGS,
+  QUALITY_DEEP_SPACE_STRENGTH,
   QUALITY_GLOW_STRENGTH,
+  QUALITY_PLANET_GEOMETRY_DETAIL,
   QUALITY_SHADER_DETAIL,
+  QUALITY_STAR_GEOMETRY_DETAIL,
   resolveQualityProfile,
 } from "../src/scene/quality";
 import { planSceneReconciliation } from "../src/scene/reconcile";
+import {
+  MIN_PLANET_ORBIT_RADIUS,
+  PLANET_ORBIT_LANE_GAP,
+} from "../src/scene/planetVisuals";
 
 describe("scene contracts", () => {
   it("defines stable visual material identities for every celestial type", () => {
@@ -72,6 +82,73 @@ describe("scene contracts", () => {
     );
     expect(normalizeVisualSeed(65_522)).toBeCloseTo(1 / 65_521);
     expect(normalizeVisualSeed(-1)).toBeCloseTo(65_520 / 65_521);
+  });
+
+  it("recreates and reattaches the central star independently of orbit lanes", () => {
+    const composition = createStarterComposition("star-runtime-invariant");
+    composition.star.presetId = "void";
+    composition.star.intensity = 0.4;
+    const descriptor = compositionToSceneDescriptor(composition);
+    const scene = new THREE.Scene();
+    const controller = new SceneController({ readTransportTicks: () => 0 });
+    type RuntimeStarProbe = {
+      group: THREE.Group;
+      body: THREE.Mesh;
+      outline: THREE.Mesh;
+      glow: THREE.Mesh;
+      dispose: () => void;
+    };
+    const internals = controller as unknown as {
+      scene: THREE.Scene | null;
+      descriptor: typeof descriptor | null;
+      qualityProfile: "low" | "balanced" | "high";
+      preferences: {
+        quality: "auto" | "low" | "balanced" | "high";
+        reducedMotion: boolean;
+        reducedParticles: boolean;
+        reducedFlash: boolean;
+      };
+      star: RuntimeStarProbe | null;
+      ensureStarRuntime: () => void;
+    };
+    internals.scene = scene;
+    internals.descriptor = descriptor;
+    internals.qualityProfile = "high";
+    internals.preferences = {
+      quality: "high",
+      reducedMotion: true,
+      reducedParticles: true,
+      reducedFlash: true,
+    };
+
+    internals.ensureStarRuntime();
+    const firstRuntime = internals.star!;
+    expect(firstRuntime.group.parent).toBe(scene);
+    scene.remove(firstRuntime.group);
+    firstRuntime.group.visible = false;
+    firstRuntime.body.visible = false;
+    firstRuntime.outline.visible = false;
+    firstRuntime.glow.visible = false;
+
+    internals.ensureStarRuntime();
+    expect(internals.star).toBe(firstRuntime);
+    expect(firstRuntime.group.parent).toBe(scene);
+    expect(firstRuntime.group.visible).toBe(true);
+    expect(firstRuntime.body.visible).toBe(true);
+    expect(firstRuntime.outline.visible).toBe(true);
+    expect(firstRuntime.glow.visible).toBe(true);
+    expect(firstRuntime.group.position.toArray()).toEqual([0, 0, 0]);
+    expect(firstRuntime.body.frustumCulled).toBe(false);
+
+    scene.remove(firstRuntime.group);
+    firstRuntime.dispose();
+    internals.star = null;
+    internals.ensureStarRuntime();
+    const recreatedRuntime = (internals as { star: RuntimeStarProbe | null })
+      .star;
+    expect(recreatedRuntime).not.toBe(firstRuntime);
+    expect(recreatedRuntime?.group.parent).toBe(scene);
+    recreatedRuntime?.dispose();
   });
 
   it("derives orbit phase from authoritative ticks", () => {
@@ -481,9 +558,20 @@ describe("scene contracts", () => {
     expect(
       new Set(descriptors.map(({ orbitRadius }) => orbitRadius)).size,
     ).toBe(descriptors.length);
-    for (const descriptor of descriptors) {
-      expect(descriptor.orbitRadius).toBe(
-        orbitRadiusForShellIndex(lanes.get(descriptor.id)!),
+    const orderedDescriptors = [...descriptors].sort(
+      (left, right) => lanes.get(left.id)! - lanes.get(right.id)!,
+    );
+    expect(orderedDescriptors[0].orbitRadius).toBeGreaterThanOrEqual(
+      MIN_PLANET_ORBIT_RADIUS,
+    );
+    for (let index = 1; index < orderedDescriptors.length; index += 1) {
+      const previous = orderedDescriptors[index - 1];
+      const current = orderedDescriptors[index];
+      expect(current.orbitRadius - previous.orbitRadius).toBeGreaterThanOrEqual(
+        previous.visualExtent +
+          current.visualExtent +
+          PLANET_ORBIT_LANE_GAP -
+          1e-10,
       );
     }
 
@@ -525,6 +613,23 @@ describe("scene contracts", () => {
     );
   });
 
+  it("bounds renderer-only camera tilt from controls and vertical drags", () => {
+    expect(clampSceneTilt(0)).toBe(SCENE_CAMERA_TILT_MIN);
+    expect(clampSceneTilt(Math.PI)).toBe(SCENE_CAMERA_TILT_MAX);
+    expect(sceneTiltFromDrag(SCENE_CAMERA_TILT_DEFAULT, -24)).toBeGreaterThan(
+      SCENE_CAMERA_TILT_DEFAULT,
+    );
+    expect(sceneTiltFromDrag(SCENE_CAMERA_TILT_DEFAULT, 24)).toBeLessThan(
+      SCENE_CAMERA_TILT_DEFAULT,
+    );
+    expect(sceneTiltFromDrag(SCENE_CAMERA_TILT_DEFAULT, -10_000)).toBe(
+      SCENE_CAMERA_TILT_MAX,
+    );
+    expect(sceneTiltFromDrag(SCENE_CAMERA_TILT_DEFAULT, 10_000)).toBe(
+      SCENE_CAMERA_TILT_MIN,
+    );
+  });
+
   it("fits the default camera farther away on narrow viewports", () => {
     const desktopDistance = cameraDistanceForView(1.4);
     const phoneDistance = cameraDistanceForView(0.6);
@@ -554,9 +659,26 @@ describe("scene contracts", () => {
   it("resolves conservative automatic mobile quality", () => {
     expect(resolveQualityProfile("auto", 390, 3)).toBe("low");
     expect(resolveQualityProfile("auto", 900, 2)).toBe("balanced");
+    expect(resolveQualityProfile("auto", 1440, 2)).toBe("high");
     expect(resolveQualityProfile("high", 390, 3)).toBe("high");
     expect(QUALITY_SHADER_DETAIL.low).toBeLessThan(QUALITY_SHADER_DETAIL.high);
     expect(QUALITY_SHADER_DETAIL.low).toBe(0);
     expect(QUALITY_GLOW_STRENGTH.low).toBeLessThan(QUALITY_GLOW_STRENGTH.high);
+    expect(QUALITY_PLANET_GEOMETRY_DETAIL.high).toBeGreaterThan(
+      QUALITY_PLANET_GEOMETRY_DETAIL.balanced,
+    );
+    expect(QUALITY_STAR_GEOMETRY_DETAIL.high).toBeGreaterThan(
+      QUALITY_STAR_GEOMETRY_DETAIL.balanced,
+    );
+    expect(QUALITY_BLOOM_SETTINGS.high.enabled).toBe(true);
+    expect(QUALITY_BLOOM_SETTINGS.balanced.enabled).toBe(false);
+    expect(QUALITY_DEEP_SPACE_STRENGTH.high).toBe(1);
+    expect(QUALITY_DEEP_SPACE_STRENGTH.low).toBeGreaterThan(0);
+    expect(QUALITY_DEEP_SPACE_STRENGTH.balanced).toBeGreaterThan(
+      QUALITY_DEEP_SPACE_STRENGTH.low,
+    );
+    expect(QUALITY_DEEP_SPACE_STRENGTH.high).toBeGreaterThan(
+      QUALITY_DEEP_SPACE_STRENGTH.balanced,
+    );
   });
 });

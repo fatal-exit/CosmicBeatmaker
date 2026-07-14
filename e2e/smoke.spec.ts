@@ -119,6 +119,14 @@ test("restores visual comfort preferences", async ({ page }) => {
 
   await expect(page.getByLabel("Quality")).toHaveValue("low");
   await expect(
+    page.getByText(
+      "High detail adds terrain normals, stellar lighting, bloom, and deep space scenery.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("Quality").selectOption("high");
+  await expect(page.getByLabel("Quality")).toHaveValue("high");
+  await expect(
     page.getByRole("checkbox", { name: "Reduce particles and motion" }),
   ).toBeChecked();
   await expect(
@@ -350,7 +358,7 @@ test("deletes a planet with clear feedback and restores it with undo", async ({
   ).toBeVisible();
 });
 
-test("offers bounded scene zoom, rotation, and reset controls", async ({
+test("offers bounded scene zoom, rotation, tilt, and reset controls", async ({
   page,
 }) => {
   await page.getByRole("button", { name: "Explore the demo" }).click();
@@ -359,7 +367,9 @@ test("offers bounded scene zoom, rotation, and reset controls", async ({
   await expect(controls).toBeVisible();
   await expect(controls).toHaveAttribute("data-zoom", "100");
   await expect(controls).toHaveAttribute("data-rotation", "0");
+  await expect(controls).toHaveAttribute("data-tilt", "40");
   await expect(page.getByLabel("Scene zoom 100%")).toBeVisible();
+  await expect(page.getByLabel("Scene tilt 40 degrees")).toBeVisible();
 
   await page.getByRole("button", { name: "Zoom in" }).click();
   await expect(controls).toHaveAttribute("data-zoom", "110");
@@ -368,9 +378,19 @@ test("offers bounded scene zoom, rotation, and reset controls", async ({
   await page.getByRole("button", { name: "Rotate right" }).click();
   await expect(controls).toHaveAttribute("data-rotation", "15");
 
+  await page.getByRole("button", { name: "Tilt up" }).click();
+  await expect(controls).toHaveAttribute("data-tilt", "50");
+  await expect(page.getByLabel("Scene tilt 50 degrees")).toBeVisible();
+  await page.getByRole("button", { name: "Tilt down" }).click();
+  await expect(controls).toHaveAttribute("data-tilt", "40");
+
+  await page.getByRole("button", { name: "Tilt down" }).click();
+  await expect(controls).toHaveAttribute("data-tilt", "30");
+
   await page.getByRole("button", { name: "Reset view" }).click();
   await expect(controls).toHaveAttribute("data-zoom", "100");
   await expect(controls).toHaveAttribute("data-rotation", "0");
+  await expect(controls).toHaveAttribute("data-tilt", "40");
   await expect(page.getByRole("button", { name: "Reset view" })).toBeDisabled();
 });
 

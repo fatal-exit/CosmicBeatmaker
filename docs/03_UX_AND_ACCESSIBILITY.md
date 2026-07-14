@@ -99,7 +99,7 @@ The editing model should feel almost 2D even though the scene is 3D.
 - Drag selected planet tangentially: change phase
 - Drag selected planet radially: change quantized orbit rate; the renderer derives a unique spatial lane separately
 - Pinch: zoom
-- Two-finger drag or rotate: limited camera adjustment
+- Two-finger drag or rotate: limited horizontal rotation and vertical tilt
 - Tap empty space: deselect
 - Long press: optional context menu, never required
 
@@ -255,6 +255,7 @@ Requirements:
 - Minimal repeated dragging
 - Tap alternatives for radial drag actions
 - Stepper buttons for precise orbit changes
+- Buttons for bounded horizontal camera rotation and vertical tilt
 - Hold-to-repeat only as an optional accelerator
 - Undo instead of confirmation dialogs for reversible actions
 - Avoid requiring chords or multi-finger gestures for core creation

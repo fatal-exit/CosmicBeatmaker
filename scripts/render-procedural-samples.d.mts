@@ -3,6 +3,26 @@ export interface ProceduralLevelStats {
   meanDb: number | null;
 }
 
+export interface SpaceReverbProfile {
+  preDelaySeconds: number;
+  tailSeconds: number;
+  roomSize: number;
+  damping: number;
+  dryGain: number;
+  wetGain: number;
+  inputGain: number;
+}
+
+export interface SpaceReverbRender {
+  channels: [Float32Array, Float32Array];
+  durationSeconds: number;
+}
+
+export function applySpaceReverb(
+  channels: readonly Float32Array[],
+  profile: SpaceReverbProfile,
+): SpaceReverbRender;
+
 export function validateRenderedChannels(
   id: string,
   channels: readonly ArrayLike<number>[],

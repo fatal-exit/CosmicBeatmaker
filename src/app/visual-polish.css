@@ -217,7 +217,7 @@ button:disabled {
   display: grid;
   gap: 4px;
   color: var(--ink);
-  background: oklch(0.12 0.006 43.2 / 0.94);
+  background: oklch(0.12 0.022 302 / 0.94);
   border-radius: 10px;
   outline: 1px solid color-mix(in oklch, var(--border) 84%, transparent);
   outline-offset: -1px;
@@ -235,7 +235,7 @@ button:disabled {
 }
 
 .scene-view-controls button,
-.scene-zoom-readout {
+.scene-view-readout {
   min-width: 44px;
   min-height: 44px;
   display: grid;
@@ -264,7 +264,7 @@ button:disabled {
   font-size: 0.68rem;
 }
 
-.scene-zoom-readout {
+.scene-view-readout {
   color: color-mix(in oklch, var(--ink) 86%, var(--accent));
   font-size: 0.72rem;
   font-weight: 760;
@@ -281,7 +281,7 @@ button:disabled {
   width: min(430px, calc(100% - 190px));
   padding: 9px 10px 10px;
   color: var(--ink);
-  background: oklch(0.12 0.006 43.2 / 0.92);
+  background: oklch(0.12 0.022 302 / 0.92);
   border-radius: 10px;
   outline: 1px solid
     color-mix(in oklch, var(--material-color) 34%, var(--border));
@@ -292,23 +292,23 @@ button:disabled {
 }
 
 .scene-polish-overlay[data-role="beat"] {
-  --material-color: oklch(0.69 0.2 43.2);
+  --material-color: var(--role-beat);
 }
 
 .scene-polish-overlay[data-role="bass"] {
-  --material-color: oklch(0.78 0.15 195);
+  --material-color: var(--role-bass);
 }
 
 .scene-polish-overlay[data-role="chords"] {
-  --material-color: oklch(0.78 0.15 92);
+  --material-color: var(--role-chords);
 }
 
 .scene-polish-overlay[data-role="melody"] {
-  --material-color: oklch(0.72 0.18 325);
+  --material-color: var(--role-melody);
 }
 
 .scene-polish-overlay[data-role="texture"] {
-  --material-color: oklch(0.7 0.14 245);
+  --material-color: var(--role-texture);
 }
 
 @keyframes polish-overlay-in {

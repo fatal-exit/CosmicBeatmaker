@@ -154,6 +154,7 @@ Responsibilities:
 - Perform picking and gesture mapping
 - Display scheduled event flashes
 - Apply adaptive quality
+- Own and dispose the High-only bloom compositor and quality-tiered procedural deep-space backdrops
 - Never schedule audio
 
 ### UI layer
@@ -201,7 +202,7 @@ For audio:
 
 Never detect a mesh crossing a visual marker and use that to trigger sound.
 
-The same stored `loopBars` drives audio recurrence and visible angular phase. Spatial orbit lanes are a deterministic scene projection derived from rate order plus stable planet order or ID; they are not timing data. Each planet receives a unique lane, including duplicate-rate planets. Camera fit and user zoom remain independent renderer state.
+The same stored `loopBars` drives audio recurrence and visible angular phase. Spatial orbit lanes are a deterministic scene projection derived from rate order, stable planet order or ID, and role-derived visual envelopes for the body, gates, rings, and moons; they are not timing data. Each planet receives a unique lane, including duplicate-rate planets, and larger visual classes receive more clearance. Camera fit and user zoom remain independent renderer state.
 
 ### Current audio stability profile
 
@@ -251,6 +252,7 @@ Examples:
 - Export progress
 - Audio loading state
 - Current quality profile
+- High-only compositor targets and deep-space shader time
 - Camera interpolation
 - Active visual pulse list
 

@@ -32,6 +32,9 @@ export interface PlanetSurfaceUpdate {
   /** Normalized visual detail. Zero retains the broad identifying pattern. */
   detail?: number;
   roughness?: number;
+  /** Color and level of the central star's incident light. */
+  starLightColor?: THREE.ColorRepresentation;
+  starLightIntensity?: number;
 }
 
 export interface StarSurfaceUpdate {
@@ -170,6 +173,7 @@ uniform vec3 uBaseColor;
 uniform vec3 uShadowColor;
 uniform vec3 uAccentColor;
 uniform vec3 uSecondaryColor;
+uniform vec3 uStarLightColor;
 uniform float uRole;
 uniform float uSeed;
 uniform float uTick;
@@ -179,6 +183,7 @@ uniform float uMuted;
 uniform float uDetail;
 uniform float uRoughness;
 uniform float uMotion;
+uniform float uStarLightIntensity;
 
 varying vec3 vObjectPosition;
 varying vec3 vWorldPosition;
@@ -305,8 +310,70 @@ vec3 planetPattern(vec3 direction, vec3 viewDirection) {
   return mix(color, uAccentColor, dust * (0.3 + uDetail * 0.4));
 }
 
+float terrainHeight(vec3 direction) {
+  vec2 sphereUv = sphereCoordinates(direction);
+  float broad = valueNoise(direction * 3.4 + uSeed * 17.0);
+  float fine = valueNoise(direction * 17.0 - uSeed * 31.0);
+
+  if (uRole < 0.5) {
+    float craters = craterField(sphereUv + vec2(uSeed, uSeed * 0.37));
+    float faults = 1.0 - smoothstep(
+      0.015,
+      0.07,
+      abs(fract(sphereUv.x * 7.0 + sphereUv.y * 11.0 + broad * 0.45) - 0.5)
+    );
+    return broad * 0.22 + craters * 0.52 + faults * 0.34;
+  }
+  if (uRole < 1.5) {
+    return sin(direction.y * 15.0 + broad * 3.0) * 0.34 + fine * 0.1;
+  }
+  if (uRole < 2.5) {
+    float strata = fract(direction.y * 9.0 + broad * 1.2);
+    float veins = 1.0 - smoothstep(
+      0.0,
+      0.16,
+      abs(sin(direction.x * 18.0 - direction.z * 15.0 + broad * 7.0))
+    );
+    return strata * 0.34 + veins * 0.28;
+  }
+  if (uRole < 3.5) {
+    float angle = atan(direction.z, direction.x);
+    return sin(angle * 5.0 + direction.y * 19.0 + broad * 4.0) * 0.3 + fine * 0.14;
+  }
+  return broad * 0.32 + fine * 0.3;
+}
+
+vec3 proceduralSurfaceNormal(vec3 direction, vec3 geometricNormal) {
+  float highDetail = smoothstep(0.72, 1.0, uDetail);
+  if (highDetail <= 0.0) return geometricNormal;
+
+  vec3 reference = abs(direction.y) < 0.92
+    ? vec3(0.0, 1.0, 0.0)
+    : vec3(1.0, 0.0, 0.0);
+  vec3 tangent = normalize(cross(reference, direction));
+  vec3 bitangent = normalize(cross(direction, tangent));
+  float epsilon = 0.012;
+  float center = terrainHeight(direction);
+  float alongTangent = terrainHeight(normalize(direction + tangent * epsilon));
+  float alongBitangent = terrainHeight(normalize(direction + bitangent * epsilon));
+  float normalStrength = mix(2.8, 5.6, 1.0 - uRoughness);
+  vec3 objectNormal = normalize(
+    direction
+      - tangent * (alongTangent - center) * normalStrength
+      - bitangent * (alongBitangent - center) * normalStrength
+  );
+  // Planet bodies only translate and uniformly scale in world space, so their
+  // seeded object-space terrain normal is also the correct world direction.
+  vec3 detailedWorldNormal = objectNormal;
+  return normalize(mix(geometricNormal, detailedWorldNormal, highDetail * 0.82));
+}
+
 void main() {
-  vec3 normal = normalize(vWorldNormal);
+  vec3 surfaceDirection = normalize(vObjectPosition);
+  vec3 normal = proceduralSurfaceNormal(
+    surfaceDirection,
+    normalize(vWorldNormal)
+  );
   vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
   vec3 starDirection = normalize(-vWorldPosition);
   float starDistance = length(vWorldPosition);
@@ -320,12 +387,15 @@ void main() {
   float specular = pow(max(dot(normal, halfDirection), 0.0), specularPower);
   specular *= mix(0.62, 0.07, uRoughness) * attenuation;
 
-  vec3 albedo = planetPattern(normalize(vObjectPosition), viewDirection);
-  float light = 0.2 + diffuse * attenuation * 1.18 + backScatter * 0.035;
-  vec3 outgoingLight = albedo * light;
-  outgoingLight += uAccentColor * specular;
+  vec3 albedo = planetPattern(surfaceDirection, viewDirection);
+  vec3 incidentColor = mix(vec3(1.0), uStarLightColor, 0.82);
+  float directLight = diffuse * attenuation * 1.42 * uStarLightIntensity;
+  vec3 outgoingLight = albedo * 0.115;
+  outgoingLight += albedo * incidentColor * directLight;
+  outgoingLight += albedo * incidentColor * backScatter * 0.026;
+  outgoingLight += mix(uAccentColor, incidentColor, 0.68) * specular * uStarLightIntensity;
   outgoingLight += uAccentColor * rim * (0.1 + uSelected * 0.44);
-  outgoingLight += uAccentColor * uPulse * (0.16 + rim * 0.46);
+  outgoingLight += uAccentColor * uPulse * (0.2 + rim * 0.54 + uDetail * 0.42);
 
   float luminance = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
   outgoingLight = mix(outgoingLight, vec3(luminance) * 0.48, uMuted * 0.72);
@@ -479,6 +549,12 @@ void main() {
   color = mix(color, uEdgeColor, limb * mix(0.42, 0.7, step(3.5, uPreset)));
   color += uHotColor * (uPulse * 0.3 + uSelected * limb * 0.3);
   color *= mix(0.72, 1.38, clamp(uIntensity, 0.0, 1.5));
+  if (uPreset > 3.5) {
+    vec3 voidVisibilityFloor = mix(uEdgeColor, uCoreColor, 0.58);
+    voidVisibilityFloor *= 0.48 + clamp(uIntensity, 0.0, 1.0) * 0.12;
+    color = max(color, voidVisibilityFloor);
+  }
+  color += uHotColor * uDetail * (0.045 + uPulse * 0.16);
   gl_FragColor = vec4(color, 1.0);
 
   #include <tonemapping_fragment>
@@ -618,6 +694,18 @@ function setNumberUniform(
   uniform.value = value;
 }
 
+function setColorUniform(
+  material: THREE.ShaderMaterial,
+  name: string,
+  value: THREE.ColorRepresentation,
+): void {
+  const uniform = material.uniforms[name];
+  if (!(uniform?.value instanceof THREE.Color)) {
+    throw new Error(`Missing procedural material color uniform ${name}.`);
+  }
+  uniform.value.set(value);
+}
+
 function updateTime(
   material: THREE.ShaderMaterial,
   time: number | undefined,
@@ -718,6 +806,7 @@ export function createPlanetSurfaceMaterial(
       uShadowColor: { value: new THREE.Color(profile.shadowColor) },
       uAccentColor: { value: new THREE.Color(profile.accentColor) },
       uSecondaryColor: { value: new THREE.Color(profile.secondaryColor) },
+      uStarLightColor: { value: new THREE.Color(0xffffff) },
       uRole: { value: indexOfPlanetRole(descriptor.role) },
       uSeed: { value: normalizeVisualSeed(descriptor.visualSeed) },
       uTick: { value: 0 },
@@ -730,6 +819,7 @@ export function createPlanetSurfaceMaterial(
       },
       uDisplacement: { value: profile.displacement },
       uMotion: { value: profile.motion },
+      uStarLightIntensity: { value: 1 },
     },
     PLANET_VERTEX_SHADER,
     PLANET_FRAGMENT_SHADER,
@@ -769,6 +859,16 @@ export function updatePlanetSurfaceMaterial(
       material,
       "uRoughness",
       clampFinite(update.roughness, 0.04, 1),
+    );
+  }
+  if (update.starLightColor !== undefined) {
+    setColorUniform(material, "uStarLightColor", update.starLightColor);
+  }
+  if (update.starLightIntensity !== undefined) {
+    setNumberUniform(
+      material,
+      "uStarLightIntensity",
+      clampFinite(update.starLightIntensity, 0, 2.5),
     );
   }
 }

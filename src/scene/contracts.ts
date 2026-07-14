@@ -1,4 +1,8 @@
 import type { LoopBars, PlanetRole, StarPresetId } from "../domain/composition";
+import type {
+  PlanetRingVisualMetrics,
+  PlanetVisualKind,
+} from "./planetVisuals";
 
 export type QualityProfile = "low" | "balanced" | "high";
 export type QualityPreference = QualityProfile | "auto";
@@ -13,11 +17,18 @@ export interface VisualPreferences {
 export interface PlanetSceneDescriptor {
   id: string;
   role: PlanetRole;
+  visualKind: PlanetVisualKind;
   orbitRadius: number;
   loopBars: LoopBars;
   phase: number;
   inclination: number;
   size: number;
+  bodyScale: readonly [number, number, number];
+  bodyExtent: number;
+  visualExtent: number;
+  gateRadius: number;
+  moonOrbitRadius: number;
+  ringVisual: PlanetRingVisualMetrics;
   hue: number;
   visualSeed: number;
   roughness: number;

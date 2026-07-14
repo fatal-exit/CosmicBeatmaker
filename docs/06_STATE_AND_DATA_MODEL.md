@@ -162,7 +162,7 @@ export interface OrbitState {
 
 Direction remains forward. `loopBars` is the sole audible/visible period. Represent its exact catalog as quarter-bar integers for super-loop LCM math. `shellIndex` remains in the early schema shape temporarily but validation no longer maps it to rate or uses it to place the planet.
 
-The renderer derives a unique compact lane for every planet by rate order and stable composition order or ID. Those lanes, camera fit, and zoom are ephemeral projections and are never serialized. Planets at the same rate receive adjacent distinct lanes.
+The renderer derives a unique lane for every planet by rate order and stable composition order or ID, then accumulates lane radii from role- and appearance-derived body, gate, ring, and moon envelopes. Those lanes, physical-class profiles, camera fit, and zoom are ephemeral projections and are never serialized. Planets at the same rate receive adjacent distinct lanes, with enough clearance for their differing visual sizes.
 
 ## Pattern state
 

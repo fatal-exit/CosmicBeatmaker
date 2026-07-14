@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Composition, LoopBars } from "../../domain/composition";
 import {
+  SCENE_CAMERA_TILT_DEFAULT,
   SceneController,
   type SceneCameraView,
 } from "../../scene/SceneController";
@@ -38,8 +39,11 @@ export function SceneCanvas({
   const [cameraView, setCameraView] = useState<SceneCameraView>({
     zoomPercent: 100,
     rotationDegrees: 0,
+    tiltDegrees: Math.round((SCENE_CAMERA_TILT_DEFAULT * 180) / Math.PI),
     canZoomIn: true,
     canZoomOut: true,
+    canTiltUp: true,
+    canTiltDown: true,
     canReset: false,
   });
   const controller = useMemo(
@@ -122,6 +126,7 @@ export function SceneCanvas({
         hidden={failed}
         data-zoom={cameraView.zoomPercent}
         data-rotation={cameraView.rotationDegrees}
+        data-tilt={cameraView.tiltDegrees}
       >
         <div className="scene-view-control-row">
           <button
@@ -136,7 +141,7 @@ export function SceneCanvas({
             type="button"
             className="scene-view-reset"
             aria-label="Reset view"
-            title="Reset zoom and rotation"
+            title="Reset zoom, rotation, and tilt"
             disabled={!cameraView.canReset}
             onClick={() => controller.resetView()}
           >
@@ -154,6 +159,34 @@ export function SceneCanvas({
         <div className="scene-view-control-row">
           <button
             type="button"
+            aria-label="Tilt down"
+            title="Tilt down"
+            disabled={!cameraView.canTiltDown}
+            onClick={() => controller.tiltDown()}
+          >
+            <span aria-hidden="true">↓</span>
+          </button>
+          <output
+            className="scene-view-readout"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={`Scene tilt ${cameraView.tiltDegrees} degrees`}
+          >
+            {cameraView.tiltDegrees}°
+          </output>
+          <button
+            type="button"
+            aria-label="Tilt up"
+            title="Tilt up"
+            disabled={!cameraView.canTiltUp}
+            onClick={() => controller.tiltUp()}
+          >
+            <span aria-hidden="true">↑</span>
+          </button>
+        </div>
+        <div className="scene-view-control-row">
+          <button
+            type="button"
             aria-label="Zoom out"
             title="Zoom out"
             disabled={!cameraView.canZoomOut}
@@ -162,7 +195,7 @@ export function SceneCanvas({
             <span aria-hidden="true">−</span>
           </button>
           <output
-            className="scene-zoom-readout"
+            className="scene-view-readout"
             aria-live="polite"
             aria-atomic="true"
             aria-label={`Scene zoom ${cameraView.zoomPercent}%`}

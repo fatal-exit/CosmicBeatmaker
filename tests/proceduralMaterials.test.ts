@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import type { PlanetRole, StarPresetId } from "../src/domain/composition";
 import {
+  createDeepSpaceMaterial,
+  createSimpleDeepSpaceMaterial,
+  updateDeepSpaceMaterial,
+} from "../src/scene/materials/deepSpaceMaterial";
+import {
   createCelestialOutlineMaterial,
   createPlanetSurfaceMaterial,
   createStarGlowMaterial,
@@ -59,6 +64,8 @@ describe("procedural scene materials", () => {
       "#include <tonemapping_fragment>",
     );
     expect(materials[0].fragmentShader).toContain("#include <fog_fragment>");
+    expect(materials[0].fragmentShader).toContain("proceduralSurfaceNormal");
+    expect(materials[0].fragmentShader).toContain("uStarLightColor");
 
     materials.forEach((material, index) => {
       const role = roles[index];
@@ -94,6 +101,8 @@ describe("procedural scene materials", () => {
       muted: true,
       detail: -1,
       roughness: 2,
+      starLightColor: 0xff4422,
+      starLightIntensity: 9,
     });
 
     expect(numberUniform(material, "uTick")).toBe(7_680);
@@ -102,6 +111,46 @@ describe("procedural scene materials", () => {
     expect(numberUniform(material, "uMuted")).toBe(1);
     expect(numberUniform(material, "uDetail")).toBe(0);
     expect(numberUniform(material, "uRoughness")).toBe(1);
+    expect(colorUniform(material, "uStarLightColor").getHex()).toBe(0xff4422);
+    expect(numberUniform(material, "uStarLightIntensity")).toBe(2.5);
+    material.dispose();
+  });
+
+  it("builds a deterministic high-detail deep-space shader", () => {
+    const material = createDeepSpaceMaterial();
+
+    expect(material.fragmentShader).toContain("float fbm");
+    expect(material.fragmentShader).toContain("galaxyProfile");
+    expect(material.fragmentShader).toContain("filaments");
+    expect(material.fragmentShader).toContain("starLayer");
+    expect(material.side).toBe(THREE.BackSide);
+    expect(material.depthWrite).toBe(false);
+
+    updateDeepSpaceMaterial(material, {
+      time: 3.5,
+      intensity: 5,
+      visualSeed: 65_522,
+      nebulaColorA: 0x112233,
+      nebulaColorB: 0x445566,
+    });
+    expect(numberUniform(material, "uTime")).toBe(3.5);
+    expect(numberUniform(material, "uIntensity")).toBe(1);
+    expect(numberUniform(material, "uSeed")).toBeCloseTo(1 / 65_521);
+    expect(colorUniform(material, "uNebulaColorA").getHex()).toBe(0x112233);
+    expect(colorUniform(material, "uNebulaColorB").getHex()).toBe(0x445566);
+    material.dispose();
+  });
+
+  it("provides a cheaper nebula and star shader for mobile profiles", () => {
+    const material = createSimpleDeepSpaceMaterial();
+
+    expect(material.fragmentShader).toContain("simpleStarLayer");
+    expect(material.fragmentShader).toContain("float valueNoise");
+    expect(material.fragmentShader).not.toContain("float fbm");
+    expect(material.fragmentShader).not.toContain("galaxyProfile");
+    expect(material.fragmentShader).not.toContain("filamentFine");
+    expect(material.side).toBe(THREE.BackSide);
+    expect(material.depthWrite).toBe(false);
     material.dispose();
   });
 
@@ -148,6 +197,18 @@ describe("procedural scene materials", () => {
       surface.dispose();
       glow.dispose();
     });
+  });
+
+  it("keeps the resting Void surface above the deep-space visibility floor", () => {
+    const surface = createStarSurfaceMaterial(
+      { presetId: "void", visualSeed: 404, intensity: 0.4 },
+      0,
+    );
+
+    expect(surface.fragmentShader).toContain("voidVisibilityFloor");
+    expect(surface.fragmentShader).toContain("color = max(color");
+    expect(numberUniform(surface, "uIntensity")).toBe(0.4);
+    surface.dispose();
   });
 
   it("keeps the essential outline shader lightweight and visible without bloom", () => {

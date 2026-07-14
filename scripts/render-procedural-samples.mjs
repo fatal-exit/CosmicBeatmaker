@@ -2,8 +2,10 @@
 
 /**
  * Offline-render the procedural patches that are too expensive to synthesize
- * repeatedly on mobile. The output is deterministic, compact, and merged into
- * the first-party manifest without touching the separately authored masters.
+ * repeatedly on mobile. Selected upper-register voices are rendered from their
+ * legacy-dry patch, then baked through a deterministic stereo space reverb. The
+ * output is compact and merged into the first-party manifest without touching
+ * the separately authored masters or packaging the legacy-dry intermediates.
  *
  * Requires ffmpeg, ffprobe, and Xiph oggenc on PATH.
  */
@@ -34,7 +36,8 @@ const DEFAULT_RUNTIME_ASSETS = join(
 
 const SAMPLE_RATE = 48_000;
 const VORBIS_QUALITY = 5;
-const SYNTHESIS_VERSION = "1.0.0";
+const LEGACY_DRY_SYNTHESIS_VERSION = "1.0.0";
+const SPATIAL_SYNTHESIS_VERSION = "2.0.0";
 const TWO_PI = Math.PI * 2;
 const MINIMUM_RENDER_RMS = 1e-5;
 const MINIMUM_LEVEL_DB = -96;
@@ -42,6 +45,32 @@ const DURATION_TOLERANCE_SECONDS = 0.005;
 const MAX_ENCODED_BYTES_PER_CHANNEL_SECOND = 64_000;
 const ENCODED_CONTAINER_ALLOWANCE_BYTES = 8_192;
 const SAFE_PROCEDURAL_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const SPACE_REVERB_ALGORITHM = "stereo-schroeder-space-v1";
+const SPACE_REVERB_PROFILES = {
+  tonal: {
+    id: "tonal-space",
+    preDelaySeconds: 0.024,
+    tailSeconds: 1.65,
+    roomSize: 0.8,
+    damping: 0.38,
+    dryGain: 0.96,
+    wetGain: 0.7,
+    inputGain: 0.34,
+    releaseSeconds: 0.48,
+  },
+  "high-drum": {
+    id: "high-drum-space",
+    preDelaySeconds: 0.016,
+    tailSeconds: 0.82,
+    roomSize: 0.68,
+    damping: 0.24,
+    dryGain: 1,
+    wetGain: 0.58,
+    inputGain: 0.3,
+    releaseSeconds: 0.16,
+  },
+};
 
 function usage() {
   return `Usage: node scripts/render-procedural-samples.mjs [--output <dir>] [--runtime-assets <file>]
@@ -81,6 +110,14 @@ const DRUM_VOICES = [
   "rim",
   "perc",
 ];
+
+const HIGH_DRUM_VOICES = new Set([
+  "snare",
+  "clap",
+  "closed-hat",
+  "open-hat",
+  "rim",
+]);
 
 const DRUM_STYLES = {
   "soft-impact": {
@@ -137,85 +174,117 @@ const DRUM_METADATA = {
 
 const TONAL_DEFINITIONS = [
   {
-    id: "warm-pad-c4",
-    name: "Warm Pad C4",
+    id: "warm-pad-space-c4",
+    name: "Warm Pad Space C4",
+    legacyDryId: "warm-pad-c4",
+    legacyDryName: "Legacy Dry Warm Pad C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "synth",
     durationSeconds: 2.6,
     channels: 2,
     attackSeconds: 0.012,
-    releaseSeconds: 0.09,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "soft-keys-c4",
-    name: "Soft Keys C4",
+    id: "soft-keys-space-c4",
+    name: "Soft Keys Space C4",
+    legacyDryId: "soft-keys-c4",
+    legacyDryName: "Legacy Dry Soft Keys C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "synth",
     durationSeconds: 1.55,
     channels: 2,
     attackSeconds: 0.004,
-    releaseSeconds: 0.06,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "glass-chords-c4",
-    name: "Glass Chords C4",
-    synthesisVersion: "1.1.0",
+    id: "glass-chords-space-c4",
+    name: "Glass Chords Space C4",
+    legacyDryId: "glass-chords-c4",
+    legacyDryName: "Legacy Dry Glass Chords C4",
+    legacyDrySynthesisVersion: "1.1.0",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "synth",
     durationSeconds: 1.9,
     channels: 2,
     attackSeconds: 0.003,
-    releaseSeconds: 0.075,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "pulsing-synth-c4",
-    name: "Pulsing Synth C4",
+    id: "pulsing-synth-space-c4",
+    name: "Pulsing Synth Space C4",
+    legacyDryId: "pulsing-synth-c4",
+    legacyDryName: "Legacy Dry Pulsing Synth C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "synth",
     durationSeconds: 1.35,
     channels: 2,
     attackSeconds: 0.004,
-    releaseSeconds: 0.055,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "dust-texture-c4",
-    name: "Dust Texture C4",
+    id: "dust-texture-space-c4",
+    name: "Dust Texture Space C4",
+    legacyDryId: "dust-texture-c4",
+    legacyDryName: "Legacy Dry Dust Texture C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "other",
     durationSeconds: 1.45,
     channels: 2,
     attackSeconds: 0.008,
-    releaseSeconds: 0.075,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "radio-texture-c4",
-    name: "Radio Texture C4",
+    id: "radio-texture-space-c4",
+    name: "Radio Texture Space C4",
+    legacyDryId: "radio-texture-c4",
+    legacyDryName: "Legacy Dry Radio Texture C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "other",
     durationSeconds: 1.75,
     channels: 2,
     attackSeconds: 0.006,
-    releaseSeconds: 0.075,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "nebula-texture-c4",
-    name: "Nebula Texture C4",
+    id: "nebula-texture-space-c4",
+    name: "Nebula Texture Space C4",
+    legacyDryId: "nebula-texture-c4",
+    legacyDryName: "Legacy Dry Nebula Texture C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "other",
     durationSeconds: 2.55,
     channels: 2,
     attackSeconds: 0.014,
-    releaseSeconds: 0.095,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
-    id: "mechanical-texture-c4",
-    name: "Mechanical Texture C4",
+    id: "mechanical-texture-space-c4",
+    name: "Mechanical Texture Space C4",
+    legacyDryId: "mechanical-texture-c4",
+    legacyDryName: "Legacy Dry Mechanical Texture C4",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES.tonal,
     rootMidi: 60,
     category: "other",
     durationSeconds: 1.15,
     channels: 2,
     attackSeconds: 0.003,
-    releaseSeconds: 0.05,
+    releaseSeconds: SPACE_REVERB_PROFILES.tonal.releaseSeconds,
   },
   {
     id: "void-drone-c2",
@@ -231,22 +300,30 @@ const TONAL_DEFINITIONS = [
 
 const AUXILIARY_DEFINITIONS = [
   {
-    id: "orbital-ring-hat",
-    name: "Orbital Ring Hat",
+    id: "orbital-ring-hat-space",
+    name: "Orbital Ring Hat Space",
+    legacyDryId: "orbital-ring-hat",
+    legacyDryName: "Legacy Dry Orbital Ring Hat",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES["high-drum"],
     category: "hi-hat",
     durationSeconds: 0.19,
-    channels: 1,
+    channels: 2,
     attackSeconds: 0.001,
-    releaseSeconds: 0.025,
+    releaseSeconds: SPACE_REVERB_PROFILES["high-drum"].releaseSeconds,
   },
   {
-    id: "orbital-ring-shaker",
-    name: "Orbital Ring Shaker",
+    id: "orbital-ring-shaker-space",
+    name: "Orbital Ring Shaker Space",
+    legacyDryId: "orbital-ring-shaker",
+    legacyDryName: "Legacy Dry Orbital Ring Shaker",
+    synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+    spaceReverbProfile: SPACE_REVERB_PROFILES["high-drum"],
     category: "hi-hat",
     durationSeconds: 0.36,
-    channels: 1,
+    channels: 2,
     attackSeconds: 0.001,
-    releaseSeconds: 0.035,
+    releaseSeconds: SPACE_REVERB_PROFILES["high-drum"].releaseSeconds,
   },
   {
     id: "orbital-ring-perc",
@@ -349,12 +426,14 @@ function drumDuration(voice, style) {
   return Math.max(0.12, Math.min(0.92, base * style.decayScale));
 }
 
-function renderDrum(styleId, voice) {
+function renderLegacyDryDrum(styleId, voice) {
   const style = DRUM_STYLES[styleId];
   const duration = drumDuration(voice, style);
   const frames = Math.ceil(duration * SAMPLE_RATE);
   const channel = new Float32Array(frames);
-  const random = createRandom(`${styleId}/${voice}/${SYNTHESIS_VERSION}`);
+  const random = createRandom(
+    `${styleId}/${voice}/${LEGACY_DRY_SYNTHESIS_VERSION}`,
+  );
   let phase = 0;
   let lowNoise = 0;
   let fastNoise = 0;
@@ -452,15 +531,15 @@ function renderDrum(styleId, voice) {
   return { channels: [channel], durationSeconds: duration };
 }
 
-function renderStereoDefinition(definition) {
+function renderLegacyDryStereoDefinition(definition) {
   const frames = Math.ceil(definition.durationSeconds * SAMPLE_RATE);
   const left = new Float32Array(frames);
   const right = new Float32Array(frames);
-  const synthesisVersion = definition.synthesisVersion ?? SYNTHESIS_VERSION;
-  const randomLeft = createRandom(`${definition.id}/left/${synthesisVersion}`);
-  const randomRight = createRandom(
-    `${definition.id}/right/${synthesisVersion}`,
-  );
+  const legacyDryId = definition.legacyDryId ?? definition.id;
+  const synthesisVersion =
+    definition.legacyDrySynthesisVersion ?? LEGACY_DRY_SYNTHESIS_VERSION;
+  const randomLeft = createRandom(`${legacyDryId}/left/${synthesisVersion}`);
+  const randomRight = createRandom(`${legacyDryId}/right/${synthesisVersion}`);
   const frequency = 440 * 2 ** ((definition.rootMidi - 69) / 12);
   let lowLeft = 0;
   let lowRight = 0;
@@ -481,7 +560,7 @@ function renderStereoDefinition(definition) {
     let leftValue;
     let rightValue;
 
-    switch (definition.id) {
+    switch (legacyDryId) {
       case "warm-pad-c4": {
         const envelope = fadeEnvelope(time, duration, 0.16, 0.62);
         const harmonics = [
@@ -656,7 +735,7 @@ function renderStereoDefinition(definition) {
         break;
       }
       default:
-        throw new Error(`Unknown tonal definition: ${definition.id}`);
+        throw new Error(`Unknown legacy-dry tonal definition: ${legacyDryId}`);
     }
 
     left[frame] = softLimit(leftValue, 0.92);
@@ -669,10 +748,11 @@ function renderStereoDefinition(definition) {
   };
 }
 
-function renderAuxiliary(definition) {
+function renderLegacyDryAuxiliary(definition) {
   const frames = Math.ceil(definition.durationSeconds * SAMPLE_RATE);
   const channel = new Float32Array(frames);
-  const random = createRandom(`${definition.id}/${SYNTHESIS_VERSION}`);
+  const legacyDryId = definition.legacyDryId ?? definition.id;
+  const random = createRandom(`${legacyDryId}/${LEGACY_DRY_SYNTHESIS_VERSION}`);
   let fastNoise = 0;
   let phase = 0;
 
@@ -683,14 +763,14 @@ function renderAuxiliary(definition) {
     const highNoise = rawNoise - fastNoise;
     let value;
 
-    if (definition.id === "orbital-ring-hat") {
+    if (legacyDryId === "orbital-ring-hat") {
       value =
         (highNoise * 0.7 + Math.sin(TWO_PI * 8_913 * time) * 0.16) *
         Math.exp(-time / 0.052);
-    } else if (definition.id === "orbital-ring-shaker") {
+    } else if (legacyDryId === "orbital-ring-shaker") {
       const motion = 0.35 + 0.65 * Math.abs(Math.sin(TWO_PI * 31 * time));
       value = highNoise * motion * Math.exp(-time / 0.15) * 0.82;
-    } else if (definition.id === "orbital-ring-perc") {
+    } else if (legacyDryId === "orbital-ring-perc") {
       const frequency = 178 + 146 * Math.exp(-time / 0.06);
       phase += (TWO_PI * frequency) / SAMPLE_RATE;
       value =
@@ -715,6 +795,145 @@ function renderAuxiliary(definition) {
   }
 
   return { channels: [channel], durationSeconds: definition.durationSeconds };
+}
+
+function createFeedbackComb(delaySamples, feedback, damping) {
+  const buffer = new Float32Array(Math.max(1, delaySamples));
+  let index = 0;
+  let damped = 0;
+  return (input) => {
+    const delayed = buffer[index];
+    damped = delayed * (1 - damping) + damped * damping;
+    buffer[index] = input + damped * feedback;
+    index = (index + 1) % buffer.length;
+    return delayed;
+  };
+}
+
+function createAllPass(delaySamples, feedback = 0.5) {
+  const buffer = new Float32Array(Math.max(1, delaySamples));
+  let index = 0;
+  return (input) => {
+    const delayed = buffer[index];
+    const output = delayed - input;
+    buffer[index] = input + delayed * feedback;
+    index = (index + 1) % buffer.length;
+    return output;
+  };
+}
+
+function renderSchroederChannel(input, outputFrames, profile, stereoSide) {
+  const stereoSpreadSeconds = stereoSide === "right" ? 0.000_521 : 0;
+  const combDelaySeconds = [
+    0.025_31, 0.026_94, 0.028_96, 0.030_75, 0.032_24, 0.033_81, 0.035_31,
+    0.036_67,
+  ];
+  const allPassDelaySeconds = [0.012_61, 0.01, 0.007_73, 0.005_1];
+  const feedback = 0.57 + profile.roomSize * 0.34;
+  const combs = combDelaySeconds.map((delay) =>
+    createFeedbackComb(
+      Math.round((delay + stereoSpreadSeconds) * SAMPLE_RATE),
+      feedback,
+      profile.damping,
+    ),
+  );
+  const allPasses = allPassDelaySeconds.map((delay) =>
+    createAllPass(
+      Math.round((delay + stereoSpreadSeconds * 0.5) * SAMPLE_RATE),
+    ),
+  );
+  const preDelayFrames = Math.round(
+    (profile.preDelaySeconds + (stereoSide === "right" ? 0.007 : 0)) *
+      SAMPLE_RATE,
+  );
+  const wet = new Float32Array(outputFrames);
+
+  for (let frame = 0; frame < outputFrames; frame += 1) {
+    const sourceFrame = frame - preDelayFrames;
+    const source =
+      sourceFrame >= 0 && sourceFrame < input.length
+        ? input[sourceFrame] * profile.inputGain
+        : 0;
+    let value = 0;
+    for (const comb of combs) value += comb(source);
+    value *= 0.25;
+    for (const allPass of allPasses) value = allPass(value);
+    wet[frame] = value;
+  }
+  return wet;
+}
+
+function applySpaceSoftCeiling(value) {
+  const sign = Math.sign(value);
+  const magnitude = Math.abs(value);
+  const knee = 0.52;
+  const ceiling = 0.68;
+  if (magnitude <= knee) return value;
+  return (
+    sign *
+    (knee + (ceiling - knee) * Math.tanh((magnitude - knee) / (ceiling - knee)))
+  );
+}
+
+/**
+ * A compact Freeverb-style Schroeder network: decorrelated feedback combs,
+ * serial all-pass diffusion, a short stereo pre-delay, and a fixed soft ceiling.
+ * It is deterministic and runs only during content builds.
+ */
+export function applySpaceReverb(channels, profile) {
+  if (
+    channels.length === 0 ||
+    channels.length > 2 ||
+    channels.some(
+      (channel) =>
+        !(channel instanceof Float32Array) ||
+        channel.length === 0 ||
+        channel.length !== channels[0].length,
+    )
+  ) {
+    throw new Error("Space reverb requires one or two aligned PCM channels.");
+  }
+  const dryFrames = channels[0].length;
+  const outputFrames = dryFrames + Math.ceil(profile.tailSeconds * SAMPLE_RATE);
+  const dryLeft = channels[0];
+  const dryRight = channels[1] ?? channels[0];
+  const reverbInputLeft = new Float32Array(dryFrames);
+  const reverbInputRight = new Float32Array(dryFrames);
+  for (let frame = 0; frame < dryFrames; frame += 1) {
+    reverbInputLeft[frame] = dryLeft[frame] * 0.82 + dryRight[frame] * 0.18;
+    reverbInputRight[frame] = dryRight[frame] * 0.82 + dryLeft[frame] * 0.18;
+  }
+
+  const wetLeft = renderSchroederChannel(
+    reverbInputLeft,
+    outputFrames,
+    profile,
+    "left",
+  );
+  const wetRight = renderSchroederChannel(
+    reverbInputRight,
+    outputFrames,
+    profile,
+    "right",
+  );
+  const outputLeft = new Float32Array(outputFrames);
+  const outputRight = new Float32Array(outputFrames);
+  const tailFadeFrames = Math.round(0.08 * SAMPLE_RATE);
+  for (let frame = 0; frame < outputFrames; frame += 1) {
+    const dryL = frame < dryFrames ? dryLeft[frame] : 0;
+    const dryR = frame < dryFrames ? dryRight[frame] : 0;
+    const tailFade = smoothstep((outputFrames - frame) / tailFadeFrames);
+    outputLeft[frame] = applySpaceSoftCeiling(
+      dryL * profile.dryGain + wetLeft[frame] * profile.wetGain * tailFade,
+    );
+    outputRight[frame] = applySpaceSoftCeiling(
+      dryR * profile.dryGain + wetRight[frame] * profile.wetGain * tailFade,
+    );
+  }
+  return {
+    channels: [outputLeft, outputRight],
+    durationSeconds: outputFrames / SAMPLE_RATE,
+  };
 }
 
 export function validateRenderedChannels(id, channels) {
@@ -937,25 +1156,50 @@ function titleCase(value) {
 
 function proceduralDefinitions() {
   const drums = Object.entries(DRUM_STYLES).flatMap(([styleId, style]) =>
-    DRUM_VOICES.map((voice) => ({
-      id: `${styleId}-${voice}`,
-      name: `${style.label} ${titleCase(voice)}`,
-      ...DRUM_METADATA[voice],
-      channels: 1,
-      styleId,
-      voice,
-    })),
+    DRUM_VOICES.map((voice) => {
+      const legacyDryId = `${styleId}-${voice}`;
+      const legacyDryName = `Legacy Dry ${style.label} ${titleCase(voice)}`;
+      const spaceReverbProfile = HIGH_DRUM_VOICES.has(voice)
+        ? SPACE_REVERB_PROFILES["high-drum"]
+        : undefined;
+      return {
+        id: spaceReverbProfile ? `${legacyDryId}-space` : legacyDryId,
+        name: spaceReverbProfile
+          ? `${style.label} ${titleCase(voice)} Space`
+          : `${style.label} ${titleCase(voice)}`,
+        ...DRUM_METADATA[voice],
+        channels: spaceReverbProfile ? 2 : 1,
+        styleId,
+        voice,
+        ...(spaceReverbProfile
+          ? {
+              legacyDryId,
+              legacyDryName,
+              synthesisVersion: SPATIAL_SYNTHESIS_VERSION,
+              spaceReverbProfile,
+              releaseSeconds: spaceReverbProfile.releaseSeconds,
+            }
+          : {}),
+      };
+    }),
   );
   return [...drums, ...TONAL_DEFINITIONS, ...AUXILIARY_DEFINITIONS];
 }
 
 function renderDefinition(definition) {
-  if (definition.styleId)
-    return renderDrum(definition.styleId, definition.voice);
-  if (TONAL_DEFINITIONS.some((candidate) => candidate.id === definition.id)) {
-    return renderStereoDefinition(definition);
+  let legacyDryRender;
+  if (definition.styleId) {
+    legacyDryRender = renderLegacyDryDrum(definition.styleId, definition.voice);
+  } else if (
+    TONAL_DEFINITIONS.some((candidate) => candidate.id === definition.id)
+  ) {
+    legacyDryRender = renderLegacyDryStereoDefinition(definition);
+  } else {
+    legacyDryRender = renderLegacyDryAuxiliary(definition);
   }
-  return renderAuxiliary(definition);
+  return definition.spaceReverbProfile
+    ? applySpaceReverb(legacyDryRender.channels, definition.spaceReverbProfile)
+    : legacyDryRender;
 }
 
 function runtimeAssetsSource(samples) {
@@ -1130,7 +1374,24 @@ function main() {
         url: `audio/cosmic-samples/${definition.id}.ogg`,
         sourceFile: `procedural:${definition.id}`,
         sourceKind: "procedural",
-        synthesisVersion: definition.synthesisVersion ?? SYNTHESIS_VERSION,
+        synthesisVersion:
+          definition.synthesisVersion ?? LEGACY_DRY_SYNTHESIS_VERSION,
+        ...(definition.spaceReverbProfile
+          ? {
+              processing: {
+                effect: "space reverb",
+                algorithm: SPACE_REVERB_ALGORITHM,
+                profile: definition.spaceReverbProfile.id,
+                sourceVariant: "legacy dry",
+                legacyDryId: definition.legacyDryId,
+                legacyDryName: definition.legacyDryName,
+                legacyDryAssetPackaged: false,
+                preDelaySeconds: definition.spaceReverbProfile.preDelaySeconds,
+                tailSeconds: definition.spaceReverbProfile.tailSeconds,
+                wetGain: definition.spaceReverbProfile.wetGain,
+              },
+            }
+          : {}),
         durationSeconds: rounded(encodedProbe.durationSeconds),
         attackSeconds: definition.attackSeconds,
         releaseSeconds: definition.releaseSeconds,
@@ -1158,11 +1419,19 @@ function main() {
     manifest.pack.generatedBy =
       "node scripts/process-samples.mjs + node scripts/render-procedural-samples.mjs";
     manifest.pack.proceduralSynthesis = {
-      version: SYNTHESIS_VERSION,
-      renderer: "deterministic PCM16 offline synthesis",
-      transientChannels: 1,
+      version: SPATIAL_SYNTHESIS_VERSION,
+      renderer:
+        "deterministic PCM16 offline synthesis + stereo Schroeder space reverb",
+      legacyDryVersion: LEGACY_DRY_SYNTHESIS_VERSION,
+      legacyDryAssetsPackaged: false,
+      spatialAlgorithm: SPACE_REVERB_ALGORITHM,
+      spatializedAssets: generated.filter(
+        (sample) => sample.processing?.effect === "space reverb",
+      ).length,
+      dryTransientChannels: 1,
+      spatializedChannels: 2,
       tonalChannels: 2,
-      peakPolicy: "fixed patch gain through a -2.2 dBFS soft ceiling",
+      peakPolicy: "fixed patch gain through a -3.3 dBFS nominal soft ceiling",
     };
     manifest.samples = samples;
 

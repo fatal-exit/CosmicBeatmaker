@@ -105,9 +105,10 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 
 - The authored processor produces exactly 20 user-authored outputs before the procedural merge.
 - The procedural renderer adds exactly 41 assets for a 61-entry merged manifest without mutating the authored inputs or entries.
+- Exactly 30 procedural upper voices carry the stereo space-reverb contract, point back to a source labeled Legacy Dry, and ship under distinct `-space` IDs; none of the corresponding Legacy Dry IDs or files appears in the pack.
 - The canonical builder discovers future authored additions dynamically, stages outside the deploy tree, and restores the prior pack and runtime inventory after an injected promotion failure.
 - Procedural reruns under the same renderer and codec toolchain preserve stable IDs, inventory, channel contracts, synthesis-version metadata, and encoded output.
-- The procedural inventory contains 32 mono transients, eight stereo C4 tonal/texture assets, and one stereo C2 drone, all at 48 kHz with safe encoded peaks.
+- The procedural inventory contains 10 mono low/percussion assets and 31 stereo assets, including the 30 spatialized replacements, all at 48 kHz with safe encoded peaks.
 - The generated TypeScript inventory and manifest agree on every procedural ID, URL, duration, category, attack, and release value.
 - Unsafe IDs, stale procedural paths, non-finite or silent PCM, duration/format drift, and excessive encoded size fail before promotion.
 - Until runtime preset integration is complete, unmapped patches continue using synth voices. Once mapped, loading and forced sample failures still trigger the same scheduled event through the synth fallback.
@@ -121,7 +122,12 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Repeated create-delete cycles do not increase object count.
 - Selection and mute appearance match state.
 - Every planet has a unique deterministic orbit lane; duplicate-rate planets occupy neighboring lanes and do not share a path.
+- Role-derived body radii preserve the gas giant > super-Earth > ice world > rocky world > dwarf world hierarchy, gas giants retain an oblate silhouette, and ring radius/fragments scale with the parent body.
+- Adjacent lane center distances are at least the sum of both planets' current visual envelopes plus the shared lane gap; adding or removing rings and moons recalculates spacing deterministically.
 - Rate changes preserve camera zoom/rotation, while auto-fit and essential outlines keep expanded lanes legible.
+- Wide desktop Auto and explicit High create the denser geometry tier, detailed deep-space shader, procedural normal detail, and bloom compositor; changing to Balanced or Low disposes High-only targets, binds the lightweight nebula/star shader, and leaves composition and transport state unchanged.
+- Star-preset changes update both the incident planet-light color and the seeded deep-space palette without introducing serialized renderer state.
+- Whenever composition state contains a star descriptor, reconciliation and the render loop maintain one attached central-star model with a visible surface, silhouette, and compact corona; a null or detached runtime is recreated or reattached independently of planet lane spacing and reduced-effects state.
 
 ### Persistence
 
@@ -262,6 +268,8 @@ Measure:
 - Initial audio-ready time
 - Share-state size
 - Export duration
+- High-detail compositor render-target allocation and disposal across repeated High/Balanced switching
+- Desktop High frame time with the deep-space shader, bloom, eight planets, rings, and active pulses
 
 Stress scenario:
 
@@ -271,6 +279,15 @@ Stress scenario:
 - Asteroid belt
 - Active visual effects
 - Inspector interaction during playback
+
+High-detail visual acceptance:
+
+- Auto resolves to High at a wide desktop viewport, including device-pixel ratio 2, while the 390-by-844 phone viewport resolves to Low.
+- High shows sparse distant stars, multi-scale nebula filaments with dust breaks, at least one readable compact galaxy profile, restrained stellar bloom, and star-colored light on planet terrain.
+- The active star retains visible surface texture rather than clipping to a featureless white disc, and bloom does not obscure orbit gates, planets, selection outlines, or status text.
+- The resting Void star remains dark but visibly distinct from deep space, including with reduced effects, and profile switching cannot leave the system origin without its star body and outline.
+- Low and Balanced allocate no full-screen compositor and use the inexpensive broad-wisp/sparse-star shader rather than the detailed FBM, filament, dust-knot, and galaxy shader; the mobile scene remains attractive and readable.
+- WebGL shader compilation, profile switching, resize, and context restoration produce no console errors.
 
 ## Accessibility checks
 
@@ -300,5 +317,5 @@ The submission is ready only when:
 - At least 20 generated seeds have been reviewed.
 - Save, share, WAV, and MIDI flows work.
 - No known issue risks data loss.
-- Reduced motion and touch alternatives work.
+- Reduced motion and touch alternatives, including camera rotation and tilt buttons, work.
 - The demo can be completed reliably without developer tools.

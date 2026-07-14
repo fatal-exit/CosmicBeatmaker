@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
 import { LOOP_BAR_RATES, type LoopBars } from "../domain/composition";
 import type {
@@ -28,11 +32,21 @@ import {
   updateStarGlowMaterial,
   updateStarSurfaceMaterial,
 } from "./materials/proceduralMaterials";
+import {
+  createDeepSpaceMaterial,
+  createSimpleDeepSpaceMaterial,
+  updateDeepSpaceMaterial,
+} from "./materials/deepSpaceMaterial";
+import { starMaterialProfile } from "./materials/profiles";
 import { orbitPhaseAtTick } from "./phase";
 import {
   QUALITY_DPR_CAP,
+  QUALITY_BLOOM_SETTINGS,
+  QUALITY_DEEP_SPACE_STRENGTH,
   QUALITY_GLOW_STRENGTH,
+  QUALITY_PLANET_GEOMETRY_DETAIL,
   QUALITY_SHADER_DETAIL,
+  QUALITY_STAR_GEOMETRY_DETAIL,
   resolveQualityProfile,
 } from "./quality";
 
@@ -64,6 +78,11 @@ interface RuntimeStar {
   dispose: () => void;
 }
 
+interface RuntimeDeepSpaceMaterials {
+  simple: THREE.ShaderMaterial;
+  detailed: THREE.ShaderMaterial;
+}
+
 export type PlanetDragMode = "radial" | "tangential";
 
 type PointerGestureMode = PlanetDragMode | "camera-rotate";
@@ -79,6 +98,7 @@ interface PointerGesture {
   startAngle: number;
   mode: PointerGestureMode | null;
   startCameraRotation: number;
+  startCameraTilt: number;
   previewLoopBars?: LoopBars;
   previewPhase?: number;
 }
@@ -108,8 +128,11 @@ export interface TransientPulseFrame {
 export interface SceneCameraView {
   zoomPercent: number;
   rotationDegrees: number;
+  tiltDegrees: number;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  canTiltUp: boolean;
+  canTiltDown: boolean;
   canReset: boolean;
 }
 
@@ -134,7 +157,9 @@ const CAMERA_DEFAULT_POSITION = { y: 8.8, z: 10.5 } as const;
 const CAMERA_BASE_DISTANCE = 16;
 const CAMERA_REFERENCE_ASPECT = 1.3;
 const CAMERA_MAX_FIT_SCALE = 2.7;
+const CAMERA_MAX_SYSTEM_FIT_SCALE = 2.9;
 const CAMERA_ROTATION_STEP = Math.PI / 12;
+const CAMERA_TILT_STEP = Math.PI / 18;
 const CAMERA_DRAG_PIXELS_PER_TURN = 960;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const STAR_GLOW_BASE_SCALE = 1.42;
@@ -147,6 +172,12 @@ export const SCENE_CAMERA_ZOOM_MIN = 0.6;
 export const SCENE_CAMERA_ZOOM_MAX = 1.8;
 export const SCENE_CAMERA_ZOOM_STEP = 0.1;
 export const SCENE_CAMERA_ZOOM_DEFAULT = 1;
+export const SCENE_CAMERA_TILT_MIN = Math.PI / 9;
+export const SCENE_CAMERA_TILT_MAX = (Math.PI * 7) / 18;
+export const SCENE_CAMERA_TILT_DEFAULT = Math.atan2(
+  CAMERA_DEFAULT_POSITION.y,
+  CAMERA_DEFAULT_POSITION.z,
+);
 
 export function pulseDelayMsFromTicks(
   scheduledTick: number,
@@ -275,6 +306,11 @@ export function normalizeSceneRotation(rotation: number): number {
   return ((((rotation + Math.PI) % turn) + turn) % turn) - Math.PI;
 }
 
+export function clampSceneTilt(tilt: number): number {
+  if (!Number.isFinite(tilt)) return SCENE_CAMERA_TILT_DEFAULT;
+  return clamp(tilt, SCENE_CAMERA_TILT_MIN, SCENE_CAMERA_TILT_MAX);
+}
+
 export function sceneRotationFromDrag(
   startRotation: number,
   deltaX: number,
@@ -286,6 +322,17 @@ export function sceneRotationFromDrag(
   return normalizeSceneRotation(
     startRotation + (deltaX / pixelsPerTurn) * Math.PI * 2,
   );
+}
+
+export function sceneTiltFromDrag(
+  startTilt: number,
+  deltaY: number,
+  pixelsPerTurn = CAMERA_DRAG_PIXELS_PER_TURN,
+): number {
+  if (!Number.isFinite(deltaY) || pixelsPerTurn <= 0) {
+    return clampSceneTilt(startTilt);
+  }
+  return clampSceneTilt(startTilt - (deltaY / pixelsPerTurn) * Math.PI * 2);
 }
 
 export function cameraDistanceForView(aspect: number, zoom = 1): number {
@@ -440,9 +487,17 @@ export function disposeObject(object: THREE.Object3D): void {
 export class SceneController {
   private readonly options: SceneControllerOptions;
   private renderer: THREE.WebGLRenderer | null = null;
+  private composer: EffectComposer | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private deepSpace: THREE.Mesh<
+    THREE.BufferGeometry,
+    THREE.ShaderMaterial
+  > | null = null;
+  private deepSpaceMaterials: RuntimeDeepSpaceMaterials | null = null;
+  private starLight: THREE.PointLight | null = null;
   private descriptor: SceneDescriptor | null = null;
   private star: RuntimeStar | null = null;
   private planets = new Map<string, RuntimePlanet>();
@@ -461,6 +516,7 @@ export class SceneController {
   private readonly activePointers = new Map<number, ActivePointer>();
   private cameraZoom = SCENE_CAMERA_ZOOM_DEFAULT;
   private cameraRotation = 0;
+  private cameraTilt = SCENE_CAMERA_TILT_DEFAULT;
   private cameraAspect = 1;
   private cameraSystemFitScale = 1;
   private lastCameraViewSignature = "";
@@ -481,14 +537,29 @@ export class SceneController {
       powerPreference: "high-performance",
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1;
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0x080808, 0.025);
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 180);
     this.updateCameraTransform();
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.35));
-    const light = new THREE.PointLight(0xff9b58, 32, 22);
-    light.position.set(0, 1.2, 0);
-    this.scene.add(light);
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.58));
+    this.starLight = new THREE.PointLight(0xff9b58, 36, 24, 1.35);
+    this.starLight.position.set(0, 0.3, 0);
+    this.scene.add(this.starLight);
+    this.deepSpaceMaterials = {
+      simple: createSimpleDeepSpaceMaterial(),
+      detailed: createDeepSpaceMaterial(),
+    };
+    this.deepSpace = new THREE.Mesh(
+      new THREE.SphereGeometry(62, 32, 16),
+      this.deepSpaceMaterials.simple,
+    );
+    this.deepSpace.name = "procedural-deep-space";
+    this.deepSpace.renderOrder = -1_000;
+    this.deepSpace.frustumCulled = false;
+    this.deepSpace.visible = true;
+    this.scene.add(this.deepSpace);
     canvas.addEventListener("pointerdown", this.handlePointerDown);
     canvas.addEventListener("pointermove", this.handlePointerMove);
     canvas.addEventListener("pointerup", this.handlePointerUp);
@@ -518,10 +589,14 @@ export class SceneController {
     const outerExtent = Math.max(
       6.2,
       ...descriptor.planets.map(
-        (planet) => planet.orbitRadius + Math.max(0.8, planet.size * 1.8),
+        (planet) => planet.orbitRadius + planet.visualExtent + 0.25,
       ),
     );
-    const nextSystemFitScale = clamp(outerExtent / 6.2, 1, 1.8);
+    const nextSystemFitScale = clamp(
+      outerExtent / 6.2,
+      1,
+      CAMERA_MAX_SYSTEM_FIT_SCALE,
+    );
     if (Math.abs(nextSystemFitScale - this.cameraSystemFitScale) > 0.0001) {
       this.cameraSystemFitScale = nextSystemFitScale;
       this.updateCameraTransform();
@@ -611,15 +686,25 @@ export class SceneController {
     this.setCameraRotation(this.cameraRotation + CAMERA_ROTATION_STEP);
   }
 
+  tiltUp(): void {
+    this.setCameraTilt(this.cameraTilt + CAMERA_TILT_STEP);
+  }
+
+  tiltDown(): void {
+    this.setCameraTilt(this.cameraTilt - CAMERA_TILT_STEP);
+  }
+
   resetView(): void {
     if (
       this.cameraZoom === SCENE_CAMERA_ZOOM_DEFAULT &&
-      this.cameraRotation === 0
+      this.cameraRotation === 0 &&
+      this.cameraTilt === SCENE_CAMERA_TILT_DEFAULT
     ) {
       return;
     }
     this.cameraZoom = SCENE_CAMERA_ZOOM_DEFAULT;
     this.cameraRotation = 0;
+    this.cameraTilt = SCENE_CAMERA_TILT_DEFAULT;
     this.updateCameraTransform();
     this.notifyCameraView();
   }
@@ -754,9 +839,10 @@ export class SceneController {
     if (!this.renderer || !this.camera || width <= 0 || height <= 0) return;
     const profile = resolveQualityProfile(
       this.preferences.quality,
-      width,
+      globalThis.innerWidth || width,
       globalThis.devicePixelRatio || 1,
     );
+    const profileChanged = profile !== this.qualityProfile;
     this.qualityProfile = profile;
     this.renderer.setPixelRatio(
       Math.min(globalThis.devicePixelRatio || 1, QUALITY_DPR_CAP[profile]),
@@ -766,8 +852,71 @@ export class SceneController {
     this.camera.aspect = this.cameraAspect;
     this.updateCameraTransform();
     this.camera.updateProjectionMatrix();
-    this.applyVisualQuality();
+    this.configurePostProcessing(width, height);
+    if (profileChanged && this.descriptor) this.rebuildForQualityProfile();
+    else this.applyVisualQuality();
     this.notifyCameraView();
+  }
+
+  private configurePostProcessing(width: number, height: number): void {
+    if (!this.renderer || !this.scene || !this.camera) return;
+    const settings = QUALITY_BLOOM_SETTINGS[this.qualityProfile];
+    if (!settings.enabled) {
+      this.disposePostProcessing();
+      return;
+    }
+    if (!this.composer) {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(width, height),
+        settings.strength,
+        settings.radius,
+        settings.threshold,
+      );
+      this.composer.addPass(this.bloomPass);
+      this.composer.addPass(new OutputPass());
+    }
+    if (this.bloomPass) {
+      this.bloomPass.strength = settings.strength;
+      this.bloomPass.radius = settings.radius;
+      this.bloomPass.threshold = settings.threshold;
+    }
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(width, height);
+  }
+
+  private disposePostProcessing(): void {
+    if (!this.composer) return;
+    for (const pass of this.composer.passes) pass.dispose();
+    this.composer.dispose();
+    this.composer = null;
+    this.bloomPass = null;
+  }
+
+  private rebuildForQualityProfile(): void {
+    if (!this.scene || !this.descriptor) return;
+    this.releaseGesture();
+    if (this.star) {
+      this.scene.remove(this.star.group);
+      this.star.dispose();
+      this.star = null;
+    }
+    this.reconcileStar(this.descriptor);
+    for (const runtime of this.planets.values()) {
+      this.scene.remove(runtime.group);
+      this.clearRuntimePulseWindows(runtime);
+      runtime.dispose();
+    }
+    this.planets.clear();
+    for (const descriptor of this.descriptor.planets) {
+      const runtime = this.createPlanet(descriptor, false);
+      this.planets.set(descriptor.id, runtime);
+      this.scene.add(runtime.group);
+    }
+    this.reconcileAsteroids(this.descriptor);
+    this.applyVisualQuality();
+    this.applySelection();
   }
 
   destroy(): void {
@@ -808,10 +957,17 @@ export class SceneController {
     this.activePointers.clear();
     this.star?.dispose();
     if (this.asteroidBelt) disposeObject(this.asteroidBelt);
+    this.deepSpace?.geometry.dispose();
+    this.deepSpaceMaterials?.simple.dispose();
+    this.deepSpaceMaterials?.detailed.dispose();
+    this.disposePostProcessing();
     this.renderer?.dispose();
     this.renderer = null;
     this.scene = null;
     this.camera = null;
+    this.deepSpace = null;
+    this.deepSpaceMaterials = null;
+    this.starLight = null;
     this.canvas = null;
   }
 
@@ -830,14 +986,18 @@ export class SceneController {
       updateStarGlowMaterial(this.star.glow.material, {
         intensity: this.starGlowIntensity(descriptor.star.intensity),
       });
-      this.star.glow.visible = this.starGlowEnabled();
+      this.ensureStarRuntimeVisible(this.star);
+      this.updateStellarLighting(descriptor.star);
       return;
     }
     if (this.star) {
       this.scene.remove(this.star.group);
       this.star.dispose();
     }
-    const geometry = new THREE.IcosahedronGeometry(0.78, 4);
+    const geometry = new THREE.IcosahedronGeometry(
+      0.78,
+      QUALITY_STAR_GEOMETRY_DETAIL[this.qualityProfile],
+    );
     const group = new THREE.Group();
     const body = new THREE.Mesh(
       geometry,
@@ -859,7 +1019,6 @@ export class SceneController {
     body.userData.entityId = descriptor.star.id;
     glow.scale.setScalar(STAR_GLOW_BASE_SCALE);
     glow.renderOrder = 1;
-    glow.visible = this.starGlowEnabled();
     glow.userData.entityId = descriptor.star.id;
     outline.renderOrder = 3;
     outline.userData.entityId = descriptor.star.id;
@@ -877,7 +1036,8 @@ export class SceneController {
       descriptor: descriptor.star,
       dispose: () => disposeObject(group),
     };
-    this.scene.add(group);
+    this.ensureStarRuntimeVisible(this.star);
+    this.updateStellarLighting(descriptor.star);
   }
 
   private createPlanet(
@@ -904,11 +1064,16 @@ export class SceneController {
     });
     group.add(new THREE.LineLoop(orbitGeometry, orbitMaterial));
 
-    const bodyGeometry = new THREE.IcosahedronGeometry(descriptor.size, 3);
+    const bodyGeometry = new THREE.IcosahedronGeometry(
+      descriptor.size,
+      QUALITY_PLANET_GEOMETRY_DETAIL[this.qualityProfile],
+    );
+    bodyGeometry.scale(...descriptor.bodyScale);
     const bodyMaterial = createPlanetSurfaceMaterial(
       descriptor,
       this.shaderDetail(),
     );
+    updatePlanetSurfaceMaterial(bodyMaterial, this.planetStellarLighting());
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     const outline = new THREE.Mesh(
       bodyGeometry,
@@ -935,7 +1100,11 @@ export class SceneController {
     group.add(body);
 
     const hit = new THREE.Mesh(
-      new THREE.SphereGeometry(Math.max(0.66, descriptor.size * 1.7), 12, 8),
+      new THREE.SphereGeometry(
+        Math.max(0.66, descriptor.bodyExtent * 1.7),
+        12,
+        8,
+      ),
       new THREE.MeshBasicMaterial({ visible: false }),
     );
     hit.userData.entityId = descriptor.id;
@@ -943,7 +1112,7 @@ export class SceneController {
 
     if (descriptor.events.length > 0) {
       const nodeGeometry = new THREE.TorusGeometry(
-        Math.max(0.42, descriptor.size * 1.32),
+        descriptor.gateRadius,
         0.032,
         6,
         20,
@@ -981,7 +1150,7 @@ export class SceneController {
     const spawnMarker = highlightSpawn
       ? new THREE.Mesh(
           new THREE.TorusGeometry(
-            Math.max(0.5, descriptor.size * 1.55),
+            Math.max(0.48, descriptor.gateRadius * 1.14),
             0.025,
             6,
             24,
@@ -1020,7 +1189,7 @@ export class SceneController {
       });
       const moonGateGeometry = new THREE.TorusGeometry(0.16, 0.022, 6, 16);
       descriptor.moons.forEach((moonDescriptor) => {
-        const moonOrbitRadius = descriptor.size + 0.3;
+        const moonOrbitRadius = descriptor.moonOrbitRadius;
         const moon = new THREE.Mesh(moonGeometry, moonMaterial);
         setMoonOrbitPosition(
           moon,
@@ -1072,7 +1241,14 @@ export class SceneController {
     }
 
     if (descriptor.ringSegments.length > 0) {
-      const ringGeometry = new THREE.BoxGeometry(0.1, 0.035, 0.18);
+      const ringGeometry = new THREE.BoxGeometry(
+        descriptor.ringVisual.fragmentRadialSize,
+        descriptor.ringVisual.fragmentHeight,
+        descriptor.ringVisual.fragmentTangentialSize,
+      );
+      const ringGroup = new THREE.Group();
+      ringGroup.rotation.x = descriptor.ringVisual.tilt;
+      body.add(ringGroup);
       let activeMaterial: THREE.MeshBasicMaterial | undefined;
       let inactiveMaterial: THREE.MeshBasicMaterial | undefined;
       descriptor.ringSegments.forEach((segment) => {
@@ -1086,16 +1262,16 @@ export class SceneController {
             }));
         const fragment = new THREE.Mesh(ringGeometry, material);
         fragment.position.set(
-          Math.cos(angle) * (descriptor.size + 0.22),
+          Math.cos(angle) * descriptor.ringVisual.radius,
           0,
-          Math.sin(angle) * (descriptor.size + 0.22),
+          Math.sin(angle) * descriptor.ringVisual.radius,
         );
         fragment.rotation.y = -angle;
         fragment.userData.entityId = descriptor.id;
         fragment.userData.sourceEntityId = segment.sourceEntityId;
         fragment.userData.eventId = segment.eventId;
         eventNodes.set(segment.eventId, fragment);
-        body.add(fragment);
+        ringGroup.add(fragment);
       });
     }
 
@@ -1132,7 +1308,7 @@ export class SceneController {
     const outerPlanetRadius = Math.max(
       5.8,
       ...descriptor.planets.map(
-        (planet) => planet.orbitRadius + Math.max(0.72, planet.size * 1.65),
+        (planet) => planet.orbitRadius + planet.visualExtent,
       ),
     );
     for (let index = 0; index < descriptor.asteroidBelt.count; index += 1) {
@@ -1152,6 +1328,69 @@ export class SceneController {
     this.scene.add(this.asteroidBelt);
   }
 
+  private starLightColor(
+    star: SceneDescriptor["star"] | undefined = this.descriptor?.star,
+  ): THREE.Color {
+    if (!star) return new THREE.Color(0xffffff);
+    const profile = starMaterialProfile(star.presetId);
+    return new THREE.Color(profile.coreColor).lerp(
+      new THREE.Color(profile.hotColor),
+      0.34,
+    );
+  }
+
+  private planetStellarLighting(): {
+    starLightColor: THREE.Color;
+    starLightIntensity: number;
+  } {
+    const intensity = this.descriptor?.star.intensity ?? 0.8;
+    return {
+      starLightColor: this.starLightColor(),
+      starLightIntensity: 0.82 + intensity * 0.52,
+    };
+  }
+
+  private updateStellarLighting(star: SceneDescriptor["star"]): void {
+    const profile = starMaterialProfile(star.presetId);
+    const lightColor = this.starLightColor(star);
+    if (this.starLight) {
+      this.starLight.color.copy(lightColor);
+      this.starLight.intensity = 28 + star.intensity * 18;
+    }
+    if (this.deepSpaceMaterials) {
+      const nebulaA = new THREE.Color(profile.glowColor).offsetHSL(
+        0.12,
+        0.04,
+        -0.24,
+      );
+      const nebulaB = new THREE.Color(profile.edgeColor).offsetHSL(
+        -0.16,
+        0.08,
+        0.08,
+      );
+      for (const material of [
+        this.deepSpaceMaterials.simple,
+        this.deepSpaceMaterials.detailed,
+      ]) {
+        updateDeepSpaceMaterial(material, {
+          visualSeed: star.visualSeed,
+          intensity: this.deepSpaceStrength(),
+          nebulaColorA: nebulaA,
+          nebulaColorB: nebulaB,
+        });
+      }
+    }
+    const lighting = this.planetStellarLighting();
+    for (const runtime of this.planets.values()) {
+      updatePlanetSurfaceMaterial(runtime.body.material, lighting);
+    }
+  }
+
+  private deepSpaceStrength(): number {
+    const comfortMultiplier = this.preferences.reducedParticles ? 0.34 : 1;
+    return QUALITY_DEEP_SPACE_STRENGTH[this.qualityProfile] * comfortMultiplier;
+  }
+
   private shaderDetail(): number {
     return QUALITY_SHADER_DETAIL[this.qualityProfile] / 5;
   }
@@ -1168,21 +1407,56 @@ export class SceneController {
   }
 
   private starGlowEnabled(): boolean {
-    return this.qualityProfile !== "low" && !this.preferences.reducedParticles;
+    return QUALITY_GLOW_STRENGTH[this.qualityProfile] > 0;
+  }
+
+  private ensureStarRuntimeVisible(runtime: RuntimeStar): void {
+    if (!this.scene) return;
+    if (runtime.group.parent !== this.scene) this.scene.add(runtime.group);
+    runtime.group.visible = true;
+    runtime.group.position.set(0, 0, 0);
+    runtime.group.frustumCulled = false;
+    runtime.body.visible = true;
+    runtime.body.frustumCulled = false;
+    runtime.outline.visible = true;
+    runtime.outline.frustumCulled = false;
+    runtime.glow.visible = this.starGlowEnabled();
+    runtime.glow.frustumCulled = false;
+  }
+
+  private ensureStarRuntime(): void {
+    if (!this.star && this.descriptor && this.scene) {
+      this.reconcileStar(this.descriptor);
+    }
+    if (this.star) this.ensureStarRuntimeVisible(this.star);
   }
 
   private applyVisualQuality(): void {
     const detail = this.shaderDetail();
+    const lighting = this.planetStellarLighting();
     for (const runtime of this.planets.values()) {
-      updatePlanetSurfaceMaterial(runtime.body.material, { detail });
+      updatePlanetSurfaceMaterial(runtime.body.material, {
+        detail,
+        ...lighting,
+      });
     }
+    if (this.deepSpace && this.deepSpaceMaterials) {
+      const strength = this.deepSpaceStrength();
+      this.deepSpace.material =
+        this.qualityProfile === "high"
+          ? this.deepSpaceMaterials.detailed
+          : this.deepSpaceMaterials.simple;
+      this.deepSpace.visible = strength > 0;
+      updateDeepSpaceMaterial(this.deepSpace.material, { intensity: strength });
+    }
+    this.ensureStarRuntime();
     if (this.star) {
-      this.star.glow.visible = this.starGlowEnabled();
       updateStarSurfaceMaterial(this.star.body.material, { detail });
       updateStarGlowMaterial(this.star.glow.material, {
         detail,
         intensity: this.starGlowIntensity(this.star.descriptor.intensity),
       });
+      this.ensureStarRuntimeVisible(this.star);
     }
   }
 
@@ -1237,20 +1511,25 @@ export class SceneController {
     const rotationDegrees = Math.round(
       (normalizeSceneRotation(this.cameraRotation) * 180) / Math.PI,
     );
+    const tiltDegrees = Math.round((this.cameraTilt * 180) / Math.PI);
     return {
       zoomPercent,
       rotationDegrees,
+      tiltDegrees,
       canZoomIn: this.cameraZoom < SCENE_CAMERA_ZOOM_MAX - 0.0001,
       canZoomOut: this.cameraZoom > SCENE_CAMERA_ZOOM_MIN + 0.0001,
+      canTiltUp: this.cameraTilt < SCENE_CAMERA_TILT_MAX - 0.0001,
+      canTiltDown: this.cameraTilt > SCENE_CAMERA_TILT_MIN + 0.0001,
       canReset:
         Math.abs(this.cameraZoom - SCENE_CAMERA_ZOOM_DEFAULT) > 0.0001 ||
-        Math.abs(this.cameraRotation) > 0.0001,
+        Math.abs(this.cameraRotation) > 0.0001 ||
+        Math.abs(this.cameraTilt - SCENE_CAMERA_TILT_DEFAULT) > 0.0001,
     };
   }
 
   private notifyCameraView(): void {
     const view = this.currentCameraView();
-    const signature = `${view.zoomPercent}:${view.rotationDegrees}:${view.canZoomIn}:${view.canZoomOut}:${view.canReset}`;
+    const signature = `${view.zoomPercent}:${view.rotationDegrees}:${view.tiltDegrees}:${view.canZoomIn}:${view.canZoomOut}:${view.canTiltUp}:${view.canTiltDown}:${view.canReset}`;
     if (signature === this.lastCameraViewSignature) return;
     this.lastCameraViewSignature = signature;
     this.options.onCameraViewChange?.(view);
@@ -1261,13 +1540,8 @@ export class SceneController {
     const distance =
       cameraDistanceForView(this.cameraAspect, this.cameraZoom) *
       this.cameraSystemFitScale;
-    const initialDistance = Math.hypot(
-      CAMERA_DEFAULT_POSITION.y,
-      CAMERA_DEFAULT_POSITION.z,
-    );
-    const y = (CAMERA_DEFAULT_POSITION.y / initialDistance) * distance;
-    const horizontalDistance =
-      (CAMERA_DEFAULT_POSITION.z / initialDistance) * distance;
+    const y = Math.sin(this.cameraTilt) * distance;
+    const horizontalDistance = Math.cos(this.cameraTilt) * distance;
     this.camera.position.set(
       Math.sin(this.cameraRotation) * horizontalDistance,
       y,
@@ -1292,9 +1566,24 @@ export class SceneController {
   }
 
   private setCameraRotation(rotation: number): void {
+    this.setCameraOrientation(rotation, this.cameraTilt);
+  }
+
+  private setCameraTilt(tilt: number): void {
+    this.setCameraOrientation(this.cameraRotation, tilt);
+  }
+
+  private setCameraOrientation(rotation: number, tilt: number): void {
     const nextRotation = normalizeSceneRotation(rotation);
-    if (Math.abs(nextRotation - this.cameraRotation) < 0.0001) return;
+    const nextTilt = clampSceneTilt(tilt);
+    if (
+      Math.abs(nextRotation - this.cameraRotation) < 0.0001 &&
+      Math.abs(nextTilt - this.cameraTilt) < 0.0001
+    ) {
+      return;
+    }
     this.cameraRotation = nextRotation;
+    this.cameraTilt = nextTilt;
     this.updateCameraTransform();
     this.notifyCameraView();
   }
@@ -1363,6 +1652,7 @@ export class SceneController {
       startAngle: Math.atan2(offsetY, offsetX),
       mode: null,
       startCameraRotation: this.cameraRotation,
+      startCameraTilt: this.cameraTilt,
     };
   };
 
@@ -1402,8 +1692,9 @@ export class SceneController {
         gesture.mode = "camera-rotate";
       }
       if (gesture.mode !== "camera-rotate") return;
-      this.setCameraRotation(
+      this.setCameraOrientation(
         sceneRotationFromDrag(gesture.startCameraRotation, deltaX),
+        sceneTiltFromDrag(gesture.startCameraTilt, deltaY),
       );
       event.preventDefault();
       return;
@@ -1712,7 +2003,9 @@ export class SceneController {
       }
     }
     this.updatePlanetDestructions(now);
+    this.ensureStarRuntime();
     if (this.star) {
+      this.ensureStarRuntimeVisible(this.star);
       const materialTime = this.preferences.reducedMotion ? 0 : ticks;
       const quarterNotePulse = this.playbackActive
         ? quarterNotePulseAtTick(ticks)
@@ -1756,7 +2049,16 @@ export class SceneController {
         this.star.group.rotation.y = ticks / 2_600;
       }
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.deepSpace?.visible) {
+      updateDeepSpaceMaterial(this.deepSpace.material, {
+        time: this.preferences.reducedMotion ? 0 : ticks / 1_920,
+      });
+    }
+    if (this.composer && this.qualityProfile === "high") {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
     this.frame = requestAnimationFrame(this.animate);
   };
 }

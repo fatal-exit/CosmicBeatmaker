@@ -30,6 +30,9 @@ interface GeneratedManifest {
     proceduralSynthesis?: {
       version: string;
       renderer: string;
+      legacyDryAssetsPackaged?: boolean;
+      spatialAlgorithm?: string;
+      spatializedAssets?: number;
     };
   };
   samples: {
@@ -48,6 +51,15 @@ interface GeneratedManifest {
     sourceKind?: string;
     synthesisVersion?: string;
     rootMidi?: number;
+    processing?: {
+      effect: string;
+      algorithm: string;
+      profile: string;
+      sourceVariant: string;
+      legacyDryId: string;
+      legacyDryName: string;
+      legacyDryAssetPackaged: boolean;
+    };
   }[];
 }
 
@@ -154,45 +166,72 @@ describe("first-party sample pack", () => {
       (asset) => asset.id,
     ).filter((id) => !referencedSampleIds.has(id));
     expect(inactiveAlternatives).toEqual([
-      "dust-texture-c4",
-      "metallic-array-open-hat",
-      "warm-pad-c4",
+      "dust-texture-space-c4",
+      "metallic-array-open-hat-space",
+      "warm-pad-space-c4",
     ]);
   });
 
-  it("ships the rendered mobile palette with mono transients and stereo tonal voices", () => {
+  it("ships low transients in mono and spatialized upper voices in stereo", () => {
     const procedural = generatedManifest.samples.filter(
       (sample) => sample.sourceKind === "procedural",
     );
     expect(procedural).toHaveLength(41);
     expect(generatedManifest.samples).toHaveLength(61);
     expect(procedural.filter((sample) => sample.channels === 1)).toHaveLength(
-      32,
+      10,
     );
     expect(procedural.filter((sample) => sample.channels === 2)).toHaveLength(
-      9,
+      31,
     );
     for (const sample of procedural) {
       expect(sample.sampleRate).toBe(48_000);
       expect(sample.encodedPeakDb).toBeLessThan(-0.1);
-      expect(sample.durationSeconds).toBeLessThanOrEqual(2.85);
+      expect(sample.durationSeconds).toBeLessThanOrEqual(4.25);
       expect(sample.synthesisVersion).toBe(
-        sample.id === "glass-chords-c4" ? "1.1.0" : "1.0.0",
+        sample.processing?.effect === "space reverb" ? "2.0.0" : "1.0.0",
       );
     }
     expect(generatedManifest.pack.proceduralSynthesis).toMatchObject({
-      version: "1.0.0",
-      renderer: "deterministic PCM16 offline synthesis",
+      version: "2.0.0",
+      renderer:
+        "deterministic PCM16 offline synthesis + stereo Schroeder space reverb",
+      legacyDryAssetsPackaged: false,
+      spatialAlgorithm: "stereo-schroeder-space-v1",
+      spatializedAssets: 30,
     });
 
-    const tonal = procedural.filter((sample) => sample.channels === 2);
+    const tonal = procedural.filter((sample) => sample.rootMidi !== undefined);
     for (const sample of tonal) {
       expect(sample.rootMidi).toBe(sample.id.endsWith("-c2") ? 36 : 60);
       expect(sample.id.endsWith("-c2") || sample.id.endsWith("-c4")).toBe(true);
     }
   });
 
-  it("uses authored reverbs plus dedicated chord, texture, ring, and asteroid renders", () => {
+  it("packages spatial replacements and excludes every labeled legacy-dry source", () => {
+    const procedural = generatedManifest.samples.filter(
+      (sample) => sample.sourceKind === "procedural",
+    );
+    const spatialized = procedural.filter(
+      (sample) => sample.processing?.effect === "space reverb",
+    );
+    expect(spatialized).toHaveLength(30);
+    const packagedIds = new Set(generatedManifest.samples.map(({ id }) => id));
+    for (const sample of spatialized) {
+      expect(sample.channels).toBe(2);
+      expect(sample.processing).toMatchObject({
+        algorithm: "stereo-schroeder-space-v1",
+        sourceVariant: "legacy dry",
+        legacyDryAssetPackaged: false,
+      });
+      expect(sample.processing?.legacyDryName.startsWith("Legacy Dry ")).toBe(
+        true,
+      );
+      expect(packagedIds.has(sample.processing?.legacyDryId ?? "")).toBe(false);
+    }
+  });
+
+  it("uses authored reverbs plus dedicated spatial chord, texture, ring, and asteroid renders", () => {
     expect(SAMPLE_VOICE_PRESETS["warm-pad"]).toMatchObject({
       sampleId: "reverb-square-saw-long",
       rootMidi: 48,
@@ -202,17 +241,17 @@ describe("first-party sample pack", () => {
       rootMidi: 48,
     });
     expect(SAMPLE_VOICE_PRESETS["glass-chords"]).toMatchObject({
-      sampleId: "glass-chords-c4",
+      sampleId: "glass-chords-space-c4",
       rootMidi: 60,
     });
     expect(SAMPLE_VOICE_PRESETS.nebula).toMatchObject({
-      sampleId: "nebula-texture-c4",
+      sampleId: "nebula-texture-space-c4",
       rootMidi: 60,
     });
     expect(SAMPLE_VOICE_PRESETS["orbital-hat"]).toMatchObject({
       samples: {
-        "closed-hat": "orbital-ring-hat",
-        "open-hat": "orbital-ring-shaker",
+        "closed-hat": "orbital-ring-hat-space",
+        "open-hat": "orbital-ring-shaker-space",
         perc: "orbital-ring-perc",
       },
     });

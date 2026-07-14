@@ -30,6 +30,7 @@ const RUNTIME_ASSETS_OUTPUT = join(
 const AUTHORED_PROCESSOR = join(SCRIPT_DIR, "process-samples.mjs");
 const PROCEDURAL_RENDERER = join(SCRIPT_DIR, "render-procedural-samples.mjs");
 const EXPECTED_PROCEDURAL_ASSETS = 41;
+const EXPECTED_SPATIALIZED_ASSETS = 30;
 const SAFE_ASSET_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function runNode(script, arguments_) {
@@ -80,6 +81,32 @@ export function validateCompleteSampleBuild(packDirectory, runtimeAssetsPath) {
       "Staged sample pack needs authored assets plus exactly 41 procedural assets.",
     );
   }
+  const spatialized = procedural.filter(
+    (sample) => sample.processing?.effect === "space reverb",
+  );
+  if (spatialized.length !== EXPECTED_SPATIALIZED_ASSETS) {
+    throw new Error(
+      "Staged sample pack needs exactly 30 spatialized procedural assets.",
+    );
+  }
+  const legacyDryIds = new Set();
+  for (const sample of spatialized) {
+    const processing = sample.processing;
+    if (
+      processing?.sourceVariant !== "legacy dry" ||
+      processing.legacyDryAssetPackaged !== false ||
+      typeof processing.legacyDryId !== "string" ||
+      !SAFE_ASSET_ID.test(processing.legacyDryId) ||
+      typeof processing.legacyDryName !== "string" ||
+      !processing.legacyDryName.startsWith("Legacy Dry ") ||
+      sample.id === processing.legacyDryId
+    ) {
+      throw new Error(
+        `Spatialized sample has an invalid legacy-dry contract: ${sample.id}.`,
+      );
+    }
+    legacyDryIds.add(processing.legacyDryId);
+  }
 
   const ids = new Set();
   const expectedFiles = new Set(["manifest.json"]);
@@ -96,6 +123,13 @@ export function validateCompleteSampleBuild(packDirectory, runtimeAssetsPath) {
       statSync(path).size !== sample.encodedBytes
     ) {
       throw new Error(`Staged sample asset failed its byte contract: ${id}.`);
+    }
+  }
+  for (const legacyDryId of legacyDryIds) {
+    if (ids.has(legacyDryId)) {
+      throw new Error(
+        `Legacy-dry sample must not be packaged: ${legacyDryId}.`,
+      );
     }
   }
 

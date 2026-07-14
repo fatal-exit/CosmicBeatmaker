@@ -31,7 +31,7 @@ Default:
 - Star centered
 - Orbits readable as ellipses
 - Limited zoom range
-- Limited rotation
+- Limited horizontal rotation and vertical tilt
 - Smooth focus transitions
 - Automatic framing that can fit one unique orbit lane per planet
 
@@ -96,7 +96,7 @@ Map pointer movement to the system plane.
 - Show preview label such as “1 bar.”
 - Commit one undoable action on release.
 
-After the rate change, derive a unique compact lane for every planet by rate order and stable composition order or ID. Duplicate-rate planets use adjacent distinct lanes. Lane radius is not musical duration, and changing rate must not mutate camera zoom or rotation.
+After the rate change, derive a unique lane for every planet by rate order and stable composition order or ID. Accumulate lane radii from each planet's real visual envelope so larger bodies, rings, gates, and moon systems receive more clearance. Duplicate-rate planets use adjacent distinct lanes. Lane radius is not musical duration, and changing rate must not mutate camera zoom or rotation.
 
 ### Tangential drag
 
@@ -109,7 +109,7 @@ After the rate change, derive a unique compact lane for every planet by rate ord
 
 - One-finger drag on a selected object edits it.
 - One-finger drag on empty space may pan only if intentionally supported.
-- Two-finger gesture controls zoom or limited camera rotation.
+- Two-finger gesture controls zoom or limited camera rotation and tilt.
 - Provide buttons for users who cannot use multi-touch.
 
 ## Geometry strategy
@@ -119,15 +119,18 @@ After the rate change, derive a unique compact lane for every planet by rate ord
 - Low to moderate polygon count
 - Shared base geometries where possible
 - Material parameters and procedural texture variation
+- Role-derived physical classes with clearly separated radius bands: bass gas giants are largest, chord super-Earths are medium-large, melody ice worlds and beat rocky worlds are smaller, and texture dwarf worlds are smallest
+- Class-specific silhouettes, including an oblate gas-giant profile, remain deterministic scene projections of existing role and appearance data rather than new composition state
 - Avoid high-resolution texture dependence
 - Use simple atmosphere shells sparingly
+- High may use denser shared geometry plus fragment-space procedural surface normals for terrain relief; this is visual shading, not a physics or terrain-simulation system
 
 ### Rings
 
 Use instanced meshes for fragments.
 
 - Shared geometry and material
-- Per-instance transform
+- Per-instance transform, with orbit radius, fragment dimensions, and tilt scaled from the parent planet's physical class and rendered body size
 - Optional per-instance emissive or color attribute
 - Active state reflected visually
 - Avoid one draw call per fragment
@@ -155,18 +158,23 @@ Avoid creating and destroying objects every beat. Reuse pools.
 - No shadows
 - Minimal particles
 - Simple additive pulses
+- One lightweight seeded sky shader with broad nebula wisps and a sparse star layer; no FBM, galaxies, dust knots, or post-processing targets
+- The central star retains its surface, silhouette, and an attenuated compact corona; quality reduction must never remove the model itself
 
 ### Balanced
 
 - Lightweight selective bloom or glow alternative
 - Limited particles
 - No dynamic shadows or one very cheap shadow source
+- The same lightweight seeded nebula and star backdrop at a slightly stronger presentation level
 
 ### High
 
-- Selective bloom
+- A restrained HDR bloom compositor using the existing Three.js post-processing modules
 - Higher particle counts
-- Additional atmospheric effects
+- A seeded procedural deep-space shader with star layers, warped nebula filaments, dust lanes, and compact galaxy profiles
+- Star-preset-colored incident light on planet surfaces
+- Higher celestial geometry and procedural normal detail
 - Optional soft shadows
 
 The application must remain attractive without post-processing.
@@ -188,6 +196,8 @@ Auto mode may consider:
 - Recent average frame time
 - WebGL context capabilities
 
+The current automatic policy uses the browser viewport rather than the narrower center-canvas width: wide desktop windows resolve to High even on high-DPI PC and Mac displays, intermediate widths resolve to Balanced, and phone widths resolve to Low. Explicit user selection still wins.
+
 Adapt gradually and avoid oscillating between profiles.
 
 Possible reductions:
@@ -196,9 +206,11 @@ Possible reductions:
 2. Reduce star-field count
 3. Reduce particles
 4. Disable post-processing
-5. Reduce asteroid count
-6. Reduce atmosphere segments
-7. Reduce update frequency for distant decorative elements
+5. Replace the detailed deep-space shader with the simple mobile shader
+6. Disable the procedural deep-space backdrop
+7. Reduce asteroid count
+8. Reduce atmosphere segments
+9. Reduce update frequency for distant decorative elements
 
 Never reduce audio scheduling quality.
 

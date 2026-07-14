@@ -96,12 +96,17 @@ export function ProjectMenu(props: ProjectMenuProps) {
               props.onQuality(event.target.value as EphemeralUiState["quality"])
             }
           >
-            <option value="auto">Auto</option>
+            <option value="auto">Auto (device-aware)</option>
             <option value="low">Low</option>
             <option value="balanced">Balanced</option>
-            <option value="high">High</option>
+            <option value="high">High detail (desktop)</option>
           </select>
         </label>
+        <small className="quality-note">
+          High detail adds terrain normals, stellar lighting, bloom, and deep
+          space scenery. Mobile modes use a lighter nebula and star backdrop.
+          Auto enables High on wide desktop displays.
+        </small>
         <label>
           <input
             type="checkbox"
