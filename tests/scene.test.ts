@@ -30,6 +30,7 @@ import {
   moonOrbitPhaseAtTick,
   normalizeSceneRotation,
   phaseFromTangentialDrag,
+  pitchStepsFromRadialDrag,
   pulseDelayMsFromTicks,
   quarterNotePulseAtTick,
   quantizeLoopBarsFromRadialDrag,
@@ -592,6 +593,24 @@ describe("scene contracts", () => {
   it("turns tangential pointer angle into a wrapped normalized phase", () => {
     expect(phaseFromTangentialDrag(0.95, 0, Math.PI / 2)).toBeCloseTo(0.2);
     expect(phaseFromTangentialDrag(0.05, 0, -Math.PI / 2)).toBeCloseTo(0.8);
+  });
+
+  it("derives selected gate slots and bounded melodic pitch drags", () => {
+    const composition = createStarterComposition("editable-gate-slots");
+    const descriptor = compositionToSceneDescriptor(composition).planets[0];
+
+    expect(descriptor.gateSlots).toHaveLength(16);
+    expect(
+      descriptor.gateSlots
+        .filter((slot) => slot.active)
+        .map((slot) => slot.step),
+    ).toEqual([0, 4, 8, 12]);
+    expect(descriptor.gateSlots[0].emphasis).toBe("beat");
+    expect(descriptor.gateSlots[2].emphasis).toBe("offbeat");
+    expect(descriptor.gateSlots[1].emphasis).toBe("subdivision");
+    expect(pitchStepsFromRadialDrag(52)).toBe(2);
+    expect(pitchStepsFromRadialDrag(-52)).toBe(-2);
+    expect(pitchStepsFromRadialDrag(10_000)).toBe(7);
   });
 
   it("bounds scene zoom for buttons, wheels, and two-pointer pinches", () => {

@@ -253,7 +253,7 @@ describe("exact polymeter rates", () => {
     expect(oneAndAHalfBars.planets[0].pattern.gridSize).toBe(12);
     expect(
       oneAndAHalfBars.planets[0].pattern.events.map(({ step }) => step),
-    ).toEqual([0, 4, 8]);
+    ).toEqual([0, 3, 6, 9]);
     expect(validateComposition(oneAndAHalfBars).success).toBe(true);
     expect(
       deserializeComposition(serializeComposition(oneAndAHalfBars)),
@@ -261,26 +261,34 @@ describe("exact polymeter rates", () => {
     expect(threeBars.planets[0].orbit.loopBars).toBe(3);
     expect(threeBars.planets[0].pattern.gridSize).toBe(24);
     expect(threeBars.planets[0].pattern.events.map(({ step }) => step)).toEqual(
-      [0, 8, 16],
+      [0, 6, 12, 18],
     );
     expect(validateComposition(threeBars).success).toBe(true);
     expect(deserializeComposition(serializeComposition(threeBars))).toEqual({
       success: true,
       composition: threeBars,
     });
-    expect(backToFourBars.planets[0].pattern.gridSize).toBe(16);
+    expect(backToFourBars.planets[0].pattern.gridSize).toBe(32);
     expect(
       backToFourBars.planets[0].pattern.events.map(({ step }) => step),
-    ).toEqual([0, 4, 8]);
+    ).toEqual([0, 8, 16, 24]);
     expect(denseBackToFourBars.planets[0].pattern.gridSize).toBe(32);
     expect(
       denseBackToFourBars.planets[0].pattern.events.map(({ step }) => step),
-    ).toEqual([0, 8, 16]);
+    ).toEqual([0, 8, 16, 24]);
   });
 
-  it.each([0.25, 0.5, 1, 2, 4, 6, 8] satisfies LoopBars[])(
-    "restores a standard pattern grid when returning to %s bars",
-    (loopBars) => {
+  it.each([
+    [0.25, 4],
+    [0.5, 4],
+    [1, 8],
+    [2, 16],
+    [4, 32],
+    [6, 24],
+    [8, 32],
+  ] as const satisfies readonly (readonly [LoopBars, number])[])(
+    "fits a natural pattern grid when returning to %s bars",
+    (loopBars, expectedGridSize) => {
       const composition = createStarterComposition(
         `polymeter-grid-return-${loopBars}`,
       );
@@ -300,7 +308,7 @@ describe("exact polymeter rates", () => {
 
       expect(polymetric.planets[0].pattern.gridSize).toBe(12);
       expect(restored.planets[0].orbit.loopBars).toBe(loopBars);
-      expect(restored.planets[0].pattern.gridSize).toBe(16);
+      expect(restored.planets[0].pattern.gridSize).toBe(expectedGridSize);
       expect(validateComposition(restored).success).toBe(true);
     },
   );

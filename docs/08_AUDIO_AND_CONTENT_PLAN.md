@@ -260,6 +260,14 @@ Melody, chord, and bass rings reuse the parent's pitched preset rather than auxi
 
 The authored processor is intentionally inventory-agnostic. New first-party WAVs can be added to the ignored input directory and incorporated by rerunning the same command. Procedural arrivals are added as versioned renderer definitions and regenerated through the separate command. Stable ID collision checks across both sets, generated metadata, stale-output cleanup, and manifest/runtime alignment tests keep the pack scalable; assigning any new asset to a sound preset remains an intentional reviewed content decision.
 
+### Local user-sound library
+
+User imports are a separate device-local runtime library rather than additions to the first-party build pack. Audio Blobs and their small metadata records are stored in a dedicated IndexedDB database. A composition continues to store only `soundPresetId`, so the canonical schema, URL share size, deterministic MIDI, and first-party manifest remain unchanged.
+
+Beat imports may fill any subset of the seven existing drum voices; each file is bounded to 12 MB and four seconds, and the combined kit is bounded to 24 MB. An unmapped or unavailable slot uses the established synthesized fallback for that occurrence. Tonal imports are bounded to 12 MB and 12 seconds, downmixed only for analysis, and inspected with normalized autocorrelation over a loud stable window. The detected MIDI source note is shown for correction before the sound is registered. Tone then transposes from that confirmed source root into the composition's already-resolved Safe Harmony MIDI notes; the source file is not destructively rewritten to C.
+
+Local sample playback uses the existing decoded-buffer cache, per-event voice ownership, overlap limits, track strip, and fallback path. Drum files are limited to four seconds. Unsupported, oversized, silent, or undecodable inputs fail with plain-language feedback. Custom audio is live-playback-only: offline WAV continues to use the equivalent bounded synth voice, MIDI remains sample-independent, and share recipients without the local library hear a safe synth rather than silence.
+
 ## Audio routing
 
 ```text

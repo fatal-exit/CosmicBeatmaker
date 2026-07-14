@@ -113,6 +113,9 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Unsafe IDs, stale procedural paths, non-finite or silent PCM, duration/format drift, and excessive encoded size fail before promotion.
 - Until runtime preset integration is complete, unmapped patches continue using synth voices. Once mapped, loading and forced sample failures still trigger the same scheduled event through the synth fallback.
 - Offline WAV output remains deterministic and synth-based through bounded shared track voices; a real browser WAV download completes without allocating one instrument graph per compiled occurrence. MIDI remains independent of sample availability.
+- Each role exposes at least three described built-in sounds, and a `SetPlanetSoundPreset` edit preserves pattern/orbit state while updating a tonal ring to the parent sound.
+- Monophonic pitch analysis identifies reference sine tones within a semitone and rejects silence instead of claiming a root.
+- A registered local pitched sound or partial drum kit resolves through the same live preset and asset lookup while built-in manifest behavior remains unchanged.
 
 ### Scene reconciliation
 
@@ -155,6 +158,39 @@ Acceptance:
 - Works at phone viewport.
 - Meaningful sound change after each edit.
 
+### Sound-choice flow
+
+1. Select a melody planet through the semantic object list.
+2. Change its labelled Instrument or kit select to another built-in sound.
+3. Expand Use your own sample, choose a short tonal file, and review the detected source note.
+4. Correct the note if needed, add the sound, and confirm it becomes the selected option.
+5. Select a beat planet and confirm Build your own drum kit exposes individually labelled slots.
+
+Acceptance:
+
+- Built-in selection remains keyboard-usable without opening theory or expression controls.
+- The selected planet keeps the same pattern and orbit.
+- Pitch analysis status is announced and the source note is keyboard-editable.
+- Local custom audio is clearly described as device-local with synth fallback for share and WAV.
+- The flow has no unlabelled file input and every control meets the 44-pixel target policy.
+
+### Beginner controls and gate-detail flow
+
+1. Use welcome-screen Surprise Me and confirm a complete system starts playing.
+2. Confirm only Energy, Activity, and Space are present in the default macro surface.
+3. Select a planet, use its separate Surprise action, and confirm neighboring planets keep their stable state.
+4. Confirm a half-bar orbit offers 4/8 steps, one- and two-bar orbits offer 8/16, and a four-bar orbit offers 8/16/32; open the circular pattern editor after a change.
+5. Enable Advanced, confirm six macro controls, then confirm 1½ bars offers 6/12 polyrhythm steps and three bars offers 12/24.
+6. Toggle a gate in the scene and semantic grid, rotate the selected orbit arc, and nudge an active melody gate with both radial drag and labelled pitch buttons.
+
+Acceptance:
+
+- Whole-system and per-planet Surprise are distinct, undoable, deterministic, and lock-aware.
+- Step resizing preserves normalized rhythmic landmarks and never leaves an out-of-range event.
+- Beat landmarks are visibly strongest, offbeat eighths use a secondary emphasis, and fine subdivisions remain legible without competing.
+- Simple step choices and every semantic editor target meet the 44-pixel touch policy at phone size.
+- Advanced mode alone exposes the orbit-appropriate 6/12/24 polyrhythms and the full six-control macro surface.
+
 ### Generation flow
 
 1. Open existing system.
@@ -193,6 +229,7 @@ Acceptance:
 4. Mute and unmute.
 5. Enable reduced motion.
 6. Open Focus View.
+7. Change the step count, toggle a gate, and change a melody gate pitch without using the canvas.
 
 Acceptance:
 

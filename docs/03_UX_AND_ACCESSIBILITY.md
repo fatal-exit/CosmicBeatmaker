@@ -20,6 +20,7 @@ This user gesture unlocks audio and enters the app.
 
 Secondary actions:
 
+- Surprise Me, which unlocks audio and builds a complete safe system
 - Explore a demo
 - Load a shared system
 - Open a saved system
@@ -69,10 +70,12 @@ After this, onboarding ends and the app remains fully usable.
   - Main menu
 - Main canvas:
   - Fixed angled top-down solar system
-- Floating action:
+- Floating actions:
+  - Surprise Me for the whole system
   - Add celestial object
 - Bottom sheet:
   - Selection summary
+  - Surprise for the selected planet
   - Main creative controls
   - Expand for Orbit Lab
 - Persistent master volume and stop inside the main menu or top-level transport
@@ -96,6 +99,9 @@ The editing model should feel almost 2D even though the scene is 3D.
 ### Allowed gestures
 
 - Tap: select
+- Tap an empty or active gate: enable or disable that step
+- Drag the selected orbit arc tangentially: rotate every gate together
+- Drag an active melody gate radially: move its note through the safe scale
 - Drag selected planet tangentially: change phase
 - Drag selected planet radially: change quantized orbit rate; the renderer derives a unique spatial lane separately
 - Pinch: zoom
@@ -119,15 +125,14 @@ The editing model should feel almost 2D even though the scene is 3D.
 Always visible:
 
 - Play or pause
-- Tempo
 - Energy
-- Density
-- Groove
+- Activity
 - Space
-- Complexity
 - Add object
-- Surprise Me
-- Undo and redo
+- Surprise Me for the whole unlocked system
+- Undo, with additional transport controls where viewport space allows
+
+The phone and beginner layouts use these three circular macro controls. An explicit Advanced toggle expands the macro surface to Energy, Density, Groove, Space, Complexity, and master Volume. Every knob remains a semantic range input with keyboard and screen-reader behavior.
 
 ### Level 2: Shape
 
@@ -135,15 +140,14 @@ Visible after selecting an object:
 
 - Role and sound
 - Mute and solo
+- Surprise for this planet
 - Pattern preset
 - Orbit rate, with familiar choices first and deeper polymetric choices progressively disclosed
-- Chord Shape controls for voicing width and harmonic complexity on chord planets
-- Melody Shape controls for pitch variety and ascending, alternating, or descending contour on melody planets
-- Regenerate
-- Duplicate
-- Delete
 - Lock
+- Orbit-appropriate gate counts: 4/8 for a half-bar orbit, 8/16 for one or two bars, and 8/16/32 for four bars
 - Ring density when the selected planet has a ring
+
+The default inspector uses plain labels such as Loop speed and keeps the role-compatible sound chooser available without theory controls. Advanced planet controls reveal local sample import depth, detailed orbit rates and system sync, orbit-appropriate 6-, 12-, and 24-step polyrhythms, Chord and Melody Shape controls, surface detail, duplicate, and delete. The UI never presents a step count that creates an unnecessarily awkward density for the selected orbit.
 
 Sound and visual surface labels must remain distinct. Material names such as “Harmonic strata” describe appearance only and must not be presented as, or confused with, the selected sound preset.
 
@@ -213,6 +217,19 @@ The celestial appearance can be generated from the role and sound preset. Users 
 
 When a selected planet has a ring, the inspector exposes one plain-language Density control. Its active-segment count and role-specific musical result are described in text, and the visible fragments update with the control.
 
+## Sound library and local samples
+
+The selected planet always names its current sound and exposes one semantic sound select that groups the active star's recommended sounds first, then the remaining built-in role-compatible sounds, then any sounds imported on this device. Changing the sound does not rewrite the planet's notes, rhythm, orbit, or visible identity.
+
+The local import control uses progressive disclosure:
+
+- Beat planets can build a partial kit through individually labelled kick, snare, clap, closed-hat, open-hat, rim, and percussion file inputs. Empty slots retain the safe synthesized voice.
+- Bass, chord, melody, and texture planets can import one tonal sample. The app analyses its likely source note, presents that note in an editable labelled select, and transposes from the confirmed root into the existing Safe Harmony note map.
+- Import status and analysis results use a polite live region. File inputs, root correction, submission, and the resulting sound select remain keyboard accessible.
+- Copy explains that custom live audio remains on the current device. Share recipients and offline WAV use safe synthesized fallbacks, while MIDI remains sample-independent.
+
+Surprise remains a separate explicit action. The planet action changes one unlocked planet's sound, orbit, and pattern; the whole-system action changes all unlocked musical layers. Both are undoable and respect visible locks.
+
 ## Focus View
 
 Selecting “Edit pattern” opens a large circular sequencer.
@@ -221,10 +238,13 @@ Requirements:
 
 - Large enough for phone editing
 - Active events clearly distinguished by shape and brightness
-- Drag event around orbit to change timing
+- Main beat gates use the strongest landmark treatment; offbeat eighths use a clear secondary treatment; fine subdivisions remain quieter
+- The natural subset of 4/8/16/32 remains visible for the current ordinary orbit, with 6/12 on 1½ bars and 12/24 on 3 bars available when Advanced is active
+- Resizing remaps the existing pattern around the orbit and resolves collapsed events deterministically instead of randomizing it
 - Tap empty subdivision to add an event
 - Tap active event to select or remove
-- Optional linear grid accessibility alternative
+- A linear semantic grid is always available as the keyboard and screen-reader alternative
+- Active melody gates have labelled Lower and Raise controls for the safe scale
 - Playback head and current event clearly indicated
 - Haptic feedback when snapping, when available
 

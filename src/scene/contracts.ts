@@ -1,4 +1,5 @@
 import type { LoopBars, PlanetRole, StarPresetId } from "../domain/composition";
+import type { GateStepEmphasis } from "../domain/rhythm";
 import type {
   PlanetRingVisualMetrics,
   PlanetVisualKind,
@@ -36,6 +37,7 @@ export interface PlanetSceneDescriptor {
   soloed: boolean;
   locked: boolean;
   events: SceneEventDescriptor[];
+  gateSlots: SceneGateSlotDescriptor[];
   moons: MoonSceneDescriptor[];
   ringSegments: RingSegmentSceneDescriptor[];
 }
@@ -47,6 +49,14 @@ export interface SceneEventDescriptor {
   phase: number;
   /** Fixed orbit position where the moving planet meets this trigger. */
   gatePhase: number;
+}
+
+export interface SceneGateSlotDescriptor {
+  step: number;
+  gatePhase: number;
+  active: boolean;
+  emphasis: GateStepEmphasis;
+  pitchEventId?: string;
 }
 
 export interface RingSegmentSceneDescriptor {
@@ -105,4 +115,15 @@ export type SceneInteractionIntent =
       type: "set-orbit-phase";
       entityId: string;
       phase: number;
+    }
+  | {
+      type: "toggle-planet-gate";
+      entityId: string;
+      step: number;
+    }
+  | {
+      type: "shift-melody-gate-pitch";
+      entityId: string;
+      eventId: string;
+      scaleDegreeDelta: number;
     };

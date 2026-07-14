@@ -16,6 +16,13 @@ async function visibleInspector(
   return page.locator(".workspace .inspector");
 }
 
+async function enableAdvanced(inspector: Locator): Promise<void> {
+  const toggle = inspector.getByRole("button", {
+    name: "More planet controls",
+  });
+  if (await toggle.isVisible()) await toggle.click();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -64,7 +71,12 @@ test("completes the guided first-minute create and save flow", async ({
   await expect(page.getByText("Give it a different orbit")).toBeVisible();
 
   if (testInfo.project.name === "mobile-chrome") {
-    await page.getByLabel("Orbit rate", { exact: true }).selectOption("0.5");
+    await page.getByRole("button", { name: "Controls" }).click();
+    const editor = page.getByRole("dialog", {
+      name: "Objects and controls",
+    });
+    await editor.locator(".orbit-options button").first().click();
+    await editor.getByRole("button", { name: "Close object controls" }).click();
   } else {
     await page.locator(".orbit-options button").first().click();
   }
@@ -80,7 +92,7 @@ test("completes the guided first-minute create and save flow", async ({
     .getByRole("button", { name: "Edit circular pattern", exact: true })
     .click();
   await expect(page.getByRole("heading", { name: /pattern$/ })).toBeVisible();
-  await page.getByRole("button", { name: "Step 2", exact: true }).click();
+  await page.getByRole("button", { name: /^Step 2(?:, active)?$/ }).click();
   await page.getByRole("button", { name: "Close pattern editor" }).click();
 
   const saveButton = page.getByRole("button", { name: "Save", exact: true });
@@ -189,6 +201,95 @@ test("offers the full semantic editor on mobile", async ({
   ).toBeVisible();
 });
 
+test("shows a simple-mode sound choice for every planet role", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  const inspector = await visibleInspector(page, testInfo.project.name);
+  const objectScope =
+    testInfo.project.name === "mobile-chrome" ? inspector : page;
+
+  for (const role of ["beat", "bass", "chords", "melody", "texture"]) {
+    const objectButton = objectScope.getByRole("button", {
+      name: new RegExp(`, ${role} role,`),
+    });
+    if (testInfo.project.name === "mobile-chrome") {
+      await objectButton.focus();
+      await objectButton.press("Enter");
+    } else {
+      await objectButton.click();
+    }
+    const soundGroup = inspector.getByRole("group", { name: "Sound" });
+    await expect(soundGroup).toBeVisible();
+    await expect(soundGroup.getByLabel("Instrument or kit")).toBeVisible();
+  }
+});
+
+test("switches built-in sounds and imports a pitch-analysed local sample", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  await page.getByRole("button", { name: /, melody role,/ }).click();
+  const inspector = page.locator(".workspace .inspector");
+  const sound = inspector.getByLabel("Instrument or kit");
+
+  await expect(sound).toBeVisible();
+  await expect(sound.locator("option")).toHaveCount(6);
+  await sound.selectOption("deep-signal");
+  await expect(sound).toHaveValue("deep-signal");
+  await expect(inspector.locator(".selected-sound strong")).toHaveText(
+    "Deep Signal",
+  );
+
+  await inspector.getByText("Use your own sample", { exact: true }).click();
+  await inspector.getByLabel("Sound name").fill("My C Signal");
+  await inspector
+    .getByLabel("Audio sample")
+    .setInputFiles("public/audio/cosmic-samples/warm-pad-space-c4.ogg");
+  const importStatus = inspector.locator(".import-status");
+  await expect(importStatus).toContainText("Detected C4");
+  await expect(inspector.getByLabel("Source note")).toHaveValue("60");
+  await inspector
+    .getByRole("button", { name: "Add and use this sound" })
+    .click();
+  await expect(importStatus).toContainText(
+    "Sound added and kept in this browser.",
+  );
+  await expect(sound.locator("option:checked")).toHaveText("My C Signal");
+
+  await page.getByRole("button", { name: /, beat role,/ }).click();
+  await inspector.getByText("Build your own drum kit", { exact: true }).click();
+  await inspector
+    .getByLabel("Kick")
+    .setInputFiles("public/audio/cosmic-samples/techno-kick.ogg");
+  await inspector.getByRole("button", { name: "Add and use this kit" }).click();
+  await expect(inspector.locator(".import-status")).toContainText(
+    "Drum kit added and kept in this browser.",
+  );
+  await expect(
+    inspector.getByLabel("Instrument or kit").locator("option:checked"),
+  ).toHaveText("My beat sound");
+
+  await page.evaluate(() =>
+    localStorage.removeItem("cosmic-onboarding-version"),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  await page.getByRole("button", { name: /, melody role,/ }).click();
+  await expect(
+    inspector.getByLabel("Instrument or kit").locator("option", {
+      hasText: "My C Signal",
+    }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: /, beat role,/ }).click();
+  await expect(
+    inspector.getByLabel("Instrument or kit").locator("option", {
+      hasText: "My beat sound",
+    }),
+  ).toHaveCount(1);
+});
+
 test("shapes chord voicing and melody direction in the semantic inspector", async ({
   page,
 }, testInfo) => {
@@ -198,6 +299,7 @@ test("shapes chord voicing and melody direction in the semantic inspector", asyn
     testInfo.project.name === "mobile-chrome" ? inspector : page;
 
   await objectScope.getByRole("button", { name: /, chords role,/ }).click();
+  await enableAdvanced(inspector);
   const voicing = inspector.getByLabel("Voicing");
   const chordComplexity = inspector.getByLabel("Chord complexity");
   await expect(voicing).toBeVisible();
@@ -249,6 +351,7 @@ test("keeps the groove running through a live-control edit storm", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium");
+  test.setTimeout(60_000);
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
   page.on("console", (message) => {
@@ -269,14 +372,15 @@ test("keeps the groove running through a live-control edit storm", async ({
   };
 
   await streamRange(page.getByLabel("Tempo"), ["96", "128", "84", "121"]);
-  const macros = page.locator('.macro-control input[type="range"]');
-  await expect(macros).toHaveCount(5);
-  for (let index = 0; index < 5; index += 1) {
+  await page.getByRole("button", { name: "Show 6 advanced controls" }).click();
+  const macros = page.locator('.macro-knob input[type="range"]');
+  await expect(macros).toHaveCount(6);
+  for (let index = 0; index < 6; index += 1) {
     await streamRange(macros.nth(index), ["0.12", "0.88", "0.34", "0.67"]);
   }
 
   await page.getByRole("button", { name: /, chords role,/ }).click();
-  const inspector = page.locator(".inspector");
+  const inspector = page.locator(".workspace .inspector");
   await streamRange(inspector.getByLabel("Chord complexity"), [
     "0.1",
     "0.9",
@@ -327,6 +431,7 @@ test("deletes a planet with clear feedback and restores it with undo", async ({
   await exploreDemo.click();
   await expect(exploreDemo).toBeHidden();
   const inspector = await visibleInspector(page, testInfo.project.name);
+  await enableAdvanced(inspector);
   const planetName =
     (await inspector.locator(".selected-summary h2").textContent()) ?? "";
   expect(planetName).not.toBe("");
@@ -402,6 +507,7 @@ test("shows a 3-bar orbit and exports one complete 12-bar sync", async ({
   await expect(exploreDemo).toBeHidden();
 
   const inspector = await visibleInspector(page, testInfo.project.name);
+  await enableAdvanced(inspector);
   const deeperRates = inspector.getByLabel("More orbit rates");
   await deeperRates.selectOption("3");
   await expect(deeperRates).toHaveValue("3");
@@ -466,7 +572,7 @@ test("keeps material identity, gate presets, and Orbit Lab connected", async ({
   await expect(
     overlay.locator(".scene-material-identity strong"),
   ).not.toBeEmpty();
-  await expect(overlay).toContainText("Gates pulse when their event plays");
+  await expect(overlay).toContainText("Tap a slot to turn it on or off");
   await expect(overlay).toContainText("Radial drag · change loop");
   await expect(overlay).toContainText("Arc drag · rotate gates");
 
@@ -504,8 +610,9 @@ test("keeps material identity, gate presets, and Orbit Lab connected", async ({
     ),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Step 2", exact: true }).click();
-  await page.getByRole("button", { name: "Close pattern editor" }).click();
+  const pattern = page.getByRole("dialog", { name: /pattern/ });
+  await pattern.getByRole("button", { name: "Step 2", exact: true }).click();
+  await pattern.getByRole("button", { name: "Close pattern editor" }).click();
 
   inspector = await visibleInspector(page, testInfo.project.name);
   gateRhythm = inspector.getByLabel("Gate rhythm");
@@ -513,4 +620,145 @@ test("keeps material identity, gate presets, and Orbit Lab connected", async ({
   await expect(gateRhythm.locator("option:checked")).toHaveText(
     "Custom orbit gates",
   );
+});
+
+test("starts with simple controls and exposes both levels of safe surprise", async ({
+  page,
+}, testInfo) => {
+  const welcomeSurprise = page
+    .locator(".onboarding-enter")
+    .getByRole("button", { name: /^Surprise me/ });
+  await expect(welcomeSurprise).toBeVisible();
+  await welcomeSurprise.click();
+
+  await expect(
+    page.getByRole("button", { name: /Surprise me whole system/ }),
+  ).toBeVisible();
+  await expect(page.locator('.macro-knob input[type="range"]')).toHaveCount(3);
+
+  const advancedToggle = page.getByRole("button", {
+    name:
+      testInfo.project.name === "mobile-chrome"
+        ? "Advanced"
+        : "Show 6 advanced controls",
+  });
+  await advancedToggle.click();
+  await expect(page.locator('.macro-knob input[type="range"]')).toHaveCount(6);
+
+  const inspector = await visibleInspector(page, testInfo.project.name);
+  const planetSurprise = inspector
+    .getByRole("button", {
+      name: /Surprise this planet/,
+    })
+    .first();
+  await expect(planetSurprise).toBeVisible();
+  await planetSurprise.click();
+  await expect(page.getByText(/has a new safe musical idea/)).toBeVisible();
+});
+
+test("changes orbit detail from clear beats to advanced polyrhythms", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  const inspector = await visibleInspector(page, testInfo.project.name);
+
+  const expectStepChoices = async (
+    visible: readonly number[],
+    absent: readonly number[],
+  ) => {
+    for (const steps of visible) {
+      await expect(
+        inspector.getByRole("button", { name: `${steps} steps`, exact: true }),
+      ).toBeVisible();
+    }
+    for (const steps of absent) {
+      await expect(
+        inspector.getByRole("button", { name: `${steps} steps`, exact: true }),
+      ).toHaveCount(0);
+    }
+  };
+
+  await expectStepChoices([8, 16], [4, 32]);
+  await inspector.getByRole("button", { name: "½ bar orbit rate" }).click();
+  await expectStepChoices([4, 8], [16, 32]);
+
+  await inspector.getByRole("button", { name: "2 bars orbit rate" }).click();
+  await expectStepChoices([8, 16], [4, 32]);
+
+  await inspector.getByRole("button", { name: "4 bars orbit rate" }).click();
+  await expectStepChoices([8, 16, 32], [4]);
+
+  await enableAdvanced(inspector);
+  const deeperRates = inspector.getByLabel("More orbit rates");
+  await deeperRates.selectOption("1.5");
+  for (const steps of [6, 12]) {
+    await expect(
+      inspector.getByRole("button", {
+        name: `${steps} polyrhythm steps`,
+        exact: true,
+      }),
+    ).toBeVisible();
+  }
+  await expect(
+    inspector.getByRole("button", {
+      name: "24 polyrhythm steps",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+
+  await deeperRates.selectOption("3");
+  for (const steps of [12, 24]) {
+    await expect(
+      inspector.getByRole("button", {
+        name: `${steps} polyrhythm steps`,
+        exact: true,
+      }),
+    ).toBeVisible();
+  }
+  await expect(
+    inspector.getByRole("button", {
+      name: "6 polyrhythm steps",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await inspector
+    .getByRole("button", { name: "12 polyrhythm steps", exact: true })
+    .click();
+  await inspector
+    .getByRole("button", { name: "Edit circular pattern" })
+    .click();
+
+  const pattern = page.getByRole("dialog", { name: /pattern/ });
+  await expect(pattern.locator(".linear-pattern button")).toHaveCount(12);
+  await expect(
+    pattern.getByRole("button", { name: /^Step 1(?:, active)?$/ }),
+  ).toHaveAttribute("aria-description", "Main beat");
+});
+
+test("offers keyboard pitch nudges for melodic gates", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Explore the demo" }).click();
+  let melody = page.getByRole("button", { name: /, melody role,/ });
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("button", { name: "Controls" }).click();
+    melody = page
+      .getByRole("dialog", { name: "Objects and controls" })
+      .getByRole("button", { name: /, melody role,/ });
+  }
+  await melody.click();
+  const inspector =
+    testInfo.project.name === "mobile-chrome"
+      ? page.getByRole("dialog", { name: "Objects and controls" })
+      : page.locator(".workspace .inspector");
+  await inspector
+    .getByRole("button", { name: "Edit circular pattern" })
+    .click();
+  const pitchUp = page
+    .getByRole("button", { name: /Raise gate \d+ pitch/ })
+    .first();
+  await expect(pitchUp).toBeVisible();
+  await pitchUp.focus();
+  await page.keyboard.press("Enter");
+  await expect(pitchUp).toBeFocused();
 });

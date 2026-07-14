@@ -64,8 +64,8 @@ export function ProjectMenu(props: ProjectMenuProps) {
           <small>A portable safety copy</small>
         </button>
         <button type="button" onClick={props.onSurprise}>
-          <span>Surprise me</span>
-          <small>Regenerate the unlocked system</small>
+          <span>Surprise whole system</span>
+          <small>New safe groove across every unlocked element</small>
         </button>
       </div>
       <section className="showcase-picker" aria-labelledby="showcase-heading">

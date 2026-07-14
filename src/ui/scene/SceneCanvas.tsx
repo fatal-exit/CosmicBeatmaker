@@ -20,6 +20,12 @@ export interface SceneCanvasProps {
   onSelect: (id: string | null) => void;
   onOrbitLoopBarsChange?: (planetId: string, loopBars: LoopBars) => void;
   onOrbitPhaseChange?: (planetId: string, phase: number) => void;
+  onGateToggle?: (planetId: string, step: number) => void;
+  onMelodyGatePitchShift?: (
+    planetId: string,
+    eventId: string,
+    scaleDegreeDelta: number,
+  ) => void;
 }
 
 export function SceneCanvas({
@@ -33,6 +39,8 @@ export function SceneCanvas({
   onSelect,
   onOrbitLoopBarsChange,
   onOrbitPhaseChange,
+  onGateToggle,
+  onMelodyGatePitchShift,
 }: SceneCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
@@ -62,10 +70,27 @@ export function SceneCanvas({
             case "set-orbit-phase":
               onOrbitPhaseChange?.(intent.entityId, intent.phase);
               break;
+            case "toggle-planet-gate":
+              onGateToggle?.(intent.entityId, intent.step);
+              break;
+            case "shift-melody-gate-pitch":
+              onMelodyGatePitchShift?.(
+                intent.entityId,
+                intent.eventId,
+                intent.scaleDegreeDelta,
+              );
+              break;
           }
         },
       }),
-    [onOrbitLoopBarsChange, onOrbitPhaseChange, onSelect, readTransportTicks],
+    [
+      onGateToggle,
+      onMelodyGatePitchShift,
+      onOrbitLoopBarsChange,
+      onOrbitPhaseChange,
+      onSelect,
+      readTransportTicks,
+    ],
   );
 
   useEffect(() => {

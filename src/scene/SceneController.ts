@@ -61,6 +61,7 @@ interface RuntimePlanet {
   body: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   outline: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   eventNodes: Map<string, THREE.Mesh>;
+  gateSlots: THREE.Group;
   moons: RuntimeMoon[];
   spawnMarker: THREE.Mesh | null;
   spawnMarkerStartedAt: number;
@@ -85,12 +86,25 @@ interface RuntimeDeepSpaceMaterials {
 
 export type PlanetDragMode = "radial" | "tangential";
 
-type PointerGestureMode = PlanetDragMode | "camera-rotate";
+type PointerGestureMode = PlanetDragMode | "camera-rotate" | "gate-pitch";
+type PointerTargetKind = "entity" | "orbit" | "gate";
+
+interface PointerTarget {
+  entityId: string | null;
+  kind: PointerTargetKind;
+  object?: THREE.Object3D;
+  gateStep?: number;
+  pitchEventId?: string;
+}
 
 interface PointerGesture {
   pointerId: number;
   entityId: string | null;
+  targetKind: PointerTargetKind;
   planet?: RuntimePlanet;
+  gateObject?: THREE.Object3D;
+  gateStep?: number;
+  pitchEventId?: string;
   startX: number;
   startY: number;
   radialX: number;
@@ -101,6 +115,7 @@ interface PointerGesture {
   startCameraTilt: number;
   previewLoopBars?: LoopBars;
   previewPhase?: number;
+  previewPitchDelta?: number;
 }
 
 interface ActivePointer {
@@ -151,6 +166,7 @@ const defaultPreferences: VisualPreferences = {
 
 const DRAG_THRESHOLD_PX = 7;
 const PIXELS_PER_ORBIT_SHELL = 44;
+const PIXELS_PER_MELODY_PITCH_STEP = 26;
 const SPAWN_MARKER_DURATION_MS = 3_200;
 const MAX_ACTIVE_DESTRUCTION_EFFECTS = 2;
 const CAMERA_DEFAULT_POSITION = { y: 8.8, z: 10.5 } as const;
@@ -420,6 +436,14 @@ export function phaseFromTangentialDrag(
     Math.cos(currentAngle - startAngle),
   );
   return (((startPhase + angleDelta / (Math.PI * 2)) % 1) + 1) % 1;
+}
+
+export function pitchStepsFromRadialDrag(
+  radialDistance: number,
+  pixelsPerStep = PIXELS_PER_MELODY_PITCH_STEP,
+): number {
+  if (!Number.isFinite(radialDistance) || pixelsPerStep <= 0) return 0;
+  return clamp(Math.round(radialDistance / pixelsPerStep), -7, 7);
 }
 
 function colorFromHue(hue: number, lightness = 0.62): THREE.Color {
@@ -1062,7 +1086,10 @@ export class SceneController {
       transparent: true,
       opacity: descriptor.muted ? 0.1 : 0.3,
     });
-    group.add(new THREE.LineLoop(orbitGeometry, orbitMaterial));
+    const orbit = new THREE.LineLoop(orbitGeometry, orbitMaterial);
+    orbit.userData.entityId = descriptor.id;
+    orbit.userData.orbitControl = true;
+    group.add(orbit);
 
     const bodyGeometry = new THREE.IcosahedronGeometry(
       descriptor.size,
@@ -1110,6 +1137,103 @@ export class SceneController {
     hit.userData.entityId = descriptor.id;
     body.add(hit);
 
+    const gateSlots = new THREE.Group();
+    gateSlots.name = "editable-gate-slots";
+    gateSlots.visible = descriptor.id === this.selectedId;
+    const gateSlotGeometry = new THREE.TorusGeometry(
+      Math.max(0.14, descriptor.gateRadius * 0.52),
+      0.018,
+      5,
+      14,
+    );
+    const gateSlotMaterials = {
+      active: {
+        beat: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 30, 0.86),
+          transparent: true,
+          opacity: descriptor.muted ? 0.24 : 0.88,
+          depthWrite: false,
+        }),
+        offbeat: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 24, 0.76),
+          transparent: true,
+          opacity: descriptor.muted ? 0.2 : 0.7,
+          depthWrite: false,
+        }),
+        subdivision: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 20, 0.68),
+          transparent: true,
+          opacity: descriptor.muted ? 0.16 : 0.52,
+          depthWrite: false,
+        }),
+      },
+      inactive: {
+        beat: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 28, 0.64),
+          transparent: true,
+          opacity: descriptor.muted ? 0.1 : 0.42,
+          depthWrite: false,
+        }),
+        offbeat: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 22, 0.55),
+          transparent: true,
+          opacity: descriptor.muted ? 0.08 : 0.28,
+          depthWrite: false,
+        }),
+        subdivision: new THREE.MeshBasicMaterial({
+          color: colorFromHue(descriptor.hue + 18, 0.46),
+          transparent: true,
+          opacity: descriptor.muted ? 0.06 : 0.14,
+          depthWrite: false,
+        }),
+      },
+    };
+    const gateSlotHitGeometry = new THREE.SphereGeometry(
+      Math.max(0.24, descriptor.gateRadius * 0.88),
+      6,
+      4,
+    );
+    const gateSlotHitMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    for (const slot of descriptor.gateSlots) {
+      const slotNode = new THREE.Mesh(
+        gateSlotGeometry,
+        gateSlotMaterials[slot.active ? "active" : "inactive"][slot.emphasis],
+      );
+      const emphasisScale =
+        slot.emphasis === "beat"
+          ? 1.34
+          : slot.emphasis === "offbeat"
+            ? 1.14
+            : 1;
+      slotNode.scale.setScalar(emphasisScale);
+      setOrbitPosition(
+        slotNode,
+        slot.gatePhase,
+        descriptor.orbitRadius,
+        descriptor.inclination,
+      );
+      orientAcrossOrbit(slotNode, slot.gatePhase);
+      slotNode.userData.entityId = descriptor.id;
+      slotNode.userData.planetGateSlot = true;
+      slotNode.userData.gateStep = slot.step;
+      slotNode.userData.gateEmphasis = slot.emphasis;
+      slotNode.userData.pitchEventId = slot.pitchEventId;
+
+      const slotHit = new THREE.Mesh(gateSlotHitGeometry, gateSlotHitMaterial);
+      slotHit.userData.entityId = descriptor.id;
+      slotHit.userData.planetGateSlot = true;
+      slotHit.userData.gateStep = slot.step;
+      slotHit.userData.gateEmphasis = slot.emphasis;
+      slotHit.userData.pitchEventId = slot.pitchEventId;
+      slotNode.add(slotHit);
+      gateSlots.add(slotNode);
+    }
+    group.add(gateSlots);
+
     if (descriptor.events.length > 0) {
       const nodeGeometry = new THREE.TorusGeometry(
         descriptor.gateRadius,
@@ -1136,6 +1260,21 @@ export class SceneController {
         node.userData.entityId = descriptor.id;
         node.userData.eventId = event.eventId;
         node.userData.orbitGate = true;
+        const canonicalSlot = descriptor.gateSlots.find(
+          (slot) => slot.step === event.step && slot.active,
+        );
+        if (canonicalSlot) {
+          node.userData.planetGateSlot = true;
+          node.userData.gateStep = canonicalSlot.step;
+          node.userData.pitchEventId = canonicalSlot.pitchEventId;
+          const emphasisScale =
+            canonicalSlot.emphasis === "beat"
+              ? 1.18
+              : canonicalSlot.emphasis === "offbeat"
+                ? 1.08
+                : 1;
+          node.scale.setScalar(emphasisScale);
+        }
         attachGateRipple(
           node,
           nodeGeometry,
@@ -1280,6 +1419,7 @@ export class SceneController {
       body,
       outline,
       eventNodes,
+      gateSlots,
       moons,
       spawnMarker,
       spawnMarkerStartedAt,
@@ -1472,6 +1612,7 @@ export class SceneController {
         muted: runtime.descriptor.muted,
       });
       runtime.body.scale.setScalar(selected ? 1.08 : 1);
+      runtime.gateSlots.visible = selected;
     }
     if (this.star) {
       const selected = this.star.descriptor.id === this.selectedId;
@@ -1481,19 +1622,56 @@ export class SceneController {
     }
   }
 
-  private entityAtPointer(event: PointerEvent): string | null {
-    if (!this.canvas || !this.camera || !this.scene) return null;
+  private targetAtPointer(event: PointerEvent): PointerTarget {
+    if (!this.canvas || !this.camera || !this.scene) {
+      return { entityId: null, kind: "entity" };
+    }
     const bounds = this.canvas.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return null;
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      return { entityId: null, kind: "entity" };
+    }
     this.pointer.set(
       ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
       -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hit = this.raycaster
-      .intersectObjects(this.scene.children, true)
-      .find((intersection) => intersection.object.userData.entityId);
-    return (hit?.object.userData.entityId as string | undefined) ?? null;
+    this.raycaster.params.Line = { threshold: 0.22 };
+    for (const intersection of this.raycaster.intersectObjects(
+      this.scene.children,
+      true,
+    )) {
+      let object: THREE.Object3D | null = intersection.object;
+      let hierarchyVisible = true;
+      for (
+        let visibilityObject: THREE.Object3D | null = object;
+        visibilityObject;
+        visibilityObject = visibilityObject.parent
+      ) {
+        if (!visibilityObject.visible) hierarchyVisible = false;
+      }
+      if (!hierarchyVisible) continue;
+
+      while (object) {
+        const entityId = object.userData.entityId as string | undefined;
+        if (entityId) {
+          if (object.userData.planetGateSlot) {
+            return {
+              entityId,
+              kind: "gate",
+              object,
+              gateStep: object.userData.gateStep as number,
+              pitchEventId: object.userData.pitchEventId as string | undefined,
+            };
+          }
+          if (object.userData.orbitControl) {
+            return { entityId, kind: "orbit", object };
+          }
+          return { entityId, kind: "entity", object };
+        }
+        object = object.parent;
+      }
+    }
+    return { entityId: null, kind: "entity" };
   }
 
   private systemCenterInClient(): { x: number; y: number } | null {
@@ -1626,7 +1804,8 @@ export class SceneController {
       return;
     }
     if (this.gesture) return;
-    const entityId = this.entityAtPointer(event);
+    const target = this.targetAtPointer(event);
+    const entityId = target.entityId;
     const center = this.systemCenterInClient();
     if (!center) {
       this.activePointers.delete(event.pointerId);
@@ -1644,7 +1823,11 @@ export class SceneController {
     this.gesture = {
       pointerId: event.pointerId,
       entityId,
+      targetKind: target.kind,
       planet,
+      gateObject: target.object,
+      gateStep: target.gateStep,
+      pitchEventId: target.pitchEventId,
       startX: event.clientX,
       startY: event.clientY,
       radialX: offsetX / length,
@@ -1695,6 +1878,48 @@ export class SceneController {
       this.setCameraOrientation(
         sceneRotationFromDrag(gesture.startCameraRotation, deltaX),
         sceneTiltFromDrag(gesture.startCameraTilt, deltaY),
+      );
+      event.preventDefault();
+      return;
+    }
+
+    if (gesture.targetKind === "gate") {
+      if (!gesture.pitchEventId) return;
+      const radialDistance =
+        deltaX * gesture.radialX + deltaY * gesture.radialY;
+      if (
+        gesture.mode === null &&
+        Math.abs(radialDistance) >= DRAG_THRESHOLD_PX
+      ) {
+        gesture.mode = "gate-pitch";
+      }
+      if (gesture.mode !== "gate-pitch") return;
+      gesture.previewPitchDelta = pitchStepsFromRadialDrag(radialDistance);
+      gesture.gateObject?.scale.setScalar(
+        1 + Math.abs(gesture.previewPitchDelta) * 0.06,
+      );
+      event.preventDefault();
+      return;
+    }
+
+    if (gesture.targetKind === "orbit") {
+      if (
+        gesture.mode === null &&
+        Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD_PX
+      ) {
+        gesture.mode = "tangential";
+      }
+      if (gesture.mode !== "tangential") return;
+      const center = this.systemCenterInClient();
+      if (!center) return;
+      const currentAngle = Math.atan2(
+        event.clientY - center.y,
+        event.clientX - center.x,
+      );
+      gesture.previewPhase = phaseFromTangentialDrag(
+        gesture.planet.descriptor.phase,
+        gesture.startAngle,
+        currentAngle,
       );
       event.preventDefault();
       return;
@@ -1753,7 +1978,32 @@ export class SceneController {
       this.releasePointerCapture(event.pointerId);
       return;
     }
-    if (gesture.mode === "radial" && gesture.planet) {
+    if (
+      gesture.mode === "gate-pitch" &&
+      gesture.planet &&
+      gesture.pitchEventId
+    ) {
+      const scaleDegreeDelta = gesture.previewPitchDelta ?? 0;
+      if (scaleDegreeDelta !== 0) {
+        this.options.onInteraction?.({
+          type: "shift-melody-gate-pitch",
+          entityId: gesture.planet.descriptor.id,
+          eventId: gesture.pitchEventId,
+          scaleDegreeDelta,
+        });
+      }
+    } else if (
+      gesture.targetKind === "gate" &&
+      gesture.mode === null &&
+      gesture.planet &&
+      gesture.gateStep !== undefined
+    ) {
+      this.options.onInteraction?.({
+        type: "toggle-planet-gate",
+        entityId: gesture.planet.descriptor.id,
+        step: gesture.gateStep,
+      });
+    } else if (gesture.mode === "radial" && gesture.planet) {
       const loopBars =
         gesture.previewLoopBars ?? gesture.planet.descriptor.loopBars;
       if (loopBars !== gesture.planet.descriptor.loopBars) {
@@ -1818,6 +2068,7 @@ export class SceneController {
     ) {
       this.releasePointerCapture(this.gesture.pointerId);
     }
+    this.gesture?.gateObject?.scale.setScalar(1);
     this.gesture = null;
   }
 

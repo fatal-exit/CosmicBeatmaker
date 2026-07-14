@@ -18,7 +18,6 @@ import {
   getSampleVoicePreset,
   resolveAudioSampleUrl,
   type AudioSampleAssetDefinition,
-  type AudioSampleId,
   type DrumSampleVoiceDefinition,
   type PitchedSampleVoiceDefinition,
   type SampleVoiceDefinition,
@@ -954,7 +953,7 @@ interface DrumSampleState {
 class DrumSampleVoice implements OptionalSampleVoice {
   private readonly strip: TrackStrip;
   private readonly statesByVoice = new Map<DrumVoiceId, DrumSampleState>();
-  private readonly uniqueStates = new Map<AudioSampleId, DrumSampleState>();
+  private readonly uniqueStates = new Map<string, DrumSampleState>();
   private readonly events: RuntimeVoiceEventPool;
   private disposed = false;
 
@@ -966,7 +965,7 @@ class DrumSampleVoice implements OptionalSampleVoice {
     this.strip = new TrackStrip(track, output, 0.34);
     for (const [drumVoice, sampleId] of Object.entries(definition.samples) as [
       DrumVoiceId,
-      AudioSampleId,
+      string,
     ][]) {
       let state = this.uniqueStates.get(sampleId);
       if (!state) {

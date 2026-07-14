@@ -9,33 +9,155 @@ export interface SoundPresetDefinition {
   id: string;
   name: string;
   role: PlanetRole;
+  description: string;
+  source?: "first-party" | "user";
 }
 
 export const SOUND_PRESETS = [
-  { id: "clean-orbit", name: "Clean Orbit", role: "beat" },
-  { id: "soft-impact", name: "Soft Impact", role: "beat" },
-  { id: "small-dry", name: "Small Dry", role: "beat" },
-  { id: "metallic-array", name: "Metallic Array", role: "beat" },
-  { id: "heavy-void", name: "Heavy Void", role: "beat" },
-  { id: "deep-sub", name: "Deep Sub", role: "bass" },
-  { id: "warm-pulse", name: "Warm Pulse", role: "bass" },
-  { id: "rough-drive", name: "Rough Drive", role: "bass" },
-  { id: "cosmic-drone", name: "Cosmic Drone", role: "bass" },
-  { id: "warm-pad", name: "Warm Pad", role: "chords" },
-  { id: "soft-keys", name: "Soft Keys", role: "chords" },
-  { id: "glass-chords", name: "Glass Chords", role: "chords" },
-  { id: "pulsing-synth", name: "Pulsing Synth", role: "chords" },
-  { id: "ice-bell", name: "Ice Bell", role: "melody" },
-  { id: "star-pluck", name: "Star Pluck", role: "melody" },
-  { id: "signal-lead", name: "Signal Lead", role: "melody" },
-  { id: "organic-mallet", name: "Organic Mallet", role: "melody" },
-  { id: "midnight-lead", name: "Midnight Lead · Pilot", role: "melody" },
-  { id: "deep-signal", name: "Deep Signal · Pilot", role: "melody" },
-  { id: "dust", name: "Dust", role: "texture" },
-  { id: "radio", name: "Radio", role: "texture" },
-  { id: "nebula", name: "Nebula", role: "texture" },
-  { id: "mechanical", name: "Mechanical", role: "texture" },
-  { id: "void-drone", name: "Void Drone", role: "texture" },
+  {
+    id: "clean-orbit",
+    name: "Clean Orbit",
+    role: "beat",
+    description: "Tight electronic drums with a clear kick and bright hats.",
+  },
+  {
+    id: "soft-impact",
+    name: "Soft Impact",
+    role: "beat",
+    description: "Rounded hits with a gentle, spacious upper layer.",
+  },
+  {
+    id: "small-dry",
+    name: "Small Dry",
+    role: "beat",
+    description: "Compact percussion with short room reflections.",
+  },
+  {
+    id: "metallic-array",
+    name: "Metallic Array",
+    role: "beat",
+    description: "Mechanical transients, bright metal, and a wide tail.",
+  },
+  {
+    id: "heavy-void",
+    name: "Heavy Void",
+    role: "beat",
+    description: "Weighty low hits with dark, distant percussion.",
+  },
+  {
+    id: "deep-sub",
+    name: "Deep Sub",
+    role: "bass",
+    description: "Clean low fundamentals with a short, controlled tail.",
+  },
+  {
+    id: "warm-pulse",
+    name: "Warm Pulse",
+    role: "bass",
+    description: "Rounded bass with enough midrange to read on phones.",
+  },
+  {
+    id: "rough-drive",
+    name: "Rough Drive",
+    role: "bass",
+    description: "A longer, textured bass for energetic systems.",
+  },
+  {
+    id: "cosmic-drone",
+    name: "Cosmic Drone",
+    role: "bass",
+    description: "Sustained sub weight for slow and spacious grooves.",
+  },
+  {
+    id: "warm-pad",
+    name: "Warm Pad",
+    role: "chords",
+    description: "A broad harmonic bed with a long authored space.",
+  },
+  {
+    id: "soft-keys",
+    name: "Soft Keys",
+    role: "chords",
+    description: "Gentle keys with a clear attack and stereo room.",
+  },
+  {
+    id: "glass-chords",
+    name: "Glass Chords",
+    role: "chords",
+    description: "Bright consonant tones with a shimmering tail.",
+  },
+  {
+    id: "pulsing-synth",
+    name: "Pulsing Synth",
+    role: "chords",
+    description: "A focused electronic chord voice with rhythmic energy.",
+  },
+  {
+    id: "ice-bell",
+    name: "Ice Bell",
+    role: "melody",
+    description: "A high, clean lead for small sparkling motifs.",
+  },
+  {
+    id: "star-pluck",
+    name: "Star Pluck",
+    role: "melody",
+    description: "A centered pluck that stays clear in busy loops.",
+  },
+  {
+    id: "signal-lead",
+    name: "Signal Lead",
+    role: "melody",
+    description: "A sustained bright signal with a spacious finish.",
+  },
+  {
+    id: "organic-mallet",
+    name: "Organic Mallet",
+    role: "melody",
+    description: "A lower, rounded voice for warmer melodic lines.",
+  },
+  {
+    id: "midnight-lead",
+    name: "Midnight Lead",
+    role: "melody",
+    description: "A long mid-register lead with a darker character.",
+  },
+  {
+    id: "deep-signal",
+    name: "Deep Signal",
+    role: "melody",
+    description: "A low sustained lead for sparse call-and-response.",
+  },
+  {
+    id: "dust",
+    name: "Dust",
+    role: "texture",
+    description: "Soft filtered particles with a short reverb trail.",
+  },
+  {
+    id: "radio",
+    name: "Radio",
+    role: "texture",
+    description: "Narrow-band signals floating in a stereo space.",
+  },
+  {
+    id: "nebula",
+    name: "Nebula",
+    role: "texture",
+    description: "A diffuse atmosphere with a long, smooth tail.",
+  },
+  {
+    id: "mechanical",
+    name: "Mechanical",
+    role: "texture",
+    description: "Rhythmic machine detail with metallic reflections.",
+  },
+  {
+    id: "void-drone",
+    name: "Void Drone",
+    role: "texture",
+    description: "A quiet low drone that leaves room around the beat.",
+  },
 ] as const satisfies readonly SoundPresetDefinition[];
 
 export type SoundPresetId = (typeof SOUND_PRESETS)[number]["id"];
@@ -122,6 +244,7 @@ export function resolveAudioSampleUrl(
   assetUrl: string,
   baseUrl = import.meta.env.BASE_URL,
 ): string {
+  if (/^(?:blob:|data:)/u.test(assetUrl)) return assetUrl;
   const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   return `${normalizedBase}${assetUrl.replace(/^\/+/, "")}`;
 }
@@ -318,12 +441,12 @@ export type AudioSampleId = (typeof AUDIO_SAMPLE_MANIFEST)[number]["id"];
 
 export interface DrumSampleVoiceDefinition {
   kind: "drum-kit";
-  samples: Partial<Record<DrumVoiceId, AudioSampleId>>;
+  samples: Partial<Record<DrumVoiceId, string>>;
 }
 
 export interface PitchedSampleVoiceDefinition {
   kind: "pitched";
-  sampleId: AudioSampleId;
+  sampleId: string;
   /** MIDI pitch captured in the source file; Tone.js transposes from here. */
   rootMidi: number;
 }
@@ -523,10 +646,10 @@ export const SAMPLE_VOICE_PRESETS = {
   SampleVoiceDefinition
 >;
 
-export function getAudioSampleAsset(
-  id: AudioSampleId,
-): (typeof AUDIO_SAMPLE_MANIFEST)[number] {
-  const asset = AUDIO_SAMPLE_MANIFEST.find((sample) => sample.id === id);
+export function getAudioSampleAsset(id: string): AudioSampleAssetDefinition {
+  const asset =
+    USER_SAMPLE_ASSETS.get(id) ??
+    AUDIO_SAMPLE_MANIFEST.find((sample) => sample.id === id);
   if (!asset) throw new Error(`Unknown audio sample asset: ${id}`);
   return asset;
 }
@@ -534,7 +657,10 @@ export function getAudioSampleAsset(
 export function getSampleVoicePreset(
   presetId: string,
 ): SampleVoiceDefinition | undefined {
-  return SAMPLE_VOICE_PRESETS[presetId as keyof typeof SAMPLE_VOICE_PRESETS];
+  return (
+    USER_SAMPLE_VOICE_PRESETS.get(presetId) ??
+    SAMPLE_VOICE_PRESETS[presetId as keyof typeof SAMPLE_VOICE_PRESETS]
+  );
 }
 
 export const STAR_SOUND_PALETTES = {
@@ -581,5 +707,78 @@ export const STAR_SOUND_PALETTES = {
 export function getSoundPresetsForRole(
   role: PlanetRole,
 ): readonly SoundPresetDefinition[] {
-  return SOUND_PRESETS.filter((preset) => preset.role === role);
+  return [
+    ...SOUND_PRESETS.filter((preset) => preset.role === role),
+    ...[...USER_SOUND_PRESETS.values()].filter(
+      (preset) => preset.role === role,
+    ),
+  ];
+}
+
+const USER_SOUND_PRESETS = new Map<string, SoundPresetDefinition>();
+const USER_SAMPLE_VOICE_PRESETS = new Map<string, SampleVoiceDefinition>();
+const USER_SAMPLE_ASSETS = new Map<string, AudioSampleAssetDefinition>();
+const USER_SOUND_OBJECT_URLS = new Map<string, string[]>();
+
+export interface UserSoundRegistration {
+  preset: SoundPresetDefinition;
+  voice: SampleVoiceDefinition;
+  assets: readonly AudioSampleAssetDefinition[];
+}
+
+/** Registers one local-only sound without placing Blob data in composition state. */
+export function registerUserSound({
+  preset,
+  voice,
+  assets,
+}: UserSoundRegistration): void {
+  unregisterUserSound(preset.id);
+  USER_SOUND_PRESETS.set(preset.id, { ...preset, source: "user" });
+  USER_SAMPLE_VOICE_PRESETS.set(preset.id, voice);
+  const objectUrls: string[] = [];
+  for (const asset of assets) {
+    USER_SAMPLE_ASSETS.set(asset.id, asset);
+    if (asset.url.startsWith("blob:")) objectUrls.push(asset.url);
+  }
+  USER_SOUND_OBJECT_URLS.set(preset.id, objectUrls);
+}
+
+export function unregisterUserSound(presetId: string): void {
+  const voice = USER_SAMPLE_VOICE_PRESETS.get(presetId);
+  if (voice?.kind === "drum-kit") {
+    for (const sampleId of Object.values(voice.samples)) {
+      if (sampleId) USER_SAMPLE_ASSETS.delete(sampleId);
+    }
+  } else if (voice?.kind === "pitched") {
+    USER_SAMPLE_ASSETS.delete(voice.sampleId);
+  }
+  for (const url of USER_SOUND_OBJECT_URLS.get(presetId) ?? []) {
+    URL.revokeObjectURL(url);
+  }
+  USER_SOUND_OBJECT_URLS.delete(presetId);
+  USER_SAMPLE_VOICE_PRESETS.delete(presetId);
+  USER_SOUND_PRESETS.delete(presetId);
+}
+
+export function clearUserSounds(): void {
+  for (const presetId of [...USER_SOUND_PRESETS.keys()]) {
+    unregisterUserSound(presetId);
+  }
+}
+
+export function getSoundPresetDefinition(
+  presetId: string,
+): SoundPresetDefinition | undefined {
+  return (
+    USER_SOUND_PRESETS.get(presetId) ??
+    SOUND_PRESETS.find((preset) => preset.id === presetId)
+  );
+}
+
+export function getUserSoundPresets(): readonly SoundPresetDefinition[] {
+  return [...USER_SOUND_PRESETS.values()];
+}
+
+export function isUserSoundPreset(presetId: string): boolean {
+  return USER_SOUND_PRESETS.has(presetId) || presetId.startsWith("user-sound_");
 }

@@ -1,3 +1,4 @@
+import { getSoundPresetDefinition } from "../../content/soundPresets";
 import type { Composition } from "../../domain/composition";
 import { PLANET_MATERIAL_PROFILES } from "../../scene/materials/profiles";
 import {
@@ -9,6 +10,7 @@ export interface ObjectListProps {
   composition: Composition;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  advanced?: boolean;
   headingId?: string;
 }
 
@@ -16,10 +18,15 @@ export function ObjectList({
   composition,
   selectedId,
   onSelect,
+  advanced = false,
   headingId = "object-list-heading",
 }: ObjectListProps) {
   return (
-    <nav className="object-panel" aria-labelledby={headingId}>
+    <nav
+      className="object-panel"
+      aria-labelledby={headingId}
+      data-advanced={advanced}
+    >
       <div className="panel-heading-row">
         <div>
           <p className="panel-label">Navigator</p>
@@ -37,11 +44,14 @@ export function ObjectList({
           <span aria-hidden="true" className="object-symbol star-symbol" />
           <span>
             <strong>{composition.star.presetId.replace("-", " ")} star</strong>
-            <small>Sets mood and harmony</small>
+            <small>{advanced ? "Sets mood and harmony" : "System mood"}</small>
           </span>
         </button>
         {composition.planets.map((planet) => {
           const material = PLANET_MATERIAL_PROFILES[planet.role];
+          const soundName =
+            getSoundPresetDefinition(planet.soundPresetId)?.name ??
+            planet.soundPresetId.replaceAll("-", " ");
 
           return (
             <button
@@ -50,7 +60,7 @@ export function ObjectList({
               key={planet.id}
               onClick={() => onSelect(planet.id)}
               aria-pressed={selectedId === planet.id}
-              aria-label={`${planet.name}, ${planet.role} role, ${material.label} material, ${planet.soundPresetId} sound, ${formatOrbitLoop(planet.orbit.loopBars)}, ${planet.moons.length} ${planet.moons.length === 1 ? "moon" : "moons"}${planet.ring ? ", rhythmic ring" : ""}${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
+              aria-label={`${planet.name}, ${planet.role} role, ${material.label} material, ${soundName} sound, ${formatOrbitLoop(planet.orbit.loopBars)}, ${planet.moons.length} ${planet.moons.length === 1 ? "moon" : "moons"}${planet.ring ? ", rhythmic ring" : ""}${planet.muted ? ", muted" : ""}${planet.soloed ? ", soloed" : ""}${planet.locked ? ", locked" : ""}`}
             >
               <span
                 aria-hidden="true"
@@ -59,14 +69,21 @@ export function ObjectList({
               <span>
                 <strong>{planet.name}</strong>
                 <small>
-                  {planet.role} ·{" "}
-                  <span className="object-material-label">
-                    {material.label}
-                  </span>{" "}
-                  · {formatOrbitRate(planet.orbit.loopBars)}
-                  {planet.moons.length > 0
-                    ? ` · ${planet.moons.length} moon${planet.moons.length === 1 ? "" : "s"}`
-                    : ""}
+                  {planet.role} · {soundName}
+                  {advanced ? (
+                    <>
+                      {" · "}
+                      <span className="object-material-label">
+                        {material.label}
+                      </span>{" "}
+                      · {formatOrbitRate(planet.orbit.loopBars)}
+                      {planet.moons.length > 0
+                        ? ` · ${planet.moons.length} moon${planet.moons.length === 1 ? "" : "s"}`
+                        : ""}
+                    </>
+                  ) : planet.ring ? (
+                    " · ring"
+                  ) : null}
                   {planet.muted ? " · muted" : ""}
                 </small>
               </span>

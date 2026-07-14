@@ -131,6 +131,8 @@ export interface PlanetState {
 }
 ```
 
+`soundPresetId` may identify a built-in data preset or a locally registered user sound. User-audio Blob data is never embedded in `Composition`, history, share URLs, JSON, MIDI, or the schema. A local user-sound repository resolves that stable ID on the originating device; when it cannot, the existing role-safe synthesized voice is the runtime and offline fallback.
+
 ```ts
 export type PlanetExpressionState =
   | {
@@ -170,7 +172,7 @@ Prefer events over a fixed global 64-step grid.
 
 ```ts
 export interface PatternState {
-  gridSize: 8 | 12 | 16 | 24 | 32;
+  gridSize: 4 | 6 | 8 | 12 | 16 | 24 | 32;
   events: PatternEvent[];
   templateId?: string;
   humanize: number;
@@ -197,13 +199,11 @@ export interface PatternEvent {
 0 <= step < gridSize;
 ```
 
-Planet rate edits into the 1.5- or 3-bar polymetric choices use only 12- or
-24-step grids. The command preserves the pattern's existing detail tier by
-simplifying 16 steps to 12 and 32 steps to 24, retaining events that remain in
-bounds and omitting overflow deterministically. Eight-step moon and auxiliary
-patterns remain valid; this rule applies to primary planet rate edits. Returning
-to an ordinary planet rate expands the corresponding detail tier from 12 back
-to 16 or from 24 back to 32 while preserving surviving event IDs and steps.
+The complete step-count catalog is 4, 6, 8, 12, 16, 24, and 32, but the UI exposes only the natural subset for the selected orbit: quarter bar → 4; half bar → 4/8; one or two bars → 8/16; four bars → 8/16/32; 1½ bars → 6/12; three bars → 12/24; six bars → 24; eight bars → 32. The 6/12/24 choices remain advanced.
+
+A step-count edit maps each event by normalized orbit position, scales its duration, clears template provenance, and keeps the strongest event when multiple detailed events collapse onto one simpler step. Stable IDs and pitch intent survive when their event survives. An orbit-rate edit preserves the current steps-per-bar density, then chooses the nearest allowed grid for the new orbit; ties prefer the simpler grid.
+
+Primary-planet orbit edits use the natural catalog above. The command carries the prior steps-per-bar density into the new period, selects the nearest allowed count, and proportionally remaps events. Eight-step moon and auxiliary patterns remain valid and are not rewritten by a parent orbit edit.
 
 ## Pitch intent
 

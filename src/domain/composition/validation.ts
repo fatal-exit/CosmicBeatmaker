@@ -50,6 +50,8 @@ const patternEventSchema = z.object({
 const patternSchema = z
   .object({
     gridSize: z.union([
+      z.literal(4),
+      z.literal(6),
       z.literal(8),
       z.literal(12),
       z.literal(16),

@@ -4,15 +4,25 @@ import {
 } from "../../content/starPresets";
 import {
   CURRENT_SCHEMA_VERSION,
+  type AsteroidBeltState,
   type Composition,
   type GenerationDomain,
   type HarmonyState,
+  type LoopBars,
   type MacroState,
+  type MoonState,
+  type PatternEvent,
   type PlanetRole,
   type PlanetState,
+  type RingState,
   type StarPresetId,
   type StarState,
 } from "../composition/types";
+import {
+  createGateEvent,
+  fitPatternGridToLoopBars,
+  ringActiveSegmentsForDensity,
+} from "../rhythm";
 import { createStableId } from "../serialization/ids";
 import { createSeededRandom, deriveSeed } from "./prng";
 import { generateRolePlanet } from "./rolePatterns";
@@ -183,6 +193,10 @@ export interface RegenerateSystemOptions {
   updatedAt?: string;
 }
 
+export interface SurpriseOptions {
+  updatedAt?: string;
+}
+
 export interface GeneratePlanetForRoleOptions {
   ordinal?: number;
 }
@@ -345,3 +359,291 @@ export function regenerateSystem(
 }
 
 export const regenerateUnlockedSystem = regenerateSystem;
+
+const COMMON_SURPRISE_RATES = {
+  beat: [0.5, 1, 2],
+  bass: [1, 2, 4],
+  chords: [1, 2, 4],
+  melody: [0.5, 1, 2, 4],
+  texture: [1, 2, 4],
+} as const satisfies Record<PlanetRole, readonly LoopBars[]>;
+
+const MOON_BEHAVIORS = {
+  beat: ["accent", "counterpulse", "fill"],
+  bass: ["pickup", "echo", "counterpulse"],
+  chords: ["harmony", "echo", "counterpulse"],
+  melody: ["echo", "harmony", "pickup"],
+  texture: ["counterpulse", "echo", "fill"],
+} as const satisfies Record<
+  PlanetRole,
+  readonly MoonState["behaviorPresetId"][]
+>;
+
+function surpriseMoon(
+  moon: MoonState,
+  parent: PlanetState,
+  generationSeed: string,
+): MoonState {
+  if (moon.locked) return moon;
+  const random = createSeededRandom(generationSeed).derive("moon", moon.id);
+  const eventCount = random.integer(1, Math.min(3, moon.pattern.gridSize) + 1);
+  const steps = new Set<number>();
+  while (steps.size < eventCount) {
+    steps.add(random.integer(0, moon.pattern.gridSize));
+  }
+  const orderedSteps = [...steps].sort((left, right) => left - right);
+  const events = orderedSteps.map((step, index): PatternEvent => {
+    const generated = createGateEvent(
+      parent.role,
+      step,
+      moon.pattern.events[index]?.id ??
+        createStableId("event", generationSeed, moon.id, String(index)),
+    );
+    return {
+      ...generated,
+      velocity: round(0.44 + random.next() * 0.22),
+      probability: round(0.68 + random.next() * 0.28),
+      durationSteps: 0.5,
+    };
+  });
+
+  return {
+    ...moon,
+    behaviorPresetId: random.pick(MOON_BEHAVIORS[parent.role]),
+    pattern: {
+      ...moon.pattern,
+      templateId: undefined,
+      events,
+      humanize: round(0.01 + random.next() * 0.05),
+    },
+    orbitRatio: random.pick([1, 2, 4] as const),
+    phase: random.pick([0, 0.125, 0.25, 0.375] as const),
+    level: round(0.3 + random.next() * 0.18),
+    probability: round(0.68 + random.next() * 0.28),
+    appearanceSeed: random.integer(0, 0x7fff_ffff),
+  };
+}
+
+function surpriseRing(
+  ring: RingState,
+  parent: PlanetState,
+  generationSeed: string,
+): RingState {
+  const random = createSeededRandom(generationSeed).derive("ring", ring.id);
+  const draft: RingState = {
+    ...ring,
+    phase: random.integer(0, ring.segments) / ring.segments,
+    velocityVariation: round(0.08 + random.next() * 0.26),
+    probability: round(0.78 + random.next() * 0.2),
+    level: round(
+      parent.role === "chords"
+        ? 0.82 + random.next() * 0.16
+        : 0.2 + random.next() * 0.2,
+    ),
+  };
+  const density = 0.25 + random.next() * 0.38;
+  return {
+    ...draft,
+    active: ringActiveSegmentsForDensity(parent, draft, density),
+  };
+}
+
+function surprisePlanetAttachments(
+  planet: PlanetState,
+  generationSeed: string,
+  lockedDomains: ReadonlySet<GenerationDomain>,
+): PlanetState {
+  if (planet.locked) return planet;
+  return {
+    ...planet,
+    moons: lockedDomains.has("moons")
+      ? planet.moons
+      : planet.moons.map((moon) => surpriseMoon(moon, planet, generationSeed)),
+    ring:
+      planet.ring && !lockedDomains.has("ring")
+        ? surpriseRing(planet.ring, planet, generationSeed)
+        : planet.ring,
+  };
+}
+
+function surpriseAsteroidBelt(
+  belt: AsteroidBeltState,
+  generationSeed: string,
+): AsteroidBeltState {
+  if (belt.locked) return belt;
+  const random = createSeededRandom(generationSeed).derive(
+    "asteroids",
+    belt.id,
+  );
+  const eventCount = random.integer(3, Math.min(8, belt.gridSize) + 1);
+  const steps = new Set<number>();
+  while (steps.size < eventCount) steps.add(random.integer(0, belt.gridSize));
+  return {
+    ...belt,
+    events: [...steps]
+      .sort((left, right) => left - right)
+      .map((step, index) => ({
+        id:
+          belt.events[index]?.id ??
+          createStableId("event", generationSeed, belt.id, String(index)),
+        step,
+        velocity: round(0.38 + random.next() * 0.32),
+        probability: round(0.58 + random.next() * 0.36),
+        durationSteps: 0.5,
+        drumVoice: "perc" as const,
+      })),
+    population: round(0.32 + random.next() * 0.42),
+    clustering: round(0.18 + random.next() * 0.52),
+    turbulence: round(0.08 + random.next() * 0.34),
+    accentChance: round(0.08 + random.next() * 0.3),
+    level: round(0.16 + random.next() * 0.16),
+    visualSeed: random.integer(0, 0x7fff_ffff),
+  };
+}
+
+function withSurprisedOrbit(
+  planet: PlanetState,
+  generationSeed: string,
+): PlanetState {
+  if (planet.locked) return planet;
+  const random = createSeededRandom(generationSeed).derive("orbit", planet.id);
+  const loopBars = random.pick(COMMON_SURPRISE_RATES[planet.role]);
+  return {
+    ...planet,
+    pattern: fitPatternGridToLoopBars(
+      planet.pattern,
+      planet.orbit.loopBars,
+      loopBars,
+    ),
+    orbit: {
+      ...planet.orbit,
+      loopBars,
+      phase: random.pick([0, 0.125, 0.25, 0.375] as const),
+      inclination: round(-0.28 + random.next() * 0.56),
+    },
+  };
+}
+
+/**
+ * Changes every unlocked musical layer as one deterministic project action.
+ * Existing IDs and celestial attachments remain stable so selection, undo,
+ * save, playback, and scene reconciliation continue through the surprise.
+ */
+export function surpriseWholeSystem(
+  composition: Composition,
+  options: SurpriseOptions = {},
+): Composition {
+  const nextRevision = composition.generation.revision + 1;
+  const generationSeed = deriveSeed(
+    composition.seed,
+    "generation",
+    String(nextRevision),
+  );
+  const lockedDomains = new Set(composition.generation.lockedDomains);
+  const generatedStar = generateStar(composition.seed, generationSeed);
+  const starPresetId =
+    composition.star.locked || lockedDomains.has("star")
+      ? composition.star.presetId
+      : generatedStar.presetId;
+  const starPreset = STAR_PRESETS[starPresetId];
+  const tempoRandom = createSeededRandom(generationSeed).derive("tempo");
+  const prepared: Composition = {
+    ...composition,
+    bpm: tempoRandom.integer(
+      starPreset.bpmRange[0],
+      starPreset.bpmRange[1] + 1,
+    ),
+    swing: round(
+      (starPresetId === "neutron" ? 0.12 : 0.04) + tempoRandom.next() * 0.16,
+    ),
+    macros: generateMacros(generationSeed, starPresetId),
+    mix: createSafeMasterMix(
+      createSeededRandom(generationSeed).derive("master-mix"),
+    ),
+  };
+  const regenerated = regenerateSystem(prepared, options);
+  const planets = regenerated.planets.map((planet) =>
+    surprisePlanetAttachments(
+      withSurprisedOrbit(planet, generationSeed),
+      generationSeed,
+      lockedDomains,
+    ),
+  );
+
+  return {
+    ...regenerated,
+    planets,
+    asteroidBelt:
+      regenerated.asteroidBelt && !lockedDomains.has("asteroids")
+        ? surpriseAsteroidBelt(regenerated.asteroidBelt, generationSeed)
+        : regenerated.asteroidBelt,
+  };
+}
+
+/** Regenerates only one unlocked planet and its attached musical structures. */
+export function surprisePlanet(
+  composition: Composition,
+  planetId: string,
+  options: SurpriseOptions = {},
+): Composition {
+  const existing = composition.planets.find((planet) => planet.id === planetId);
+  if (
+    !existing ||
+    existing.locked ||
+    composition.generation.lockedDomains.includes(existing.role)
+  ) {
+    return composition;
+  }
+
+  const nextRevision = composition.generation.revision + 1;
+  const generationSeed = deriveSeed(
+    composition.seed,
+    "generation",
+    String(nextRevision),
+    "planet",
+    existing.id,
+  );
+  const ordinal = composition.planets
+    .filter((planet) => planet.role === existing.role)
+    .findIndex((planet) => planet.id === existing.id);
+  const generated = generateRolePlanet({
+    seed: generationSeed,
+    role: existing.role,
+    ordinal: Math.max(0, ordinal),
+    starPreset: STAR_PRESETS[composition.star.presetId],
+    voicingId: composition.harmony.voicingId,
+    macros: composition.macros,
+    beatPattern: composition.planets.find((planet) => planet.role === "beat")
+      ?.pattern,
+  });
+  const replacement = surprisePlanetAttachments(
+    withSurprisedOrbit(
+      {
+        ...generated,
+        id: existing.id,
+        name: existing.name,
+        moons: existing.moons,
+        ring: existing.ring,
+        muted: existing.muted,
+        soloed: existing.soloed,
+        locked: existing.locked,
+      },
+      generationSeed,
+    ),
+    generationSeed,
+    new Set(composition.generation.lockedDomains),
+  );
+
+  return {
+    ...composition,
+    updatedAt: options.updatedAt ?? composition.updatedAt,
+    planets: composition.planets.map((planet) =>
+      planet.id === planetId ? replacement : planet,
+    ),
+    generation: {
+      ...composition.generation,
+      revision: nextRevision,
+      generatorVersion: GENERATOR_VERSION,
+    },
+  };
+}

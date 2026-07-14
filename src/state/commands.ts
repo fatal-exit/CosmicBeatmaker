@@ -5,6 +5,7 @@ import type {
   LoopBars,
   MacroState,
   MoonState,
+  PatternGridSize,
   PatternState,
   PlanetExpressionState,
   PlanetState,
@@ -12,7 +13,13 @@ import type {
   StarPresetId,
   TrackMixState,
 } from "../domain/composition/types";
-import { normalizePatternForLoopBars } from "../domain/rhythm/polymeterPatterns";
+import {
+  fitPatternGridToLoopBars,
+  naturalPatternGridSizesForLoopBars,
+  resizePatternGrid,
+  shiftMelodyGatePitch,
+  togglePatternGate,
+} from "../domain/rhythm/directGateEditing";
 import { ringActiveSegmentsForDensity } from "../domain/rhythm/ringPatterns";
 
 type ChordExpression = Extract<PlanetExpressionState, { kind: "chords" }>;
@@ -42,6 +49,12 @@ export type CompositionCommand =
   | { type: "TogglePlanetSolo"; planetId: string; timestamp?: string }
   | { type: "TogglePlanetLock"; planetId: string; timestamp?: string }
   | {
+      type: "SetPlanetSoundPreset";
+      planetId: string;
+      soundPresetId: string;
+      timestamp?: string;
+    }
+  | {
       type: "SetPlanetLoopBars";
       planetId: string;
       loopBars: LoopBars;
@@ -57,6 +70,26 @@ export type CompositionCommand =
       type: "SetPlanetPattern";
       planetId: string;
       pattern: PatternState;
+      timestamp?: string;
+    }
+  | {
+      type: "SetPlanetPatternGridSize";
+      planetId: string;
+      gridSize: PatternGridSize;
+      timestamp?: string;
+    }
+  | {
+      type: "TogglePlanetGate";
+      planetId: string;
+      step: number;
+      addedEventId: string;
+      timestamp?: string;
+    }
+  | {
+      type: "ShiftMelodyGatePitch";
+      planetId: string;
+      eventId: string;
+      scaleDegreeDelta: number;
       timestamp?: string;
     }
   | {
@@ -242,6 +275,29 @@ export function applyCompositionCommand(
         },
         description: "Toggled planet lock",
       };
+    case "SetPlanetSoundPreset":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) => {
+            if (planet.id !== command.planetId) return planet;
+            const tonalRing =
+              planet.ring &&
+              (planet.role === "bass" ||
+                planet.role === "chords" ||
+                planet.role === "melody")
+                ? { ...planet.ring, soundPresetId: command.soundPresetId }
+                : planet.ring;
+            return {
+              ...planet,
+              soundPresetId: command.soundPresetId,
+              ring: tonalRing,
+            };
+          }),
+          updatedAt: timestamp,
+        },
+        description: "Changed planet sound",
+      };
     case "SetPlanetLoopBars":
       return {
         composition: {
@@ -254,8 +310,9 @@ export function applyCompositionCommand(
                     ...planet.orbit,
                     loopBars: command.loopBars,
                   },
-                  pattern: normalizePatternForLoopBars(
+                  pattern: fitPatternGridToLoopBars(
                     planet.pattern,
+                    planet.orbit.loopBars,
                     command.loopBars,
                   ),
                 }
@@ -296,6 +353,69 @@ export function applyCompositionCommand(
           updatedAt: timestamp,
         },
         description: "Changed planet pattern",
+      };
+    case "SetPlanetPatternGridSize":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId &&
+            !planet.locked &&
+            naturalPatternGridSizesForLoopBars(planet.orbit.loopBars).includes(
+              command.gridSize,
+            )
+              ? {
+                  ...planet,
+                  pattern: resizePatternGrid(planet.pattern, command.gridSize),
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed orbit step count",
+      };
+    case "TogglePlanetGate":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId && !planet.locked
+              ? {
+                  ...planet,
+                  pattern: togglePatternGate(
+                    planet.pattern,
+                    planet.role,
+                    command.step,
+                    command.addedEventId,
+                  ),
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed an orbit gate",
+      };
+    case "ShiftMelodyGatePitch":
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId &&
+            planet.role === "melody" &&
+            !planet.locked
+              ? {
+                  ...planet,
+                  pattern: shiftMelodyGatePitch(
+                    planet.pattern,
+                    command.eventId,
+                    command.scaleDegreeDelta,
+                  ),
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed a melody gate pitch",
       };
     case "SetPlanetMix":
       return {

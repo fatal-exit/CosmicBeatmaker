@@ -220,6 +220,34 @@ Keep rate/ID lane ordering from D-020, but accumulate actual lane center radii f
 
 **Reason:** The former fixed lane step and nearly equal rendered radii made the five surface types read as color variants and allowed large rings or gas giants to crowd neighboring paths. Role-derived physical classes strengthen visible musical identity without expanding the schema, while one shared metrics source keeps body geometry, rings, touch clearance, lane spacing, camera fit, and tests consistent. Separating lane ordering from lane distance preserves the exact musical-rate model and deterministic duplicate-rate behavior.
 
+### D-031 — Accessible sound choice and device-local user samples
+
+**Decision:** Expose the complete role-compatible first-party sound palette through one semantic selected-planet control. Group the active star's recommendations first, describe every sound in musical language, and apply a sound change through an undoable `SetPlanetSoundPreset` command without changing pattern, pitch intent, orbit, or identity. A tonal ring follows its parent to the new voice. Planet and whole-system Surprise remain explicit deterministic generation actions over the existing kits and respect planet/domain locks.
+
+Allow bounded user audio through a separate local sound library. Store audio Blobs and metadata in a dedicated IndexedDB database and register their stable preset/asset IDs with the existing live voice factory; keep Blob data out of `Composition`, schema migrations, history, project JSON, URL shares, MIDI, the first-party manifest, and repository assets. Beat planets may map any subset of the seven existing drum voices. Bass, chord, melody, and texture imports accept one monophonic sample, estimate its source MIDI note through normalized autocorrelation, and require an editable confirmation before Tone transposes from that root into the canonical Safe Harmony MIDI notes.
+
+Keep custom samples live-playback-only. They use the existing page-lifetime decoded-buffer cache, cancellable event instruments, overlap budgets, track strip, and per-occurrence synth fallback. Missing drum slots, failed local storage, missing local IDs on another device, decode failures, and share recipients all fall back to the role-safe synth rather than silence. Offline WAV remains synth-rendered and MIDI remains sample-independent. No new runtime dependency is added.
+
+**Reason:** The content pack already contains substantial role and star variety, including 30 baked spatial replacements, but the main inspector did not expose that choice. A familiar semantic selector makes the existing authored value available without adding synthesis complexity. Keeping user Blobs outside canonical state protects deterministic save/share/export behavior and URL size, while source-note analysis plus manual correction makes one-shot tonal samples useful across the system's C-based calibration without pretending to solve polyphonic key detection. Reusing the established cache, safety limits, and fallback voice keeps personalization bounded on mobile.
+
+### D-032 — Beginner surface and scoped Surprise actions
+
+**Decision:** Default to three circular whole-system controls: Energy, Activity (the plain-language label for stored Density), and Space. Advanced expands the same semantic range controls to Energy, Density, Groove, Space, Complexity, and master Volume. Keep expression, deep orbit, sync, duplication, deletion, and local-sample detail behind the shared Advanced state. Keep the selected planet's current sound and role-compatible sound chooser visible in the beginner inspector.
+
+Expose whole-system Surprise on the welcome screen and beside the scene's Add object action, and expose a separate Surprise on every selected planet. Whole-system Surprise regenerates all unlocked musical layers and bounded hidden values; planet Surprise changes only that unlocked planet and its attachments. Both advance deterministic generation revision, preserve locks, remain undoable, and use existing safe content.
+
+**Reason:** The first thirty seconds should present one musical world, three expressive choices, and two clearly scoped creation actions instead of workstation density. Sharing one persisted disclosure state across macro, navigator, inspector, and mobile sheet avoids inconsistent expertise modes while preserving the complete existing toolset.
+
+### D-033 — Direct gate editing and selectable orbit detail
+
+**Decision:** A selected planet renders one editable gate for every canonical pattern step. Tap toggles a gate, tangential drag on its orbit arc rotates the entire pattern phase, and radial drag on an active melodic gate changes that event's relative safe-scale degree. The Focus View supplies equivalent semantic step buttons and labelled pitch nudges.
+
+Expose only musically natural click-in choices for the current orbit: 4 for ¼ bar; 4/8 for ½ bar; 8/16 for one or two bars; and 8/16/32 for four bars. Advanced polymetric rates expose 6/12 for 1½ bars, 12/24 for three bars, 24 for six bars, and 32 for eight bars. This orbit-aware mapping supersedes D-020's fixed 16→12 and 32→24 tier conversion: an orbit edit now preserves steps-per-bar density and snaps to the nearest allowed count, preferring the simpler choice on a tie.
+
+Resizing maps events by normalized orbit position, scales duration, clears template provenance, and deterministically keeps the strongest event when multiple events collapse onto one gate. In ordinary grids, four main beat landmarks receive the strongest visual treatment and their offbeat eighths receive a secondary treatment; 6/12/24 grids emphasize each triplet beat boundary. Hit regions remain larger than rendered gates.
+
+**Reason:** Fewer visible decisions make a rhythm understandable before adding detail, while proportional remapping preserves the user's musical idea. Beat hierarchy teaches timing through cause and effect, and separate DOM controls ensure the canvas gestures are never the only essential path. The existing serializable event model and audio-authoritative compiler already support these grid sizes, so no new dependency or renderer-driven timing state is required.
+
 ### Current implementation note for D-014
 
 D-026 supersedes D-014's next-bar replacement behavior for live performance controls. Deterministic probability, transport reset/resume behavior, export loop indexing, and intentional playhead-relative macro, expression, step, ring, loop-length, harmony, voice, and pattern editing are implemented. Major regeneration remains an explicit whole-project action rather than a continuous performance control.

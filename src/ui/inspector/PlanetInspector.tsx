@@ -1,16 +1,30 @@
 import { useId } from "react";
 
+import { getSoundPresetDefinition } from "../../content/soundPresets";
 import type {
   LoopBars,
   MelodyContour,
+  PatternGridSize,
   PlanetExpressionState,
   PlanetState,
+  StarPresetId,
 } from "../../domain/composition";
 import {
   GATE_RHYTHM_PRESETS,
   type GateRhythmPresetId,
 } from "../../domain/rhythm/gatePresets";
+import {
+  FRIENDLY_PATTERN_GRID_SIZES,
+  naturalPatternGridSizesForLoopBars,
+  POLYRHYTHM_PATTERN_GRID_SIZES,
+} from "../../domain/rhythm/directGateEditing";
 import { PLANET_MATERIAL_PROFILES } from "../../scene/materials/profiles";
+import {
+  SoundChoice,
+  type DrumKitImport,
+  type PitchedSoundImport,
+  type SoundImportResult,
+} from "../sound/SoundChoice";
 import {
   COMMON_ORBIT_RATE_OPTIONS,
   DEEP_ORBIT_RATE_OPTIONS,
@@ -21,11 +35,19 @@ import {
 
 export interface PlanetInspectorProps {
   planet?: PlanetState;
+  starPresetId?: StarPresetId;
   superLoopBars: number;
+  advanced: boolean;
+  onAdvancedChange: (advanced: boolean) => void;
+  onSurprise: () => void;
   onMute: () => void;
   onSolo: () => void;
   onLock: () => void;
+  onSound?: (soundPresetId: string) => void;
+  onImportPitched?: (input: PitchedSoundImport) => Promise<SoundImportResult>;
+  onImportDrumKit?: (input: DrumKitImport) => Promise<SoundImportResult>;
   onOrbit: (loopBars: LoopBars) => void;
+  onPatternGridSize: (gridSize: PatternGridSize) => void;
   onExpressionBegin: (
     control: "voicing" | "chord-complexity" | "pitch-variety",
   ) => void;
@@ -90,6 +112,9 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   }
 
   const material = PLANET_MATERIAL_PROFILES[planet.role];
+  const soundName =
+    getSoundPresetDefinition(planet.soundPresetId)?.name ??
+    planet.soundPresetId.replaceAll("-", " ");
   const gateRhythm = GATE_RHYTHM_PRESETS.find(
     ({ id }) => id === actions.gateRhythmPreset,
   );
@@ -106,9 +131,22 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           : planet.role === "texture"
             ? "The ring adds a light, regular shaker texture."
             : "The ring adds a regular high-percussion pulse.";
+  const naturalStepCounts = naturalPatternGridSizesForLoopBars(
+    planet.orbit.loopBars,
+  );
+  const friendlyStepCounts = FRIENDLY_PATTERN_GRID_SIZES.filter((gridSize) =>
+    naturalStepCounts.includes(gridSize),
+  );
+  const polyrhythmStepCounts = POLYRHYTHM_PATTERN_GRID_SIZES.filter(
+    (gridSize) => naturalStepCounts.includes(gridSize),
+  );
 
   return (
-    <aside className="inspector" aria-labelledby={headingId}>
+    <aside
+      className="inspector"
+      aria-labelledby={headingId}
+      data-advanced={actions.advanced}
+    >
       <div className="selected-summary">
         <span
           aria-hidden="true"
@@ -119,14 +157,27 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           <h2 id={headingId}>{planet.name}</h2>
           <p className="selected-sound">
             <span>Sound</span>
-            <strong>{planet.soundPresetId.replaceAll("-", " ")}</strong>
+            <strong>{soundName}</strong>
           </p>
-          <p className="selected-material">
+          <p className="selected-material advanced-only">
             <strong>Surface · {material.label}</strong>
             <span>{material.description}</span>
           </p>
         </div>
       </div>
+      <button
+        type="button"
+        className="planet-surprise-action"
+        onClick={actions.onSurprise}
+        disabled={planet.locked}
+      >
+        <span>Surprise this planet</span>
+        <small>
+          {planet.locked
+            ? "Unlock this planet first"
+            : "New sound, orbit, and musical pattern"}
+        </small>
+      </button>
       <div className="segmented-actions" aria-label="Planet states">
         <button
           type="button"
@@ -150,8 +201,21 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Lock
         </button>
       </div>
+      {actions.starPresetId &&
+      actions.onSound &&
+      actions.onImportPitched &&
+      actions.onImportDrumKit ? (
+        <SoundChoice
+          key={planet.id}
+          planet={planet}
+          starPresetId={actions.starPresetId}
+          onSound={actions.onSound}
+          onImportPitched={actions.onImportPitched}
+          onImportDrumKit={actions.onImportDrumKit}
+        />
+      ) : null}
       {planet.role === "chords" && planet.expression.kind === "chords" ? (
-        <fieldset className="role-expression-controls">
+        <fieldset className="role-expression-controls advanced-only">
           <legend>Chord shape</legend>
           <p>Spread the notes apart, then choose how much color to add.</p>
           <label className="expression-slider" htmlFor={voicingId}>
@@ -221,7 +285,7 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         </fieldset>
       ) : null}
       {planet.role === "melody" && melodyExpression ? (
-        <fieldset className="role-expression-controls">
+        <fieldset className="role-expression-controls advanced-only">
           <legend>Melody shape</legend>
           <p>Control its pitch range and the direction it tends to travel.</p>
           <label className="expression-slider" htmlFor={pitchVarietyId}>
@@ -282,10 +346,11 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         </fieldset>
       ) : null}
       <fieldset className="orbit-options">
-        <legend>Orbit rate</legend>
+        <legend>{actions.advanced ? "Orbit rate" : "Loop speed"}</legend>
         <p>
-          One orbit takes this long. The musical pattern repeats at the same
-          rate.
+          {actions.advanced
+            ? "One orbit takes this long. The musical pattern repeats at the same rate."
+            : "Choose how quickly this planet repeats its musical part."}
         </p>
         <div className="orbit-current" aria-live="polite" aria-atomic="true">
           <span>Current rate</span>
@@ -309,7 +374,7 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
             </button>
           ))}
         </div>
-        <label className="orbit-deeper-control">
+        <label className="orbit-deeper-control advanced-only">
           <span>More orbit rates</span>
           <select
             aria-label="More orbit rates"
@@ -336,10 +401,65 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           </select>
         </label>
       </fieldset>
-      <p className="system-sync" aria-live="polite" aria-atomic="true">
+      <p
+        className="system-sync advanced-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         <strong>System sync · {formatBarCount(actions.superLoopBars)}</strong>
         <span>All active patterns meet at the start again here.</span>
       </p>
+      <fieldset className="gate-count-control">
+        <legend>Steps around this orbit</legend>
+        <p>
+          Use fewer gates for a clearer rhythm. Larger gates mark beats; medium
+          gates mark offbeat 8ths.
+        </p>
+        {friendlyStepCounts.length > 0 ? (
+          <div aria-label="Recommended step counts">
+            {friendlyStepCounts.map((gridSize) => (
+              <button
+                type="button"
+                key={gridSize}
+                aria-label={`${gridSize} steps`}
+                aria-pressed={planet.pattern.gridSize === gridSize}
+                disabled={planet.locked}
+                onClick={() => actions.onPatternGridSize(gridSize)}
+              >
+                <strong>{gridSize}</strong>
+                <small>
+                  {gridSize === 4
+                    ? "Beats"
+                    : gridSize === 8
+                      ? "8ths"
+                      : gridSize === 16
+                        ? "16ths"
+                        : "Fine"}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {polyrhythmStepCounts.length > 0 ? (
+          <div className="polyrhythm-step-options advanced-only">
+            <span>Polyrhythm</span>
+            <div aria-label="Polyrhythm step counts">
+              {polyrhythmStepCounts.map((gridSize) => (
+                <button
+                  type="button"
+                  key={gridSize}
+                  aria-label={`${gridSize} polyrhythm steps`}
+                  aria-pressed={planet.pattern.gridSize === gridSize}
+                  disabled={planet.locked}
+                  onClick={() => actions.onPatternGridSize(gridSize)}
+                >
+                  {gridSize}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </fieldset>
       <div className="gate-rhythm-control">
         <label htmlFor={gateRhythmId}>Gate rhythm</label>
         <p id={`${gateRhythmId}-hint`}>
@@ -379,6 +499,13 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Fine-tune individual orbit gates
         </small>
       </button>
+      <p className="direct-gate-help">
+        On the solar system, tap a gate slot to turn it on or off. Drag the
+        orbit arc to rotate every gate together.
+        {planet.role === "melody"
+          ? " Drag an active melody gate outward for a higher note or inward for a lower one."
+          : ""}
+      </p>
       {planet.ring ? (
         <div className="ring-density-control">
           <label htmlFor={ringDensityId}>
@@ -421,7 +548,15 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Add rhythmic ring
         </button>
       )}
-      <div className="inspector-footer">
+      <button
+        type="button"
+        className="inspector-depth-toggle"
+        aria-expanded={actions.advanced}
+        onClick={() => actions.onAdvancedChange(!actions.advanced)}
+      >
+        {actions.advanced ? "Hide advanced controls" : "More planet controls"}
+      </button>
+      <div className="inspector-footer advanced-only">
         <button type="button" onClick={actions.onDuplicate}>
           Duplicate
         </button>

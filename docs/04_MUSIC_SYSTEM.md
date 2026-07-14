@@ -227,16 +227,11 @@ A track stores:
 - Phase offset
 - Role-specific note data
 
-When a planet changes to a 1.5- or 3-bar polymetric orbit, its pattern grid
-must use 12 or 24 steps rather than 16 or 32. Preserve the current detail
-tier by simplifying 16 steps to 12 and 32 steps to 24. Keep events that still
-fit the shorter grid and deterministically omit overflow; if every event would
-be omitted, wrap the earliest event into the new grid so the planet does not
-become silent. Both supported polymeter grids divide each polymetric period
-into a whole number of subdivisions per bar. When the planet returns to an
-ordinary rate, expand 12 steps back to 16 and 24 steps back to 32. Preserve the
-surviving event IDs and step positions; do not invent replacements for events
-that were omitted, and keep the transformed pattern custom.
+The manual detail catalog contains 4, 8, 16, and 32 gates as the beginner progression from pulse to fine detail. Advanced adds 6, 12, and 24 as triplet-oriented polyrhythm grids. Present only the natural subset for the current orbit: 4 for a quarter bar; 4/8 for a half bar; 8/16 for one or two bars; 8/16/32 for four bars; 6/12 for 1½ bars; 12/24 for three bars; 24 for six bars; and 32 for eight bars. A resize maps each surviving event to the nearest normalized orbit position and scales its duration. If detailed events converge on one simpler gate, keep the event with the greatest velocity-times-probability strength, then stable ID order, so simplification is deterministic and does not stack hidden hits.
+
+For visual rhythm teaching, ordinary grids divide the orbit into four primary beat landmarks. Where the grid has eighth-note positions, the halfway offbeats receive a secondary emphasis and all finer subdivisions remain quieter. The 6/12/24 grids emphasize every third step as their triplet beat boundary. These are presentation and interaction attributes only; the audio compiler continues to schedule from canonical step/grid ratios.
+
+When an orbit length changes, carry its existing steps-per-bar density into the new period, choose the nearest count from that period's natural subset, and use the same normalized remapping rule. Ties select the simpler count. This keeps a 4-bar/32-step rhythm at 16 steps when shortened to two bars, at 8 steps when shortened to one bar, and at 12 or 24 steps when moved to the matching polymetric period. Keep the transformed pattern custom.
 
 The planet completes one visual orbit per musical pattern loop. Live scheduling, orbit phase, WAV, and MIDI all consume the same rate and derived super-loop boundary.
 
@@ -412,6 +407,8 @@ Generation order:
 10. Validate density, register, event count, and variety.
 
 If validation fails, regenerate only the failing layer using a derived seed.
+
+The user-facing Surprise actions advance the stored generation revision and derive every choice from the next revision seed. Whole-system Surprise regenerates unlocked role layers and varies bounded macro, tempo, orbit, satellite, ring, and asteroid choices. Planet Surprise preserves the selected planet's stable ID and neighboring planets while replacing only that unlocked planet and its unlocked attachments. Both actions choose only from the existing role- and star-compatible sound palettes.
 
 ## MIDI export mapping
 

@@ -38,8 +38,10 @@ A polished Build Week web application that works well on desktop and modern mobi
   - Texture
 - **MUST** provide musically safe default harmony.
 - **MUST** provide curated common rhythm templates.
+- **MUST** expose only the orbit-appropriate subset of beginner 4/8/16/32 gate counts and advanced 6/12/24 polyrhythms, while preserving the existing pattern when resizing.
 - **MUST** support swing, density, energy, space, and complexity macros.
 - **MUST** keep the audio schedule independent of rendered frames.
+- **SHOULD** let a selected planet switch among role-compatible sounds without changing its notes, rhythm, or orbit.
 - **SHOULD** expose root, scale, and progression to advanced users.
 
 ### C. Celestial construction
@@ -76,6 +78,7 @@ A polished Build Week web application that works well on desktop and modern mobi
   - Individual planets
 - **MUST** allow regeneration of the unlocked system.
 - **SHOULD** allow regeneration of one selected object.
+- **MUST** keep a whole-system Surprise visible from the start and provide a separately scoped per-planet Surprise.
 - **SHOULD** preserve human edits when unrelated parts are regenerated.
 
 ### F. Save and sharing
@@ -130,6 +133,8 @@ The release should contain at least:
 - 4 or more scale/mode presets, with pentatonic defaults
 - 5 polished full-system presets
 - 12 or more seed-generated systems tested for variety and coherence
+- An accessible sound chooser that exposes the complete role-compatible palette
+- **COULD** let users keep local custom pitched sounds and partial drum kits, with safe fallback when those device-local assets are unavailable
 
 ## Explicit cuts
 

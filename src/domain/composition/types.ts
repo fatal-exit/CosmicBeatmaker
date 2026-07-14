@@ -26,7 +26,7 @@ export type MelodyContour = "ascending" | "alternating" | "descending";
 
 export type PlanetRole = "beat" | "bass" | "chords" | "melody" | "texture";
 export type LoopBars = SupportedLoopBars;
-export type PatternGridSize = 8 | 12 | 16 | 24 | 32;
+export type PatternGridSize = 4 | 6 | 8 | 12 | 16 | 24 | 32;
 
 export interface Composition {
   schemaVersion: SchemaVersion;

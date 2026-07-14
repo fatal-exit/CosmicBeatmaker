@@ -37,7 +37,7 @@ export function ScenePolishOverlay({
         {isLocked ? <span className="scene-lock-state">Locked</span> : null}
       </div>
       <p className="scene-gate-note">
-        <b>Orbit gates</b> Gates pulse when their event plays
+        <b>Orbit gates</b> Tap a slot to turn it on or off
       </p>
       <div className="scene-gesture-guides">
         <span>
@@ -46,6 +46,11 @@ export function ScenePolishOverlay({
         <span>
           <b>↺</b> Arc drag · rotate gates
         </span>
+        {selectedPlanetRole === "melody" ? (
+          <span>
+            <b>↕</b> Gate drag · change pitch
+          </span>
+        ) : null}
       </div>
     </div>
   );

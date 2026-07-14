@@ -16,6 +16,8 @@ import {
   generatePlanetForRole,
   isTrackMixWithinSafeRange,
   regenerateSystem,
+  surprisePlanet,
+  surpriseWholeSystem,
   shouldTriggerEvent,
 } from "../src/domain/generation";
 import {
@@ -228,6 +230,57 @@ describe("complete-system generation", () => {
         planets: [...composition.planets, first],
       }).success,
     ).toBe(true);
+  });
+
+  it("surprises every unlocked system layer deterministically as one valid edit", () => {
+    const original = generateCompleteSystem("whole-system-surprise");
+    const first = surpriseWholeSystem(original, {
+      updatedAt: "2026-07-14T12:00:00.000Z",
+    });
+    const second = surpriseWholeSystem(original, {
+      updatedAt: "2026-07-14T12:00:00.000Z",
+    });
+
+    expect(first).toEqual(second);
+    expect(first.generation.revision).toBe(1);
+    expect(first.bpm).not.toBe(original.bpm);
+    expect(first.macros).not.toEqual(original.macros);
+    expect(first.mix).not.toEqual(original.mix);
+    expect(
+      first.planets.every(
+        (planet) =>
+          !original.planets.some(
+            (candidate) =>
+              candidate.id === planet.id &&
+              candidate.pattern === planet.pattern &&
+              candidate.soundPresetId === planet.soundPresetId,
+          ),
+      ),
+    ).toBe(true);
+    expect(validateComposition(first).success).toBe(true);
+  });
+
+  it("surprises only the selected planet while preserving identity and locks", () => {
+    const original = generateCompleteSystem("one-planet-surprise");
+    const melody = getPlanet(original, "melody");
+    const surprised = surprisePlanet(original, melody.id, {
+      updatedAt: "2026-07-14T12:00:00.000Z",
+    });
+
+    expect(surprised.generation.revision).toBe(1);
+    expect(getPlanet(surprised, "melody").id).toBe(melody.id);
+    expect(getPlanet(surprised, "melody")).not.toEqual(melody);
+    for (const role of ["beat", "bass", "chords", "texture"] as const) {
+      expect(getPlanet(surprised, role)).toEqual(getPlanet(original, role));
+    }
+
+    const locked = {
+      ...original,
+      planets: original.planets.map((planet) =>
+        planet.id === melody.id ? { ...planet, locked: true } : planet,
+      ),
+    };
+    expect(surprisePlanet(locked, melody.id)).toBe(locked);
   });
 });
 

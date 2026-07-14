@@ -7,6 +7,7 @@ export * from "./RuntimeVoiceRegistry";
 export * from "./OfflineRenderer";
 export * from "./Scheduler";
 export * from "./TransportController";
+export * from "./UserSampleAnalyzer";
 export * from "./VoiceFactory";
 export * from "./WavEncoder";
 export * from "./constants";

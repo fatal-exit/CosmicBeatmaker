@@ -15,7 +15,7 @@ import {
 
 export interface EphemeralUiState {
   selectedObjectId: string | null;
-  inspectorExpanded: boolean;
+  advancedControls: boolean;
   announcement: string;
   quality: "auto" | "low" | "balanced" | "high";
   reducedEffects: boolean;
@@ -49,7 +49,7 @@ export interface AppStore {
   commitHistoryGroup: () => void;
   cancelHistoryGroup: () => void;
   selectObject: (id: string | null) => void;
-  setInspectorExpanded: (expanded: boolean) => void;
+  setAdvancedControls: (expanded: boolean) => void;
   setQuality: (quality: EphemeralUiState["quality"]) => void;
   setReducedEffects: (reduced: boolean) => void;
   setReducedFlash: (reduced: boolean) => void;
@@ -94,7 +94,7 @@ export const useAppStore = create<AppStore>((set) => ({
   compositionHistory: createHistory(starter),
   ui: {
     selectedObjectId: starter.planets[0]?.id ?? null,
-    inspectorExpanded: false,
+    advancedControls: readStoredBoolean("cosmic-advanced-controls", false),
     announcement: "First Light is ready.",
     quality: readStoredQuality(),
     reducedEffects: readStoredBoolean(
@@ -185,8 +185,8 @@ export const useAppStore = create<AppStore>((set) => ({
     ),
   selectObject: (id) =>
     set((state) => ({ ui: { ...state.ui, selectedObjectId: id } })),
-  setInspectorExpanded: (expanded) =>
-    set((state) => ({ ui: { ...state.ui, inspectorExpanded: expanded } })),
+  setAdvancedControls: (advancedControls) =>
+    set((state) => ({ ui: { ...state.ui, advancedControls } })),
   setQuality: (quality) => set((state) => ({ ui: { ...state.ui, quality } })),
   setReducedEffects: (reducedEffects) =>
     set((state) => ({ ui: { ...state.ui, reducedEffects } })),

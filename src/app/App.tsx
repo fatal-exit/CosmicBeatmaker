@@ -13,11 +13,20 @@ import {
   SHOWCASE_SYSTEMS,
   type ShowcaseSystemDefinition,
 } from "../content/showcaseSystems";
+import {
+  isUserSoundPreset,
+  registerUserSoundRecord,
+  resolveAudioSampleEnvelope,
+  type AudioSampleCategory,
+  type UserSoundRecord,
+} from "../content";
 import type {
   AsteroidBeltState,
   Composition,
+  DrumVoiceId,
   LoopBars,
   MoonState,
+  PatternGridSize,
   PlanetExpressionState,
   PlanetRole,
   PlanetState,
@@ -27,7 +36,8 @@ import type {
 import {
   generateCompleteSystem,
   generatePlanetForRole,
-  regenerateUnlockedSystem,
+  surprisePlanet,
+  surpriseWholeSystem,
 } from "../domain/generation";
 import {
   applyGateRhythmPreset,
@@ -40,6 +50,7 @@ import {
   LocalCompositionRepository,
   type CompositionSummary,
 } from "../persistence/LocalCompositionRepository";
+import { UserSoundRepository } from "../persistence/UserSoundRepository";
 import {
   createShareUrl,
   readShareStateFromHash,
@@ -62,16 +73,20 @@ import {
 } from "../ui/export/downloads";
 import { FocusView } from "../ui/focus/FocusView";
 import { PlanetInspector } from "../ui/inspector/PlanetInspector";
-import {
-  formatOrbitLoop,
-  ORBIT_RATE_OPTIONS,
-  parseOrbitRate,
-} from "../ui/inspector/orbitRateOptions";
+import { formatOrbitLoop } from "../ui/inspector/orbitRateOptions";
 import { LibraryPanel } from "../ui/library/LibraryPanel";
-import { MacroControls } from "../ui/macros/MacroControls";
+import {
+  MacroControls,
+  type MacroControlKey,
+} from "../ui/macros/MacroControls";
 import { ProjectMenu } from "../ui/menu/ProjectMenu";
 import { Onboarding } from "../ui/onboarding/Onboarding";
 import { ScenePolishOverlay } from "../ui/scene/ScenePolishOverlay";
+import type {
+  DrumKitImport,
+  PitchedSoundImport,
+  SoundImportResult,
+} from "../ui/sound/SoundChoice";
 import { TransportBar } from "../ui/transport/TransportBar";
 
 type OpenPanel = "menu" | "add" | "library" | "export" | "mobile-editor" | null;
@@ -83,6 +98,7 @@ type MelodyExpressionUpdate = Partial<
 >;
 
 const repository = new LocalCompositionRepository();
+const userSoundRepository = new UserSoundRepository();
 const SceneCanvas = lazy(async () => {
   const module = await import("../ui/scene/SceneCanvas");
   return { default: module.SceneCanvas };
@@ -92,6 +108,14 @@ function bytesToBlob(bytes: Uint8Array, type: string): Blob {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return new Blob([copy.buffer], { type });
+}
+
+function drumSampleCategory(voice: DrumVoiceId): AudioSampleCategory {
+  if (voice === "kick") return "kick";
+  if (voice === "closed-hat" || voice === "open-hat") return "hi-hat";
+  if (voice === "rim") return "rimshot";
+  if (voice === "snare" || voice === "clap") return "snare";
+  return "other";
 }
 
 function ringTypeForRole(role: PlanetRole): RingState["type"] {
@@ -257,12 +281,14 @@ export function App() {
   const setAudioStatus = useAppStore((state) => state.setAudioStatus);
   const setPlaying = useAppStore((state) => state.setPlaying);
   const setSaveStatus = useAppStore((state) => state.setSaveStatus);
+  const setAdvancedControls = useAppStore((state) => state.setAdvancedControls);
   const setQuality = useAppStore((state) => state.setQuality);
   const setReducedEffects = useAppStore((state) => state.setReducedEffects);
   const setReducedFlash = useAppStore((state) => state.setReducedFlash);
 
   const audioRef = useRef<AudioEngine | null>(null);
   const audioLoadRef = useRef<Promise<AudioEngine> | null>(null);
+  const userSoundHydrationRef = useRef<Promise<void> | null>(null);
   const audioGenerationRef = useRef(0);
   const pendingAutoPlayCompositionRef = useRef<Composition | null>(null);
   const sharedLoadedRef = useRef(false);
@@ -270,6 +296,7 @@ export function App() {
   const exportAbortRef = useRef<AbortController | null>(null);
   const pulseQueueRef = useRef<VisualPulse[]>([]);
   const [pulseRevision, setPulseRevision] = useState(0);
+  const [, setUserSoundRevision] = useState(0);
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [focusOpen, setFocusOpen] = useState(false);
   const [saves, setSaves] = useState<CompositionSummary[]>([]);
@@ -308,6 +335,19 @@ export function App() {
     [],
   );
 
+  const hydrateUserSounds = useCallback((): Promise<void> => {
+    userSoundHydrationRef.current ??= userSoundRepository
+      .list()
+      .then((records) => {
+        for (const record of records) registerUserSoundRecord(record);
+        if (records.length > 0) {
+          setUserSoundRevision((revision) => revision + 1);
+        }
+      })
+      .catch(() => undefined);
+    return userSoundHydrationRef.current;
+  }, []);
+
   const ensureAudioEngine = useCallback((): Promise<AudioEngine> => {
     if (audioRef.current) return Promise.resolve(audioRef.current);
     if (!audioLoadRef.current) {
@@ -341,6 +381,10 @@ export function App() {
     }
     return audioLoadRef.current;
   }, [handleAudioHealthFailure, handleVisualEvent]);
+
+  useEffect(() => {
+    void hydrateUserSounds();
+  }, [hydrateUserSounds]);
 
   useEffect(() => {
     const generation = audioGenerationRef.current + 1;
@@ -407,7 +451,11 @@ export function App() {
     localStorage.setItem("cosmic-quality", ui.quality);
     localStorage.setItem("cosmic-reduced-effects", String(ui.reducedEffects));
     localStorage.setItem("cosmic-reduced-flash", String(ui.reducedFlash));
-  }, [ui.quality, ui.reducedEffects, ui.reducedFlash]);
+    localStorage.setItem(
+      "cosmic-advanced-controls",
+      String(ui.advancedControls),
+    );
+  }, [ui.advancedControls, ui.quality, ui.reducedEffects, ui.reducedFlash]);
 
   useEffect(() => {
     if (!toast) return;
@@ -477,6 +525,7 @@ export function App() {
     const generation = audioGenerationRef.current;
     setAudioStatus("loading");
     try {
+      await hydrateUserSounds();
       const engine = await ensureAudioEngine();
       await engine.unlock();
       if (generation !== audioGenerationRef.current) return false;
@@ -512,6 +561,45 @@ export function App() {
     if (!audioReady) setPlaying(false);
     setOnboardingStep("complete");
     localStorage.setItem("cosmic-onboarding-version", "1");
+  };
+
+  const startWithSurprise = async () => {
+    const audioReady = await unlockAudio();
+    const surprised = surpriseWholeSystem(composition, {
+      updatedAt: new Date().toISOString(),
+    });
+    pendingAutoPlayCompositionRef.current = audioReady ? surprised : null;
+    replaceComposition(surprised);
+    if (!audioReady) setPlaying(false);
+    setOnboardingStep("complete");
+    localStorage.setItem("cosmic-onboarding-version", "1");
+    setToast("A complete safe system is ready. Undo is available after edits.");
+  };
+
+  const surpriseSystem = () => {
+    const surprised = surpriseWholeSystem(composition, {
+      updatedAt: new Date().toISOString(),
+    });
+    dispatch({ type: "RegenerateSystem", composition: surprised });
+    setOpenPanel(null);
+    setToast("The unlocked solar system has a new groove. Undo restores it.");
+  };
+
+  const surpriseSelectedPlanet = () => {
+    if (!selectedPlanet) return;
+    if (selectedPlanet.locked) {
+      setToast("Unlock this planet before surprising it.");
+      return;
+    }
+    const surprised = surprisePlanet(composition, selectedPlanet.id, {
+      updatedAt: new Date().toISOString(),
+    });
+    if (surprised === composition) {
+      setToast("This planet is protected by a generation lock.");
+      return;
+    }
+    dispatch({ type: "RegenerateSystem", composition: surprised });
+    setToast(`${selectedPlanet.name} has a new safe musical idea.`);
   };
 
   const openShowcase = (showcase: ShowcaseSystemDefinition) => {
@@ -587,9 +675,16 @@ export function App() {
 
   const share = async () => {
     const url = createShareUrl(composition);
+    const hasLocalAudio = composition.planets.some((planet) =>
+      isUserSoundPreset(planet.soundPresetId),
+    );
     try {
       await navigator.clipboard.writeText(url);
-      setToast("Share link copied.");
+      setToast(
+        hasLocalAudio
+          ? "Share link copied. Your imported audio stays on this device; the shared system uses safe fallback voices."
+          : "Share link copied.",
+      );
     } catch {
       window.prompt("Copy this share link", url);
     }
@@ -618,6 +713,16 @@ export function App() {
       localStorage.setItem("cosmic-onboarding-version", "1");
       setToast("You made your first cosmic groove.");
     }
+  };
+
+  const setPatternGridSize = (gridSize: PatternGridSize) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetPlanetPatternGridSize",
+      planetId: selectedPlanet.id,
+      gridSize,
+    });
+    setToast(`${selectedPlanet.name} now has ${gridSize} steps.`);
   };
 
   const setGateRhythm = (presetId: GateRhythmPresetId) => {
@@ -692,6 +797,113 @@ export function App() {
     });
     setOpenPanel(null);
     setToast(`${selectedPlanet.name} has a new moon.`);
+  };
+
+  const activateUserSound = async (
+    record: UserSoundRecord,
+    planetId: string,
+  ): Promise<SoundImportResult> => {
+    let persisted = true;
+    try {
+      await userSoundRepository.save(record);
+    } catch {
+      persisted = false;
+    }
+    registerUserSoundRecord(record);
+    setUserSoundRevision((revision) => revision + 1);
+    dispatch({
+      type: "SetPlanetSoundPreset",
+      planetId,
+      soundPresetId: record.id,
+    });
+    setToast(`${record.name} is now playing on this planet.`);
+    return { persisted };
+  };
+
+  const importPitchedSound = async (
+    input: PitchedSoundImport,
+  ): Promise<SoundImportResult> => {
+    if (!selectedPlanet || selectedPlanet.role === "beat") {
+      throw new Error("Select a bass, chord, melody, or texture planet first.");
+    }
+    const targetId = selectedPlanet.id;
+    const role = selectedPlanet.role;
+    const id = createId("user-sound");
+    const category: AudioSampleCategory = role === "bass" ? "bass" : "synth";
+    const envelope = resolveAudioSampleEnvelope({ category });
+    return activateUserSound(
+      {
+        schemaVersion: 1,
+        id,
+        name: input.name,
+        role,
+        kind: "pitched",
+        createdAt: new Date().toISOString(),
+        samples: [
+          {
+            assetId: createId("user-sample"),
+            name: input.file.name,
+            category,
+            blob: input.file,
+            durationSeconds: input.durationSeconds,
+            attackSeconds: envelope.attackSeconds,
+            releaseSeconds: envelope.releaseSeconds,
+            rootMidi: input.rootMidi,
+          },
+        ],
+      },
+      targetId,
+    );
+  };
+
+  const importDrumKit = async (
+    input: DrumKitImport,
+  ): Promise<SoundImportResult> => {
+    if (!selectedPlanet || selectedPlanet.role !== "beat") {
+      throw new Error("Select a beat planet before building a drum kit.");
+    }
+    const targetId = selectedPlanet.id;
+    const id = createId("user-sound");
+    const samples = (
+      Object.entries(input.samples) as [
+        DrumVoiceId,
+        { file: File; durationSeconds: number },
+      ][]
+    ).map(([drumVoice, sample]) => {
+      const category = drumSampleCategory(drumVoice);
+      const envelope = resolveAudioSampleEnvelope({ category });
+      return {
+        assetId: createId("user-sample"),
+        name: sample.file.name,
+        category,
+        blob: sample.file,
+        durationSeconds: sample.durationSeconds,
+        attackSeconds: envelope.attackSeconds,
+        releaseSeconds: envelope.releaseSeconds,
+        drumVoice,
+      };
+    });
+    return activateUserSound(
+      {
+        schemaVersion: 1,
+        id,
+        name: input.name,
+        role: "beat",
+        kind: "drum-kit",
+        createdAt: new Date().toISOString(),
+        samples,
+      },
+      targetId,
+    );
+  };
+
+  const setSelectedSound = (soundPresetId: string) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetPlanetSoundPreset",
+      planetId: selectedPlanet.id,
+      soundPresetId,
+    });
   };
 
   const toggleSelectedMute = () => {
@@ -812,6 +1024,47 @@ export function App() {
     [dispatch, selectObject],
   );
 
+  const handleSceneGateToggle = useCallback(
+    (planetId: string, step: number) => {
+      selectObject(planetId);
+      dispatch({
+        type: "TogglePlanetGate",
+        planetId,
+        step,
+        addedEventId: createId("event"),
+      });
+    },
+    [dispatch, selectObject],
+  );
+
+  const handleSceneMelodyPitchShift = useCallback(
+    (planetId: string, eventId: string, scaleDegreeDelta: number) => {
+      selectObject(planetId);
+      dispatch({
+        type: "ShiftMelodyGatePitch",
+        planetId,
+        eventId,
+        scaleDegreeDelta,
+      });
+    },
+    [dispatch, selectObject],
+  );
+
+  const handleMacroBegin = (control: MacroControlKey) => {
+    beginHistoryGroup(
+      `macro-${control}`,
+      control === "volume" ? "Changed master volume" : `Changed ${control}`,
+    );
+  };
+
+  const handleMacroChange = (control: MacroControlKey, value: number) => {
+    if (control === "volume") {
+      dispatch({ type: "SetMasterLevel", value });
+    } else {
+      dispatch({ type: "SetMacro", macro: control, value });
+    }
+  };
+
   return (
     <main className="app-shell" data-reduced-motion={ui.reducedEffects}>
       <TransportBar
@@ -840,6 +1093,7 @@ export function App() {
           composition={composition}
           selectedId={ui.selectedObjectId}
           onSelect={selectObject}
+          advanced={ui.advancedControls}
         />
         <section className="scene-panel" aria-label="Cosmic instrument scene">
           <Suspense
@@ -865,6 +1119,8 @@ export function App() {
               onSelect={selectObject}
               onOrbitLoopBarsChange={handleSceneOrbitChange}
               onOrbitPhaseChange={handleScenePhaseChange}
+              onGateToggle={handleSceneGateToggle}
+              onMelodyGatePitchShift={handleSceneMelodyPitchShift}
             />
           </Suspense>
           <ScenePolishOverlay
@@ -892,21 +1148,39 @@ export function App() {
               <span>Choose a faster or slower rate in the inspector.</span>
             </div>
           ) : null}
-          <button
-            type="button"
-            className="add-button"
-            onClick={() => setOpenPanel("add")}
-          >
-            <span aria-hidden="true">+</span> Add object
-          </button>
+          <div className="scene-primary-actions">
+            <button
+              type="button"
+              className="surprise-system-button"
+              onClick={surpriseSystem}
+            >
+              <span aria-hidden="true">✦</span> Surprise me
+              <small>whole system</small>
+            </button>
+            <button
+              type="button"
+              className="add-button"
+              onClick={() => setOpenPanel("add")}
+            >
+              <span aria-hidden="true">+</span> Add object
+            </button>
+          </div>
         </section>
         <PlanetInspector
           planet={selectedPlanet}
+          starPresetId={composition.star.presetId}
           superLoopBars={superLoopBars}
+          advanced={ui.advancedControls}
+          onAdvancedChange={setAdvancedControls}
+          onSurprise={surpriseSelectedPlanet}
+          onSound={setSelectedSound}
+          onImportPitched={importPitchedSound}
+          onImportDrumKit={importDrumKit}
           onMute={toggleSelectedMute}
           onSolo={toggleSelectedSolo}
           onLock={toggleSelectedLock}
           onOrbit={setOrbit}
+          onPatternGridSize={setPatternGridSize}
           onExpressionBegin={beginExpressionEdit}
           onExpressionCommit={commitHistoryGroup}
           onChordExpression={setChordExpression}
@@ -936,12 +1210,11 @@ export function App() {
 
       <MacroControls
         macros={composition.macros}
-        onBegin={(macro) =>
-          beginHistoryGroup(`macro-${macro}`, `Changed ${macro}`)
-        }
-        onChange={(macro, value) =>
-          dispatch({ type: "SetMacro", macro, value })
-        }
+        masterLevel={composition.mix.level}
+        advanced={ui.advancedControls}
+        onAdvancedChange={setAdvancedControls}
+        onBegin={handleMacroBegin}
+        onChange={handleMacroChange}
         onCommit={commitHistoryGroup}
       />
 
@@ -960,34 +1233,25 @@ export function App() {
             </small>
           </span>
         </div>
-        <button type="button" onClick={() => setOpenPanel("mobile-editor")}>
-          Controls
-        </button>
-        {selectedPlanet ? (
-          <label className="mobile-orbit-control">
-            <span>Orbit</span>
-            <select
-              aria-label="Orbit rate"
-              value={selectedPlanet.orbit.loopBars}
-              onChange={(event) => {
-                const orbit = parseOrbitRate(event.target.value);
-                if (orbit !== undefined) setOrbit(orbit);
-              }}
-            >
-              {ORBIT_RATE_OPTIONS.map((orbit) => (
-                <option key={orbit.bars} value={orbit.bars}>
-                  {orbit.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        <div className="mobile-sheet-actions">
+          <button
+            type="button"
+            onClick={surpriseSelectedPlanet}
+            disabled={!selectedPlanet || selectedPlanet.locked}
+          >
+            Surprise
+          </button>
+          <button type="button" onClick={() => setOpenPanel("mobile-editor")}>
+            Controls
+          </button>
+        </div>
       </div>
 
       <Onboarding
         step={ui.onboardingStep}
         audioStatus={ui.audioStatus}
         onStart={startOnboarding}
+        onSurprise={startWithSurprise}
         onMood={chooseMood}
         onSkip={() => void openCompleteDemo()}
       />
@@ -1013,11 +1277,7 @@ export function App() {
           onShare={share}
           onExport={() => setOpenPanel("export")}
           onJson={() => downloadCompositionJson(composition)}
-          onSurprise={() => {
-            const regenerated = regenerateUnlockedSystem(composition);
-            dispatch({ type: "RegenerateSystem", composition: regenerated });
-            setOpenPanel(null);
-          }}
+          onSurprise={surpriseSystem}
           onShowcase={openShowcase}
           onClose={() => setOpenPanel(null)}
         />
@@ -1098,16 +1358,25 @@ export function App() {
             composition={composition}
             selectedId={ui.selectedObjectId}
             onSelect={selectObject}
+            advanced={ui.advancedControls}
             headingId="mobile-object-list-heading"
           />
           <PlanetInspector
             planet={selectedPlanet}
+            starPresetId={composition.star.presetId}
             superLoopBars={superLoopBars}
+            advanced={ui.advancedControls}
+            onAdvancedChange={setAdvancedControls}
+            onSurprise={surpriseSelectedPlanet}
+            onSound={setSelectedSound}
+            onImportPitched={importPitchedSound}
+            onImportDrumKit={importDrumKit}
             headingId="mobile-inspector-heading"
             onMute={toggleSelectedMute}
             onSolo={toggleSelectedSolo}
             onLock={toggleSelectedLock}
             onOrbit={setOrbit}
+            onPatternGridSize={setPatternGridSize}
             onExpressionBegin={beginExpressionEdit}
             onExpressionCommit={commitHistoryGroup}
             onChordExpression={setChordExpression}
@@ -1138,13 +1407,18 @@ export function App() {
       {focusOpen ? (
         <FocusView
           planet={selectedPlanet}
-          onChange={(pattern) =>
+          advanced={ui.advancedControls}
+          onPatternGridSize={setPatternGridSize}
+          onToggleGate={(step) =>
+            selectedPlanet && handleSceneGateToggle(selectedPlanet.id, step)
+          }
+          onPitchShift={(eventId, scaleDegreeDelta) =>
             selectedPlanet &&
-            dispatch({
-              type: "SetPlanetPattern",
-              planetId: selectedPlanet.id,
-              pattern,
-            })
+            handleSceneMelodyPitchShift(
+              selectedPlanet.id,
+              eventId,
+              scaleDegreeDelta,
+            )
           }
           onClose={() => setFocusOpen(false)}
         />

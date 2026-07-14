@@ -412,6 +412,40 @@ This milestone does not add terrain simulation, physical shadow maps, WebGPU, co
 
 Format, typecheck, lint, unit tests, production build, and critical E2E pass; real-browser desktop High and phone Auto captures are inspected; profile switching and the console remain clean; and any remaining physical-device performance risk is reported without claiming it verified.
 
+## Milestone 12 — Accessible Sound Library & Local Sample Import
+
+### Goal
+
+Expose the variety already present in the first-party pack, make safe variation an obvious creative action, and allow bounded device-local sample personalization without changing the canonical composition or export contracts.
+
+### Deliverables
+
+- One labelled selected-planet sound control with the active star's recommendations, the remaining role-compatible built-ins, descriptions, and local user sounds
+- An undoable `SetPlanetSoundPreset` command that preserves the planet pattern and orbit and keeps tonal rings on the parent voice
+- Deterministic planet and whole-system Surprise actions that advance generation revision, respect locks, and choose only existing role-safe palettes
+- A dedicated local IndexedDB sound library containing Blob assets and stable IDs outside composition/share state
+- Partial seven-slot user drum kits whose empty or failed slots retain event-for-event synth fallback
+- Bounded tonal sample import for bass, chords, melody, and texture, with normalized-autocorrelation source-note analysis and manual correction
+- Runtime registration through the existing lazy decoded-buffer cache, event ownership, overlap budgets, track strips, and synth fallback
+- Explicit copy that custom live audio is device-local; offline WAV remains synth-rendered and MIDI remains sample-independent
+
+### Acceptance
+
+- Every role exposes at least three described built-in sound choices through semantic HTML on desktop and phone layouts.
+- Selecting a different sound changes `soundPresetId` without rewriting rhythm, pitch intent, orbit, or stable IDs; undo and redo restore the exact voice.
+- A short monophonic C-rooted fixture is detected as C within one semitone, the user can correct the result, and the imported sound becomes immediately selectable and playable.
+- A beat kit can contain any non-empty subset of labelled slots, and an empty/missing/failed slot produces the safe synth occurrence rather than silence or disabling other loaded slots.
+- Custom Blob data never enters composition JSON, share URLs, MIDI, history, or the first-party manifest. A save on the same device can resolve its stable local sound ID; another device falls back safely.
+- Format, typecheck, lint, unit tests, production build, and critical browser flows pass without a new runtime dependency.
+
+### Scope boundary
+
+This milestone does not add a sample marketplace, cloud sync, destructive editing, timestretching, multisample mapping, automatic key detection for polyphonic material, sample-based offline WAV, stems, or custom audio inside share links. Pitch analysis targets short monophonic tonal sources and always exposes manual correction.
+
+### Stopping condition
+
+The primary agent verifies built-in sound switching, one tonal import, one partial drum kit, deterministic Surprise and undo behavior, local reload/fallback copy, and the complete repository quality suite. Physical-device listening and storage-quota behavior remain release checks.
+
 ## Nine-day build sequence
 
 ### Day 1

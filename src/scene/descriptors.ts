@@ -1,6 +1,6 @@
 import type { Composition, PatternState } from "../domain/composition";
 import { derivePlanetOrbitLanes } from "../domain/composition/orbitLanes";
-import { derivePerformancePattern } from "../domain/rhythm";
+import { derivePerformancePattern, gateStepEmphasis } from "../domain/rhythm";
 import type { SceneDescriptor } from "./contracts";
 import { gatePhaseForTrigger } from "./gates";
 import {
@@ -40,6 +40,23 @@ function describePatternEvents(
       step: event.step,
       phase,
       gatePhase: gatePhaseForTrigger(phase, orbitPhase),
+    };
+  });
+}
+
+function describeGateSlots(pattern: PatternState, orbitPhase: number) {
+  return Array.from({ length: pattern.gridSize }, (_, step) => {
+    const events = pattern.events.filter((event) => event.step === step);
+    const pitchEvent = events.find(
+      (event) => event.pitch?.kind === "scaleDegree",
+    );
+    const triggerPhase = normalizePhase(step / pattern.gridSize + orbitPhase);
+    return {
+      step,
+      gatePhase: gatePhaseForTrigger(triggerPhase, orbitPhase),
+      active: events.length > 0,
+      emphasis: gateStepEmphasis(pattern.gridSize, step),
+      pitchEventId: pitchEvent?.id,
     };
   });
 }
@@ -110,6 +127,7 @@ export function compositionToSceneDescriptor(
         soloed: planet.soloed,
         locked: planet.locked,
         events,
+        gateSlots: describeGateSlots(planet.pattern, planet.orbit.phase),
         moons: planet.moons.map((moon) => {
           const moonPerformancePattern = derivePerformancePattern(
             moon.pattern,

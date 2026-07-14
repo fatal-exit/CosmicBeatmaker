@@ -43,6 +43,7 @@ export interface OnboardingProps {
   step: EphemeralUiState["onboardingStep"];
   audioStatus: EphemeralUiState["audioStatus"];
   onStart: () => void | Promise<void>;
+  onSurprise: () => void | Promise<void>;
   onMood: (presetId: StarPresetId) => void;
   onSkip: () => void;
 }
@@ -51,6 +52,7 @@ export function Onboarding({
   step,
   audioStatus,
   onStart,
+  onSurprise,
   onMood,
   onSkip,
 }: OnboardingProps) {
@@ -73,6 +75,15 @@ export function Onboarding({
             disabled={audioStatus === "loading"}
           >
             {audioStatus === "loading" ? "Starting audio…" : "Start creating"}
+          </button>
+          <button
+            type="button"
+            className="secondary-action onboarding-surprise"
+            onClick={() => void onSurprise()}
+            disabled={audioStatus === "loading"}
+          >
+            <span>Surprise me</span>
+            <small>Build a complete, good-sounding system</small>
           </button>
           <button type="button" className="text-action" onClick={onSkip}>
             Explore the demo
@@ -119,6 +130,13 @@ export function Onboarding({
           </div>
           <button type="button" className="text-action" onClick={onSkip}>
             Use the recommended Radiant system
+          </button>
+          <button
+            type="button"
+            className="text-action"
+            onClick={() => void onSurprise()}
+          >
+            Surprise me with a complete system
           </button>
         </div>
       </section>
