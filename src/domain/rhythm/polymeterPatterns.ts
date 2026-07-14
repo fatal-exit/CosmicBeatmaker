@@ -57,3 +57,33 @@ export function simplifyPatternForPolymeter(
     events,
   };
 }
+
+/**
+ * Keeps primary-planet detail tiers compatible with the selected orbit rate.
+ * Returning from polymeter expands 12 steps back to 16 and 24 back to 32
+ * without inventing replacements for events omitted during simplification.
+ */
+export function normalizePatternForLoopBars(
+  pattern: PatternState,
+  loopBars: LoopBars,
+): PatternState {
+  if (isPolymeterLoopBars(loopBars)) {
+    return simplifyPatternForPolymeter(pattern, loopBars);
+  }
+
+  const gridSize =
+    pattern.gridSize === 12
+      ? 16
+      : pattern.gridSize === 24
+        ? 32
+        : pattern.gridSize;
+  if (pattern.gridSize === gridSize) return pattern;
+
+  const customPattern: PatternState = { ...pattern };
+  delete customPattern.templateId;
+
+  return {
+    ...customPattern,
+    gridSize,
+  };
+}

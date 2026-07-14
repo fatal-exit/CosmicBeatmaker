@@ -233,7 +233,10 @@ tier by simplifying 16 steps to 12 and 32 steps to 24. Keep events that still
 fit the shorter grid and deterministically omit overflow; if every event would
 be omitted, wrap the earliest event into the new grid so the planet does not
 become silent. Both supported polymeter grids divide each polymetric period
-into a whole number of subdivisions per bar.
+into a whole number of subdivisions per bar. When the planet returns to an
+ordinary rate, expand 12 steps back to 16 and 24 steps back to 32. Preserve the
+surviving event IDs and step positions; do not invent replacements for events
+that were omitted, and keep the transformed pattern custom.
 
 The planet completes one visual orbit per musical pattern loop. Live scheduling, orbit phase, WAV, and MIDI all consume the same rate and derived super-loop boundary.
 

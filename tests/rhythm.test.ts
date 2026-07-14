@@ -10,6 +10,7 @@ import {
   calculateSwingOffset,
   getRhythmAnchorKeys,
   instantiateRhythmTemplate,
+  normalizePatternForLoopBars,
   rotatePattern,
   simplifyPatternForPolymeter,
 } from "../src/domain/rhythm";
@@ -121,6 +122,61 @@ describe("rhythm templates", () => {
     expect(threeBars.templateId).toBeUndefined();
     expect(sixteenStepPattern.events).toHaveLength(5);
     expect(thirtyTwoStepPattern.events).toHaveLength(5);
+  });
+
+  it("restores ordinary detail tiers after polymetric simplification", () => {
+    const sixteenStepPattern: PatternState = {
+      gridSize: 16,
+      humanize: 0,
+      templateId: "backbeat",
+      events: [0, 4, 8, 12].map((step) => ({
+        id: `ordinary-${step}`,
+        step,
+        velocity: 0.8,
+        probability: 1,
+        durationSteps: 1,
+        drumVoice: "kick" as const,
+      })),
+    };
+    const thirtyTwoStepPattern: PatternState = {
+      ...sixteenStepPattern,
+      gridSize: 32,
+      events: [0, 8, 16, 24].map((step) => ({
+        id: `detailed-${step}`,
+        step,
+        velocity: 0.8,
+        probability: 1,
+        durationSteps: 1,
+        drumVoice: "kick" as const,
+      })),
+    };
+
+    const simplified = normalizePatternForLoopBars(sixteenStepPattern, 1.5);
+    const detailedSimplified = normalizePatternForLoopBars(
+      thirtyTwoStepPattern,
+      3,
+    );
+    const restored = normalizePatternForLoopBars(simplified, 4);
+    const detailedRestored = normalizePatternForLoopBars(detailedSimplified, 2);
+
+    expect(restored.gridSize).toBe(16);
+    expect(restored.events.map(({ id, step }) => ({ id, step }))).toEqual([
+      { id: "ordinary-0", step: 0 },
+      { id: "ordinary-4", step: 4 },
+      { id: "ordinary-8", step: 8 },
+    ]);
+    expect(restored.templateId).toBeUndefined();
+    expect(detailedRestored.gridSize).toBe(32);
+    expect(
+      detailedRestored.events.map(({ id, step }) => ({ id, step })),
+    ).toEqual([
+      { id: "detailed-0", step: 0 },
+      { id: "detailed-8", step: 8 },
+      { id: "detailed-16", step: 16 },
+    ]);
+    expect(normalizePatternForLoopBars(sixteenStepPattern, 1)).toBe(
+      sixteenStepPattern,
+    );
   });
 
   it("retains one event when polymeter simplification would empty a pattern", () => {

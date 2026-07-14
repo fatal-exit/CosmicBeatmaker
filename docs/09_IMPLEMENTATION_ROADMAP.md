@@ -320,6 +320,7 @@ Let simple loops and deeper polymeters coexist without breaking the beginner met
 ### Acceptance
 
 - The catalog round-trips and validates every supported rate while rejecting values outside it.
+- Returning from a 1.5- or 3-bar rate to an ordinary rate restores the corresponding 16- or 32-step detail tier without changing surviving event IDs or steps.
 - Integer timing proves 3 + 4 → 12 bars, 6 + 8 → 24 bars, fractional rates exactly divide the shared PPQ timeline, and no supported composition exceeds the 24-bar limit.
 - Live playback, visual phase, probability indexing, WAV, and MIDI use the same derived boundary; repeated exports are whole super-loops rather than arbitrary four-bar slices.
 - Every planet has a distinct orbit radius. Planets with the same rate occupy neighboring lanes and never share or cross the same path; reloading the same composition preserves deterministic lane ordering.

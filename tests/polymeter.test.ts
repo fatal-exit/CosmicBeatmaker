@@ -207,6 +207,18 @@ describe("exact polymeter rates", () => {
       loopBars: 3,
       timestamp: denseComposition.updatedAt,
     }).composition;
+    const backToFourBars = applyCompositionCommand(oneAndAHalfBars, {
+      type: "SetPlanetLoopBars",
+      planetId,
+      loopBars: 4,
+      timestamp: oneAndAHalfBars.updatedAt,
+    }).composition;
+    const denseBackToFourBars = applyCompositionCommand(threeBars, {
+      type: "SetPlanetLoopBars",
+      planetId: densePlanet.id,
+      loopBars: 4,
+      timestamp: threeBars.updatedAt,
+    }).composition;
 
     expect(oneAndAHalfBars.planets[0].orbit.loopBars).toBe(1.5);
     expect(oneAndAHalfBars.planets[0].pattern.gridSize).toBe(12);
@@ -227,7 +239,42 @@ describe("exact polymeter rates", () => {
       success: true,
       composition: threeBars,
     });
+    expect(backToFourBars.planets[0].pattern.gridSize).toBe(16);
+    expect(
+      backToFourBars.planets[0].pattern.events.map(({ step }) => step),
+    ).toEqual([0, 4, 8]);
+    expect(denseBackToFourBars.planets[0].pattern.gridSize).toBe(32);
+    expect(
+      denseBackToFourBars.planets[0].pattern.events.map(({ step }) => step),
+    ).toEqual([0, 8, 16]);
   });
+
+  it.each([0.25, 0.5, 1, 2, 4, 6, 8] satisfies LoopBars[])(
+    "restores a standard pattern grid when returning to %s bars",
+    (loopBars) => {
+      const composition = createStarterComposition(
+        `polymeter-grid-return-${loopBars}`,
+      );
+      const planetId = composition.planets[0].id;
+      const polymetric = applyCompositionCommand(composition, {
+        type: "SetPlanetLoopBars",
+        planetId,
+        loopBars: 1.5,
+        timestamp: composition.updatedAt,
+      }).composition;
+      const restored = applyCompositionCommand(polymetric, {
+        type: "SetPlanetLoopBars",
+        planetId,
+        loopBars,
+        timestamp: polymetric.updatedAt,
+      }).composition;
+
+      expect(polymetric.planets[0].pattern.gridSize).toBe(12);
+      expect(restored.planets[0].orbit.loopBars).toBe(loopBars);
+      expect(restored.planets[0].pattern.gridSize).toBe(16);
+      expect(validateComposition(restored).success).toBe(true);
+    },
+  );
 });
 
 describe("polymetric compilation and scheduling", () => {

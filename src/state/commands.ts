@@ -12,7 +12,7 @@ import type {
   StarPresetId,
   TrackMixState,
 } from "../domain/composition/types";
-import { simplifyPatternForPolymeter } from "../domain/rhythm/polymeterPatterns";
+import { normalizePatternForLoopBars } from "../domain/rhythm/polymeterPatterns";
 import { ringActiveSegmentsForDensity } from "../domain/rhythm/ringPatterns";
 
 type ChordExpression = Extract<PlanetExpressionState, { kind: "chords" }>;
@@ -254,7 +254,7 @@ export function applyCompositionCommand(
                     ...planet.orbit,
                     loopBars: command.loopBars,
                   },
-                  pattern: simplifyPatternForPolymeter(
+                  pattern: normalizePatternForLoopBars(
                     planet.pattern,
                     command.loopBars,
                   ),

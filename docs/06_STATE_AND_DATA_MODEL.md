@@ -201,7 +201,9 @@ Planet rate edits into the 1.5- or 3-bar polymetric choices use only 12- or
 24-step grids. The command preserves the pattern's existing detail tier by
 simplifying 16 steps to 12 and 32 steps to 24, retaining events that remain in
 bounds and omitting overflow deterministically. Eight-step moon and auxiliary
-patterns remain valid; this rule applies to primary planet rate edits.
+patterns remain valid; this rule applies to primary planet rate edits. Returning
+to an ordinary planet rate expands the corresponding detail tier from 12 back
+to 16 or from 24 back to 32 while preserving surviving event IDs and steps.
 
 ## Pitch intent
 
@@ -436,6 +438,7 @@ Keep expensive derived calculations memoized where useful.
 - No duplicate IDs
 - Every event step inside pattern bounds
 - Planet rate edits to 1.5 or 3 bars produce a 12- or 24-step pattern grid
+- Planet rate edits back to ordinary rates restore 12 steps to 16 and 24 to 32
 - Ring segment count matches active array
 - Values normalized
 - Safe Harmony pitch intents valid

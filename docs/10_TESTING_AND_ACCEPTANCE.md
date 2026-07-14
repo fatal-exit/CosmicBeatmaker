@@ -49,6 +49,7 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - The exact orbit catalog is `[0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8]` bars and round-trips without floating approximation.
 - Quarter-bar integer LCM yields 12 bars for 3 + 4, 24 bars for 6 + 8, and never exceeds 24 bars for the supported catalog.
 - Changing a planet to 1.5 or 3 bars simplifies 16-step patterns to 12 and 32-step patterns to 24, keeps surviving event IDs and steps stable, and never leaves a previously active planet silent.
+- Changing that planet back to an ordinary rate restores 12-step patterns to 16 and 24-step patterns to 32 while keeping surviving event IDs and steps stable.
 
 ### State
 
