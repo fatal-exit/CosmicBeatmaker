@@ -181,13 +181,17 @@ Acceptance:
 3. Select a planet, use its separate Surprise action, and confirm neighboring planets keep their stable state.
 4. Confirm a half-bar orbit offers 4/8 steps, one- and two-bar orbits offer 8/16, and a four-bar orbit offers 8/16/32; open the circular pattern editor after a change.
 5. Enable Advanced, confirm six macro controls, then confirm 1½ bars offers 6/12 polyrhythm steps and three bars offers 12/24.
-6. Toggle a gate in the scene and semantic grid, rotate the selected orbit arc, and nudge an active melody gate with both radial drag and labelled pitch buttons.
+6. Confirm inactive scene gates are hidden and protected by default, enable Gate edit, toggle a gate in the scene and semantic grid, rotate the selected orbit arc, and nudge an active melody gate with both radial drag and labelled pitch buttons.
+7. Use Earlier and Later to rotate the complete pattern by one slot, then Reset it.
 
 Acceptance:
 
 - Whole-system and per-planet Surprise are distinct, undoable, deterministic, and lock-aware.
 - Step resizing preserves normalized rhythmic landmarks and never leaves an out-of-range event.
 - Beat landmarks are visibly strongest, offbeat eighths use a secondary emphasis, and fine subdivisions remain legible without competing.
+- Every gate edit reports its bar, beat, and subdivision in a short non-modal readout; Orbit Lab summarizes how many active gates are on beats versus between beats.
+- Outside explicit Gate edit mode, inactive slots are visually suppressed and excluded from picking, active gate taps cannot mutate the pattern, and orbit-arc drags cannot rotate it.
+- Earlier, Later, and Reset are semantic 44-pixel controls that move all gates together by exact slots and remain keyboard operable.
 - Simple step choices and every semantic editor target meet the 44-pixel touch policy at phone size.
 - Advanced mode alone exposes the orbit-appropriate 6/12/24 polyrhythms and the full six-control macro surface.
 

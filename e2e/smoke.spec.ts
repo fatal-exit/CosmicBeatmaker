@@ -572,9 +572,18 @@ test("keeps material identity, gate presets, and Orbit Lab connected", async ({
   await expect(
     overlay.locator(".scene-material-identity strong"),
   ).not.toBeEmpty();
+  const gateEdit = overlay.getByRole("button", { name: /Edit gates/ });
+  await expect(gateEdit).toHaveAttribute("aria-pressed", "false");
+  await expect(overlay).toContainText(
+    "Active gates stay visible. Gate taps and arc rotation are off.",
+  );
+  await gateEdit.click();
+  await expect(
+    overlay.getByRole("button", { name: /Done editing gates/ }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(overlay).toContainText("Tap a slot to turn it on or off");
-  await expect(overlay).toContainText("Radial drag · change loop");
-  await expect(overlay).toContainText("Arc drag · rotate gates");
+  await expect(overlay).toContainText("Planet drag · change loop");
+  await expect(overlay).toContainText("Orbit arc · rotate gates");
 
   const materialByRole = {
     beat: "Impact terrain",
@@ -611,7 +620,26 @@ test("keeps material identity, gate presets, and Orbit Lab connected", async ({
   ).toBeVisible();
 
   const pattern = page.getByRole("dialog", { name: /pattern/ });
+  await expect(pattern.getByText("Beat alignment")).toBeVisible();
+  const offsetBefore = await pattern
+    .locator(".gate-offset-stepper output strong")
+    .textContent();
+  await pattern
+    .getByRole("button", { name: "Move all gates one slot later" })
+    .click();
+  await expect(
+    pattern.locator(".gate-offset-stepper output strong"),
+  ).not.toHaveText(offsetBefore ?? "");
+  const stepGridBox = await pattern.getByLabel(/step pattern$/).boundingBox();
+  expect(stepGridBox).not.toBeNull();
+  expect(stepGridBox?.height ?? 0).toBeGreaterThanOrEqual(44);
   await pattern.getByRole("button", { name: "Step 2", exact: true }).click();
+  await expect(pattern.locator(".gate-timing-feedback")).toContainText(
+    /On the beat|Halfway between beats|Fine subdivision/,
+  );
+  await expect(pattern.locator(".gate-timing-feedback")).toContainText(
+    /Bar \d+ · Beat \d/,
+  );
   await pattern.getByRole("button", { name: "Close pattern editor" }).click();
 
   inspector = await visibleInspector(page, testInfo.project.name);
@@ -732,7 +760,7 @@ test("changes orbit detail from clear beats to advanced polyrhythms", async ({
   await expect(pattern.locator(".linear-pattern button")).toHaveCount(12);
   await expect(
     pattern.getByRole("button", { name: /^Step 1(?:, active)?$/ }),
-  ).toHaveAttribute("aria-description", "Main beat");
+  ).toHaveAttribute("aria-description", /Bar \d+ · Beat \d/);
 });
 
 test("offers keyboard pitch nudges for melodic gates", async ({

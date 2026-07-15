@@ -77,6 +77,7 @@ Minimum hit behavior:
 - Selected orbit path and radial rate-control hit area wide enough for touch
 - Pattern nodes enlarged in Focus View
 - Object selection resolvable even when visuals overlap
+- Inactive gate hit meshes excluded from picking until the user explicitly enables Gate edit mode
 
 When multiple objects are under a tap:
 
@@ -100,14 +101,17 @@ After the rate change, derive a unique lane for every planet by rate order and s
 
 ### Tangential drag
 
+- Available only while Gate edit mode is explicitly enabled
 - Convert angular delta to normalized phase.
 - Snap according to current grid resolution.
 - Provide visible and optional haptic snap feedback.
 - Commit one history entry on release.
+- Provide one-slot Earlier/Later and Reset HTML controls as the precise alternative.
 
 ### Camera conflict prevention
 
 - One-finger drag on a selected object edits it.
+- Gate taps and tangential phase rotation do nothing while Gate edit mode is off; active gates may still select their parent without changing it.
 - One-finger drag on empty space may pan only if intentionally supported.
 - Two-finger gesture controls zoom or limited camera rotation and tilt.
 - Provide buttons for users who cannot use multi-touch.

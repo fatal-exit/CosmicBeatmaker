@@ -271,14 +271,14 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
-/* Visual-only scene context; all edits remain available in the HTML controls. */
+/* Scene context plus an explicit edit-mode boundary. */
 .scene-polish-overlay {
   --material-color: var(--accent);
   position: absolute;
   bottom: 18px;
   left: 16px;
   z-index: 2;
-  width: min(430px, calc(100% - 190px));
+  width: min(330px, calc(100% - 310px));
   padding: 9px 10px 10px;
   color: var(--ink);
   background: oklch(0.12 0.022 302 / 0.92);
@@ -289,6 +289,88 @@ button:disabled {
   pointer-events: none;
   user-select: none;
   animation: polish-overlay-in var(--polish-standard) var(--polish-ease) both;
+}
+
+.scene-gate-edit-toggle {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  display: grid;
+  gap: 1px;
+  color: var(--ink);
+  text-align: left;
+  background: color-mix(in oklch, var(--material-color) 7%, transparent);
+  border: 1px solid
+    color-mix(in oklch, var(--material-color) 32%, var(--border));
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+.scene-gate-edit-toggle span {
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.scene-gate-edit-toggle small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.scene-gate-edit-toggle[aria-pressed="true"] {
+  color: var(--ink);
+  background: color-mix(
+    in oklch,
+    var(--material-color) 18%,
+    var(--surface-raised)
+  );
+  border-color: color-mix(in oklch, var(--material-color) 68%, var(--border));
+}
+
+.scene-gate-safe-note {
+  margin: 7px 0 0;
+  color: color-mix(in oklch, var(--ink) 68%, var(--muted));
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.gate-placement-popover {
+  position: absolute;
+  top: 58px;
+  left: 16px;
+  z-index: 3;
+  width: min(290px, calc(100% - 182px));
+  padding: 10px 11px;
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  background: oklch(0.145 0.026 302 / 0.96);
+  border-radius: 10px;
+  outline: 1px solid color-mix(in oklch, var(--accent) 34%, var(--border));
+  outline-offset: -1px;
+  pointer-events: none;
+  animation: polish-overlay-in var(--polish-standard) var(--polish-ease) both;
+}
+
+.gate-placement-popover[data-character="beat"] {
+  outline-color: color-mix(in oklch, var(--focus) 54%, var(--border));
+}
+
+.gate-placement-popover > span {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.gate-placement-popover strong {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-placement-popover p {
+  margin: 0;
+  color: color-mix(in oklch, var(--ink) 82%, var(--muted));
+  font-size: 0.68rem;
+  line-height: 1.35;
 }
 
 .scene-polish-overlay[data-role="beat"] {
@@ -457,6 +539,12 @@ button:disabled {
   .selected-summary .selected-material {
     max-width: 42ch;
   }
+
+  .gate-placement-popover {
+    top: 60px;
+    left: 10px;
+    width: min(250px, calc(100% - 170px));
+  }
 }
 
 @media (max-width: 430px) {
@@ -475,6 +563,10 @@ button:disabled {
 
   .scene-gesture-guides span {
     font-size: 0.66rem;
+  }
+
+  .gate-placement-popover {
+    width: min(250px, calc(100% - 116px));
   }
 }
 
@@ -500,6 +592,7 @@ button:disabled {
   .focus-view .circular-pattern,
   .circular-pattern > span.active,
   .scene-polish-overlay,
+  .gate-placement-popover,
   .scene-polish-overlay[data-playing="true"] .scene-material-swatch {
     animation: none !important;
   }

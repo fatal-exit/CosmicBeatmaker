@@ -248,6 +248,37 @@ Resizing maps events by normalized orbit position, scales duration, clears templ
 
 **Reason:** Fewer visible decisions make a rhythm understandable before adding detail, while proportional remapping preserves the user's musical idea. Beat hierarchy teaches timing through cause and effect, and separate DOM controls ensure the canvas gestures are never the only essential path. The existing serializable event model and audio-authoritative compiler already support these grid sizes, so no new dependency or renderer-driven timing state is required.
 
+### D-034 — Protected gate editing, timing feedback, and precise offset controls
+
+**Decision:** Keep active orbit gates visible as the causes of audible events, but
+hide the complete inactive-slot projection and exclude every gate slot and orbit
+arc from mutating hit-testing until the user explicitly enables the ephemeral
+Gate edit mode. Gate edit mode reveals the quiet slot hierarchy, enables gate
+tap and pitch gestures, and permits tangential phase dragging; changing selection
+or locking the planet exits the mode. The accessible Focus View remains the
+complete precision editor regardless of canvas mode.
+
+After every gate toggle, show a short non-modal placement readout in bar, beat,
+and quarter-beat language and identify the placement as on-beat, halfway between
+beats, or a fine subdivision. Orbit Lab also summarizes active on-beat versus
+between-beat gates and explains that between-beat placement creates syncopation
+rather than labelling it as a mistake. Provide semantic Earlier, Later, and Reset
+controls in both the inspector and Orbit Lab; each nudge snaps the stored phase to
+the current gate grid and moves the complete pattern by exactly one slot through
+the existing undoable `SetPlanetPhase` command.
+
+No edit-mode, popup, selected step, or timing-summary state enters the composition,
+history, share payload, audio schedule, or schema. The timing readout is a pure
+projection of the canonical grid, step, loop length, and phase, while the audio
+compiler remains authoritative for actual scheduling.
+
+**Reason:** Showing and hit-testing every inactive slot whenever a planet is
+selected created visual noise and made reversible but unintended rhythm edits too
+easy, especially on touch screens. An explicit edit boundary protects casual
+selection without hiding audible causality. Exact one-slot buttons are clearer
+than an always-live arc gesture, and plain musical-time feedback helps a beginner
+spot one misplaced event while preserving syncopation as a valid creative choice.
+
 ### Current implementation note for D-014
 
 D-026 supersedes D-014's next-bar replacement behavior for live performance controls. Deterministic probability, transport reset/resume behavior, export loop indexing, and intentional playhead-relative macro, expression, step, ring, loop-length, harmony, voice, and pattern editing are implemented. Major regeneration remains an explicit whole-project action rather than a continuous performance control.

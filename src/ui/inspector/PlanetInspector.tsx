@@ -19,6 +19,7 @@ import {
   POLYRHYTHM_PATTERN_GRID_SIZES,
 } from "../../domain/rhythm/directGateEditing";
 import { PLANET_MATERIAL_PROFILES } from "../../scene/materials/profiles";
+import { GateOffsetControl } from "../focus/GateOffsetControl";
 import {
   SoundChoice,
   type DrumKitImport,
@@ -64,6 +65,8 @@ export interface PlanetInspectorProps {
   ) => void;
   gateRhythmPreset: GateRhythmPresetId | "custom";
   onGateRhythmPreset: (presetId: GateRhythmPresetId) => void;
+  onGateOffsetNudge: (direction: -1 | 1) => void;
+  onGateOffsetReset: () => void;
   onPattern: () => void;
   onRing: () => void;
   onRingDensityBegin: () => void;
@@ -487,6 +490,13 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           ))}
         </select>
       </div>
+      <GateOffsetControl
+        phase={planet.orbit.phase}
+        gridSize={planet.pattern.gridSize}
+        locked={planet.locked}
+        onNudge={actions.onGateOffsetNudge}
+        onReset={actions.onGateOffsetReset}
+      />
       <button
         type="button"
         className="primary-panel-action"
@@ -500,8 +510,9 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
         </small>
       </button>
       <p className="direct-gate-help">
-        On the solar system, tap a gate slot to turn it on or off. Drag the
-        orbit arc to rotate every gate together.
+        On the solar system, choose Edit gates before changing slots. Inactive
+        slots stay quiet and cannot be tapped until editing is on. Arc drag
+        rotates the gates only in that mode.
         {planet.role === "melody"
           ? " Drag an active melody gate outward for a higher note or inward for a lower one."
           : ""}

@@ -7,11 +7,15 @@ import {
   inferGateRhythmPreset,
 } from "../src/domain/rhythm/gatePresets";
 import {
+  describeGateTiming,
   fitPatternGridToLoopBars,
   gateStepEmphasis,
   naturalPatternGridSizesForLoopBars,
+  nudgeGatePhase,
   resizePatternGrid,
   shiftMelodyGatePitch,
+  signedGateOffsetSteps,
+  summarizeGateTiming,
   togglePatternGate,
 } from "../src/domain/rhythm/directGateEditing";
 
@@ -136,6 +140,55 @@ describe("direct orbit gate editing", () => {
         gateStepEmphasis(12, step),
       ).filter((emphasis) => emphasis === "beat"),
     ).toHaveLength(4);
+  });
+
+  it("describes gate placement in bar-and-beat language after phase offset", () => {
+    expect(describeGateTiming(1, 16, 0, 0)).toMatchObject({
+      positionLabel: "Bar 1 · Beat 1",
+      character: "beat",
+    });
+    expect(describeGateTiming(1, 16, 1, 0)).toMatchObject({
+      positionLabel: "Bar 1 · Beat 1 + ¼",
+      character: "subdivision",
+    });
+    expect(describeGateTiming(1, 16, 2, 0)).toMatchObject({
+      positionLabel: "Bar 1 · Beat 1 + ½",
+      character: "offbeat",
+    });
+    expect(describeGateTiming(1, 16, 0, 0.25).positionLabel).toBe(
+      "Bar 1 · Beat 2",
+    );
+  });
+
+  it("nudges the complete gate pattern by one snapped slot", () => {
+    const earlier = nudgeGatePhase(0, 16, -1);
+    expect(earlier).toBe(15 / 16);
+    expect(signedGateOffsetSteps(earlier, 16)).toBe(-1);
+    expect(nudgeGatePhase(earlier, 16, 1)).toBe(0);
+    expect(nudgeGatePhase(0.249, 16, 1)).toBe(5 / 16);
+  });
+
+  it("summarizes one between-beat gate without judging syncopation as wrong", () => {
+    const planet = createStarterComposition("gate-timing-summary").planets[0];
+    const withSyncopation = togglePatternGate(
+      planet.pattern,
+      planet.role,
+      1,
+      "between-beat-gate",
+    );
+    const summary = summarizeGateTiming(
+      withSyncopation,
+      planet.orbit.loopBars,
+      planet.orbit.phase,
+    );
+
+    expect(summary).toMatchObject({
+      activeGates: 5,
+      onBeat: 4,
+      betweenBeats: 1,
+      label: "4 on-beat · 1 between beats",
+    });
+    expect(summary.guidance).toContain("creates syncopation");
   });
 
   it("turns every event at a tapped step off and adds a role-safe event back", () => {

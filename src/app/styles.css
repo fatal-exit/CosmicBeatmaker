@@ -1224,6 +1224,87 @@ p {
   margin: 4px 0 10px;
 }
 
+.gate-offset-control {
+  margin: 12px 0;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: color-mix(in oklch, var(--primary) 7%, var(--surface-raised));
+  border: 0;
+  border-radius: 10px;
+}
+
+.gate-offset-control legend {
+  padding: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 740;
+}
+
+.gate-offset-control > p {
+  margin: -3px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.gate-offset-stepper {
+  display: grid;
+  grid-template-columns: minmax(68px, 1fr) minmax(90px, 1.2fr) minmax(68px, 1fr);
+  align-items: stretch;
+  gap: 5px;
+}
+
+.gate-offset-stepper button,
+.gate-offset-reset {
+  min-height: 44px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+.gate-offset-stepper button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.gate-offset-stepper button span {
+  color: var(--focus);
+  font-size: 1rem;
+}
+
+.gate-offset-stepper output {
+  min-width: 0;
+  padding: 5px 4px;
+  display: grid;
+  place-content: center;
+  color: var(--ink);
+  text-align: center;
+  background: color-mix(in oklch, var(--accent) 9%, var(--surface));
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-offset-stepper output strong {
+  font-size: 0.7rem;
+}
+
+.gate-offset-stepper output small {
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+
+.gate-offset-reset {
+  width: 100%;
+  color: var(--muted);
+  background: transparent;
+}
+
 .inspector-depth-toggle {
   width: 100%;
   min-height: 44px;
@@ -1900,7 +1981,7 @@ p {
   inset: 0;
   padding: 22px;
   display: grid;
-  grid-template-rows: auto auto minmax(240px, 1fr) auto;
+  grid-template-rows: auto;
   gap: 18px;
   overflow-y: auto;
   background: var(--bg);
@@ -1909,6 +1990,46 @@ p {
 .focus-step-count {
   width: min(720px, 100%);
   margin: 0 auto;
+}
+
+.focus-pattern-tools {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: stretch;
+  gap: 10px;
+}
+
+.pattern-timing-summary {
+  padding: 12px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface-raised));
+  border-radius: 10px;
+}
+
+.pattern-timing-summary > span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.pattern-timing-summary strong {
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.pattern-timing-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.gate-offset-control.compact {
+  margin: 0;
 }
 
 .focus-view > header p:last-child {
@@ -1923,6 +2044,7 @@ p {
   place-self: center;
   border: 1px solid var(--border);
   border-radius: 50%;
+  pointer-events: none;
 }
 
 .focus-planet {
@@ -1943,39 +2065,55 @@ p {
   height: 14px;
   border: 1px solid var(--border);
   border-radius: 50%;
+  opacity: 0.16;
   transform: rotate(var(--angle)) translateY(calc(-1 * min(25vh, 25vw, 235px)));
 }
 
 .circular-pattern > span.active {
   background: var(--accent);
   border-color: var(--accent);
+  opacity: 1;
 }
 
 .circular-pattern > span.beat-step {
-  border-width: 3px;
+  border-width: 2px;
   border-color: color-mix(in oklch, var(--primary) 78%, white);
-  box-shadow: 0 0 12px color-mix(in oklch, var(--primary) 48%, transparent);
+  opacity: 0.58;
+}
+
+.circular-pattern > span.beat-step.active {
+  border-width: 3px;
+  opacity: 1;
+  box-shadow: 0 0 10px color-mix(in oklch, var(--primary) 42%, transparent);
 }
 
 .circular-pattern > span.offbeat-step {
   border-width: 2px;
   border-color: color-mix(in oklch, var(--primary) 62%, var(--border));
+  opacity: 0.3;
+}
+
+.circular-pattern > span.offbeat-step.active {
+  opacity: 1;
 }
 
 .linear-pattern {
+  width: min(720px, 100%);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(16, minmax(32px, 1fr));
+  grid-auto-rows: 44px;
   gap: 5px;
-  overflow-x: auto;
   padding-bottom: 4px;
 }
 
 .linear-pattern button {
-  aspect-ratio: 1;
+  width: 100%;
+  height: 44px;
   padding: 0;
   color: var(--muted);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklch, var(--border) 58%, transparent);
   border-radius: 7px;
 }
 
@@ -1987,18 +2125,54 @@ p {
 
 .linear-pattern button.beat-step:not(.active) {
   color: var(--ink);
-  background: color-mix(in oklch, var(--primary) 10%, var(--surface));
+  background: color-mix(in oklch, var(--primary) 7%, var(--surface));
   border-width: 2px;
   border-color: color-mix(in oklch, var(--primary) 72%, var(--border));
 }
 
 .linear-pattern button.offbeat-step:not(.active) {
-  border-color: color-mix(in oklch, var(--primary) 46%, var(--border));
-  box-shadow: inset 0 3px 0 color-mix(in oklch, var(--primary) 38%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 34%, var(--border));
+  box-shadow: inset 0 2px 0 color-mix(in oklch, var(--primary) 24%, transparent);
 }
 
 .linear-pattern button span {
   font-size: 0.68rem;
+}
+
+.gate-timing-feedback {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 14px;
+  background: color-mix(in oklch, var(--accent) 10%, var(--surface-raised));
+  border-radius: 10px;
+}
+
+.gate-timing-feedback[data-character="beat"] {
+  background: color-mix(in oklch, var(--focus) 11%, var(--surface-raised));
+}
+
+.gate-timing-feedback > span {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.gate-timing-feedback strong {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-timing-feedback p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .melody-gate-pitches {
@@ -2338,7 +2512,7 @@ p {
   }
 
   .linear-pattern {
-    grid-template-columns: repeat(8, minmax(38px, 1fr));
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
   }
 }
 

@@ -41,8 +41,11 @@ import {
 } from "../domain/generation";
 import {
   applyGateRhythmPreset,
+  describeGateTiming,
   inferGateRhythmPreset,
+  nudgeGatePhase,
   ringActiveSegmentsForDensity,
+  type GateTimingDescription,
   type GateRhythmPresetId,
 } from "../domain/rhythm";
 import { createId } from "../domain/serialization/ids";
@@ -96,6 +99,12 @@ type ChordExpressionUpdate = Partial<
 type MelodyExpressionUpdate = Partial<
   Omit<Extract<PlanetExpressionState, { kind: "melody" }>, "kind">
 >;
+interface GatePlacementNotice {
+  planetId: string;
+  step: number;
+  action: "added" | "removed";
+  timing: GateTimingDescription;
+}
 
 const repository = new LocalCompositionRepository();
 const userSoundRepository = new UserSoundRepository();
@@ -299,6 +308,11 @@ export function App() {
   const [, setUserSoundRevision] = useState(0);
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [sceneGateEditingPlanetId, setSceneGateEditingPlanetId] = useState<
+    string | null
+  >(null);
+  const [gatePlacementNotice, setGatePlacementNotice] =
+    useState<GatePlacementNotice | null>(null);
   const [saves, setSaves] = useState<CompositionSummary[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -308,6 +322,19 @@ export function App() {
   const [exportMessage, setExportMessage] = useState("");
   const [repetitions, setRepetitions] = useState<1 | 2 | 4>(1);
   const superLoopBars = getCompositionSuperLoop(composition).bars;
+  const sceneGateEditing =
+    sceneGateEditingPlanetId === selectedPlanet?.id && !selectedPlanet?.locked;
+
+  const handleSelectObject = useCallback(
+    (id: string | null) => {
+      if (id !== useAppStore.getState().ui.selectedObjectId) {
+        setSceneGateEditingPlanetId(null);
+        setGatePlacementNotice(null);
+      }
+      selectObject(id);
+    },
+    [selectObject],
+  );
 
   const handleVisualEvent = useCallback((event: ScheduledVisualEvent) => {
     pulseQueueRef.current.push({
@@ -462,6 +489,12 @@ export function App() {
     const timeout = window.setTimeout(() => setToast(null), 4200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (!gatePlacementNotice) return;
+    const timeout = window.setTimeout(() => setGatePlacementNotice(null), 5200);
+    return () => window.clearTimeout(timeout);
+  }, [gatePlacementNotice]);
 
   useEffect(() => {
     if (!openPanel && !focusOpen) return;
@@ -693,7 +726,7 @@ export function App() {
   const addRole = (role: PlanetRole) => {
     const planet = generatePlanetForRole(composition, role);
     dispatch({ type: "AddPlanet", planet });
-    selectObject(planet.id);
+    handleSelectObject(planet.id);
     setOpenPanel(null);
     if (ui.onboardingStep === "add-bass" && role === "bass") {
       setOnboardingStep("orbit");
@@ -738,6 +771,34 @@ export function App() {
       ),
     });
     setToast(`${selectedPlanet.name} gates set to ${presetId}.`);
+  };
+
+  const nudgeSelectedGateOffset = (direction: -1 | 1) => {
+    if (!selectedPlanet || selectedPlanet.locked) return;
+    dispatch({
+      type: "SetPlanetPhase",
+      planetId: selectedPlanet.id,
+      phase: nudgeGatePhase(
+        selectedPlanet.orbit.phase,
+        selectedPlanet.pattern.gridSize,
+        direction,
+      ),
+    });
+    setGatePlacementNotice(null);
+    setToast(
+      `${selectedPlanet.name} gates moved one slot ${direction < 0 ? "earlier" : "later"}.`,
+    );
+  };
+
+  const resetSelectedGateOffset = () => {
+    if (!selectedPlanet || selectedPlanet.locked) return;
+    dispatch({
+      type: "SetPlanetPhase",
+      planetId: selectedPlanet.id,
+      phase: 0,
+    });
+    setGatePlacementNotice(null);
+    setToast(`${selectedPlanet.name} gates reset to the pattern start.`);
   };
 
   const beginExpressionEdit = (
@@ -918,6 +979,7 @@ export function App() {
 
   const toggleSelectedLock = () => {
     if (!selectedPlanet) return;
+    setSceneGateEditingPlanetId(null);
     dispatch({ type: "TogglePlanetLock", planetId: selectedPlanet.id });
   };
 
@@ -930,7 +992,7 @@ export function App() {
     if (!selectedPlanet) return;
     const planet = clonePlanet(selectedPlanet);
     dispatch({ type: "DuplicatePlanet", planet });
-    selectObject(planet.id);
+    handleSelectObject(planet.id);
   };
 
   const deleteSelectedPlanet = () => {
@@ -941,7 +1003,7 @@ export function App() {
     }
     const deletedName = selectedPlanet.name;
     dispatch({ type: "RemovePlanet", planetId: selectedPlanet.id });
-    selectObject(composition.star.id);
+    handleSelectObject(composition.star.id);
     setOpenPanel(null);
     setToast(`${deletedName} was blown out of orbit. Undo restores it.`);
   };
@@ -1005,7 +1067,7 @@ export function App() {
 
   const handleSceneOrbitChange = useCallback(
     (planetId: string, loopBars: LoopBars) => {
-      selectObject(planetId);
+      handleSelectObject(planetId);
       dispatch({ type: "SetPlanetLoopBars", planetId, loopBars });
       if (useAppStore.getState().ui.onboardingStep === "orbit") {
         setOnboardingStep("complete");
@@ -1013,20 +1075,37 @@ export function App() {
         setToast("You made your first cosmic groove.");
       }
     },
-    [dispatch, selectObject, setOnboardingStep],
+    [dispatch, handleSelectObject, setOnboardingStep],
   );
 
   const handleScenePhaseChange = useCallback(
     (planetId: string, phase: number) => {
-      selectObject(planetId);
+      handleSelectObject(planetId);
       dispatch({ type: "SetPlanetPhase", planetId, phase });
     },
-    [dispatch, selectObject],
+    [dispatch, handleSelectObject],
   );
 
   const handleSceneGateToggle = useCallback(
     (planetId: string, step: number) => {
-      selectObject(planetId);
+      handleSelectObject(planetId);
+      const planet = useAppStore
+        .getState()
+        .compositionHistory.present.planets.find(({ id }) => id === planetId);
+      if (!planet || planet.locked) return;
+      setGatePlacementNotice({
+        planetId,
+        step,
+        action: planet.pattern.events.some((event) => event.step === step)
+          ? "removed"
+          : "added",
+        timing: describeGateTiming(
+          planet.orbit.loopBars,
+          planet.pattern.gridSize,
+          step,
+          planet.orbit.phase,
+        ),
+      });
       dispatch({
         type: "TogglePlanetGate",
         planetId,
@@ -1034,12 +1113,12 @@ export function App() {
         addedEventId: createId("event"),
       });
     },
-    [dispatch, selectObject],
+    [dispatch, handleSelectObject],
   );
 
   const handleSceneMelodyPitchShift = useCallback(
     (planetId: string, eventId: string, scaleDegreeDelta: number) => {
-      selectObject(planetId);
+      handleSelectObject(planetId);
       dispatch({
         type: "ShiftMelodyGatePitch",
         planetId,
@@ -1047,7 +1126,7 @@ export function App() {
         scaleDegreeDelta,
       });
     },
-    [dispatch, selectObject],
+    [dispatch, handleSelectObject],
   );
 
   const handleMacroBegin = (control: MacroControlKey) => {
@@ -1092,7 +1171,7 @@ export function App() {
         <ObjectList
           composition={composition}
           selectedId={ui.selectedObjectId}
-          onSelect={selectObject}
+          onSelect={handleSelectObject}
           advanced={ui.advancedControls}
         />
         <section className="scene-panel" aria-label="Cosmic instrument scene">
@@ -1106,6 +1185,7 @@ export function App() {
             <SceneCanvas
               composition={composition}
               selectedId={ui.selectedObjectId}
+              gateEditing={sceneGateEditing}
               isPlaying={ui.isPlaying}
               visualPreferences={{
                 quality: ui.quality,
@@ -1116,7 +1196,7 @@ export function App() {
               readTransportTicks={readTransportTicks}
               pulseRevision={pulseRevision}
               drainVisualPulses={drainVisualPulses}
-              onSelect={selectObject}
+              onSelect={handleSelectObject}
               onOrbitLoopBarsChange={handleSceneOrbitChange}
               onOrbitPhaseChange={handleScenePhaseChange}
               onGateToggle={handleSceneGateToggle}
@@ -1128,7 +1208,33 @@ export function App() {
             selectedPlanetName={selectedPlanet?.name}
             isPlaying={ui.isPlaying}
             isLocked={selectedPlanet?.locked}
+            gateEditing={sceneGateEditing}
+            onGateEditingChange={(editing) =>
+              setSceneGateEditingPlanetId(
+                editing ? (selectedPlanet?.id ?? null) : null,
+              )
+            }
           />
+          {gatePlacementNotice &&
+          gatePlacementNotice.planetId === selectedPlanet?.id ? (
+            <div
+              className="gate-placement-popover"
+              data-character={gatePlacementNotice.timing.character}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <span>
+                Gate {gatePlacementNotice.action} · Step{" "}
+                {gatePlacementNotice.step + 1}
+              </span>
+              <strong>{gatePlacementNotice.timing.positionLabel}</strong>
+              <p>
+                {gatePlacementNotice.timing.characterLabel}.{" "}
+                {gatePlacementNotice.timing.guidance}
+              </p>
+            </div>
+          ) : null}
           <div className="scene-status">
             <span className={ui.isPlaying ? "playing" : ""} />
             {ui.isPlaying ? "In orbit" : "Ready"} · {composition.bpm} BPM
@@ -1191,6 +1297,8 @@ export function App() {
               : "custom"
           }
           onGateRhythmPreset={setGateRhythm}
+          onGateOffsetNudge={nudgeSelectedGateOffset}
+          onGateOffsetReset={resetSelectedGateOffset}
           onPattern={openPatternEditor}
           onRing={addRing}
           onRingDensityBegin={() =>
@@ -1357,7 +1465,7 @@ export function App() {
           <ObjectList
             composition={composition}
             selectedId={ui.selectedObjectId}
-            onSelect={selectObject}
+            onSelect={handleSelectObject}
             advanced={ui.advancedControls}
             headingId="mobile-object-list-heading"
           />
@@ -1387,6 +1495,8 @@ export function App() {
                 : "custom"
             }
             onGateRhythmPreset={setGateRhythm}
+            onGateOffsetNudge={nudgeSelectedGateOffset}
+            onGateOffsetReset={resetSelectedGateOffset}
             onPattern={openPatternEditor}
             onRing={addRing}
             onRingDensityBegin={() =>
@@ -1420,6 +1530,8 @@ export function App() {
               scaleDegreeDelta,
             )
           }
+          onGateOffsetNudge={nudgeSelectedGateOffset}
+          onGateOffsetReset={resetSelectedGateOffset}
           onClose={() => setFocusOpen(false)}
         />
       ) : null}

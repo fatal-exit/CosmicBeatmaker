@@ -12,6 +12,7 @@ import type { VisualPreferences, VisualPulse } from "../../scene/contracts";
 export interface SceneCanvasProps {
   composition: Composition;
   selectedId: string | null;
+  gateEditing: boolean;
   isPlaying: boolean;
   visualPreferences: VisualPreferences;
   readTransportTicks: () => number;
@@ -31,6 +32,7 @@ export interface SceneCanvasProps {
 export function SceneCanvas({
   composition,
   selectedId,
+  gateEditing,
   isPlaying,
   visualPreferences,
   readTransportTicks,
@@ -122,6 +124,10 @@ export function SceneCanvas({
   useEffect(
     () => controller.setSelection(selectedId),
     [controller, selectedId],
+  );
+  useEffect(
+    () => controller.setGateEditingEnabled(gateEditing),
+    [controller, gateEditing],
   );
   useEffect(
     () => controller.setVisualPreferences(visualPreferences),

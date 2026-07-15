@@ -99,8 +99,8 @@ The editing model should feel almost 2D even though the scene is 3D.
 ### Allowed gestures
 
 - Tap: select
-- Tap an empty or active gate: enable or disable that step
-- Drag the selected orbit arc tangentially: rotate every gate together
+- Choose Gate edit, then tap an empty or active gate: enable or disable that step
+- While Gate edit is on, drag the selected orbit arc tangentially: rotate every gate together
 - Drag an active melody gate radially: move its note through the safe scale
 - Drag selected planet tangentially: change phase
 - Drag selected planet radially: change quantized orbit rate; the renderer derives a unique spatial lane separately
@@ -108,6 +108,12 @@ The editing model should feel almost 2D even though the scene is 3D.
 - Two-finger drag or rotate: limited horizontal rotation and vertical tilt
 - Tap empty space: deselect
 - Long press: optional context menu, never required
+
+Gate edit is an explicit temporary mode. Outside that mode, active gates remain
+visible as musical causes, inactive slots are visually suppressed, and neither
+gate taps nor orbit-arc rotation can change the pattern. The inspector and Orbit
+Lab provide labelled Earlier, Later, and Reset controls that move the complete
+pattern by exactly one gate slot and are the preferred precision path.
 
 ### Avoid
 
@@ -238,11 +244,15 @@ Requirements:
 
 - Large enough for phone editing
 - Active events clearly distinguished by shape and brightness
+- Inactive subdivisions stay very quiet; strong beat landmarks remain readable without making every empty slot compete with active events
 - Main beat gates use the strongest landmark treatment; offbeat eighths use a clear secondary treatment; fine subdivisions remain quieter
 - The natural subset of 4/8/16/32 remains visible for the current ordinary orbit, with 6/12 on 1½ bars and 12/24 on 3 bars available when Advanced is active
 - Resizing remaps the existing pattern around the orbit and resolves collapsed events deterministically instead of randomizing it
 - Tap empty subdivision to add an event
 - Tap active event to select or remove
+- After a gate edit, show a short non-modal timing readout such as “Bar 1 · Beat 2 + ½” and explain whether it is on the beat, halfway between beats, or a fine subdivision
+- Show an overall beat-alignment summary so a user targeting every beat can find one accidental between-beat placement without describing syncopation as inherently wrong
+- Provide labelled Earlier, Later, and Reset gate-offset buttons that move the complete pattern by one slot
 - A linear semantic grid is always available as the keyboard and screen-reader alternative
 - Active melody gates have labelled Lower and Raise controls for the safe scale
 - Playback head and current event clearly indicated

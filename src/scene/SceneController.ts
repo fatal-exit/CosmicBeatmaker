@@ -87,7 +87,7 @@ interface RuntimeDeepSpaceMaterials {
 export type PlanetDragMode = "radial" | "tangential";
 
 type PointerGestureMode = PlanetDragMode | "camera-rotate" | "gate-pitch";
-type PointerTargetKind = "entity" | "orbit" | "gate";
+type PointerTargetKind = "entity" | "orbit" | "gate" | "protected";
 
 interface PointerTarget {
   entityId: string | null;
@@ -528,6 +528,7 @@ export class SceneController {
   private asteroidBelt: THREE.Points | null = null;
   private frame = 0;
   private selectedId: string | null = null;
+  private gateEditingEnabled = false;
   private preferences = defaultPreferences;
   private qualityProfile: QualityProfile = "balanced";
   private tempoBpm = 120;
@@ -667,6 +668,20 @@ export class SceneController {
 
   setSelection(id: string | null): void {
     this.selectedId = id;
+    this.applySelection();
+  }
+
+  setGateEditingEnabled(enabled: boolean): void {
+    this.gateEditingEnabled = enabled;
+    if (
+      !enabled &&
+      this.gesture &&
+      (this.gesture.targetKind === "gate" ||
+        this.gesture.targetKind === "orbit" ||
+        this.gesture.mode === "tangential")
+    ) {
+      this.releaseGesture();
+    }
     this.applySelection();
   }
 
@@ -1139,7 +1154,8 @@ export class SceneController {
 
     const gateSlots = new THREE.Group();
     gateSlots.name = "editable-gate-slots";
-    gateSlots.visible = descriptor.id === this.selectedId;
+    gateSlots.visible =
+      descriptor.id === this.selectedId && this.gateEditingEnabled;
     const gateSlotGeometry = new THREE.TorusGeometry(
       Math.max(0.14, descriptor.gateRadius * 0.52),
       0.018,
@@ -1171,19 +1187,19 @@ export class SceneController {
         beat: new THREE.MeshBasicMaterial({
           color: colorFromHue(descriptor.hue + 28, 0.64),
           transparent: true,
-          opacity: descriptor.muted ? 0.1 : 0.42,
+          opacity: descriptor.muted ? 0.06 : 0.24,
           depthWrite: false,
         }),
         offbeat: new THREE.MeshBasicMaterial({
           color: colorFromHue(descriptor.hue + 22, 0.55),
           transparent: true,
-          opacity: descriptor.muted ? 0.08 : 0.28,
+          opacity: descriptor.muted ? 0.035 : 0.11,
           depthWrite: false,
         }),
         subdivision: new THREE.MeshBasicMaterial({
           color: colorFromHue(descriptor.hue + 18, 0.46),
           transparent: true,
-          opacity: descriptor.muted ? 0.06 : 0.14,
+          opacity: descriptor.muted ? 0.015 : 0.035,
           depthWrite: false,
         }),
       },
@@ -1612,7 +1628,7 @@ export class SceneController {
         muted: runtime.descriptor.muted,
       });
       runtime.body.scale.setScalar(selected ? 1.08 : 1);
-      runtime.gateSlots.visible = selected;
+      runtime.gateSlots.visible = selected && this.gateEditingEnabled;
     }
     if (this.star) {
       const selected = this.star.descriptor.id === this.selectedId;
@@ -1655,16 +1671,23 @@ export class SceneController {
         const entityId = object.userData.entityId as string | undefined;
         if (entityId) {
           if (object.userData.planetGateSlot) {
-            return {
-              entityId,
-              kind: "gate",
-              object,
-              gateStep: object.userData.gateStep as number,
-              pitchEventId: object.userData.pitchEventId as string | undefined,
-            };
+            return this.gateEditingEnabled
+              ? {
+                  entityId,
+                  kind: "gate",
+                  object,
+                  gateStep: object.userData.gateStep as number,
+                  pitchEventId: object.userData.pitchEventId as
+                    string | undefined,
+                }
+              : { entityId, kind: "protected", object };
           }
           if (object.userData.orbitControl) {
-            return { entityId, kind: "orbit", object };
+            return {
+              entityId,
+              kind: this.gateEditingEnabled ? "orbit" : "protected",
+              object,
+            };
           }
           return { entityId, kind: "entity", object };
         }
@@ -1817,7 +1840,10 @@ export class SceneController {
     const length = Math.hypot(offsetX, offsetY) || 1;
     const candidate = entityId ? this.planets.get(entityId) : undefined;
     const planet =
-      candidate && entityId === this.selectedId && !candidate.descriptor.locked
+      target.kind !== "protected" &&
+      candidate &&
+      entityId === this.selectedId &&
+      !candidate.descriptor.locked
         ? candidate
         : undefined;
     this.gesture = {
@@ -1903,6 +1929,7 @@ export class SceneController {
     }
 
     if (gesture.targetKind === "orbit") {
+      if (!this.gateEditingEnabled) return;
       if (
         gesture.mode === null &&
         Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD_PX
@@ -1925,12 +1952,16 @@ export class SceneController {
       return;
     }
 
-    gesture.mode ??= classifyPlanetDrag(
-      deltaX,
-      deltaY,
-      gesture.radialX,
-      gesture.radialY,
-    );
+    if (gesture.mode === null) {
+      const mode = classifyPlanetDrag(
+        deltaX,
+        deltaY,
+        gesture.radialX,
+        gesture.radialY,
+      );
+      if (mode === "tangential" && !this.gateEditingEnabled) return;
+      gesture.mode = mode;
+    }
     if (!gesture.mode) return;
 
     if (gesture.mode === "radial") {
@@ -2013,7 +2044,11 @@ export class SceneController {
           loopBars,
         });
       }
-    } else if (gesture.mode === "tangential" && gesture.planet) {
+    } else if (
+      gesture.mode === "tangential" &&
+      gesture.planet &&
+      this.gateEditingEnabled
+    ) {
       const phase = gesture.previewPhase ?? gesture.planet.descriptor.phase;
       if (Math.abs(phase - gesture.planet.descriptor.phase) > 0.0001) {
         this.options.onInteraction?.({

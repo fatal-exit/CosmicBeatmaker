@@ -239,6 +239,14 @@ The planet completes one visual orbit per musical pattern loop. Live scheduling,
 
 Moving a planet tangentially changes phase. This rotates all events without changing their internal spacing.
 
+The default precision control is a semantic one-slot Earlier/Later stepper with
+Reset. Direct tangential rotation is available only after the user explicitly
+enters Gate edit mode, so ordinary selection and inspection cannot shift a
+pattern accidentally. Gate placement feedback translates the resulting phase
+and step into bar-and-beat language; on-beat, offbeat, and fine-subdivision
+descriptions teach the timing consequence without treating syncopation as an
+error.
+
 ## Moons
 
 A moon is bound to one parent planet.
