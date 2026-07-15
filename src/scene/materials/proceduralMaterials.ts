@@ -74,6 +74,7 @@ const STAR_PRESETS: readonly StarPresetId[] = [
   "dwarf",
   "neutron",
   "void",
+  "black-hole",
 ];
 
 const OUTLINE_VERTEX_SHADER = /* glsl */ `

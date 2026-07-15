@@ -22,6 +22,11 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Regenerating one unlocked domain preserves locked domains.
 - No use of `Math.random()` inside generation.
 - Validation repair remains deterministic.
+- Complete generated systems produce the same moon and asteroid belt for the
+  same seed and generator version.
+- Binary affinity always includes both palettes when at least two planets exist.
+- Explicit or edited same-preset companions normalize deterministically, and
+  serialized binary systems reject identical primary/companion palettes.
 
 ### Harmony
 
@@ -46,6 +51,16 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Ring density deterministically activates the requested number of visible segments in a role-safe order.
 - Melody rings produce quieter pitch-matched notes adjacent to motif notes, chord rings replace sustained parent voicings with articulated single-note arpeggios, and bass rings produce syncopated octave pickups. A chord ring added during playback joins the remainder of the current cycle without waiting for a full orbit boundary.
 - Asteroid clustering stays within configured density limits.
+- Asteroid accent decisions are deterministic per stable event, velocity-only,
+  immutable, and identical in audio and scene projection.
+- All six moon behavior presets are distinct, bounded, ID/count preserving,
+  non-destructive, musically safe for pitched and beat roles, and identical in
+  audio and scene projection.
+- Black Hole half-speed maps only the first half of a planet or moon pattern
+  across its full unchanged orbit, doubles durations, preserves IDs, and never
+  leaves the projected pattern silent.
+- Binary interlock, mirror, and call-and-response projections are deterministic,
+  ID-preserving, bounded, non-destructive, and shared by audio and scene gates.
 - The exact orbit catalog is `[0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8]` bars and round-trips without floating approximation.
 - Quarter-bar integer LCM yields 12 bars for 3 + 4, 24 bars for 6 + 8, and never exceeds 24 bars for the supported catalog.
 - Changing a planet to 1.5 or 3 bars simplifies 16-step patterns to 12 and 32-step patterns to 24, keeps surviving event IDs and steps stable, and never leaves a previously active planet silent.
@@ -131,6 +146,32 @@ Automated tests should focus heavily on pure domain logic. Manual testing should
 - Wide desktop Auto and explicit High create the denser geometry tier, detailed deep-space shader, procedural normal detail, and bloom compositor; changing to Balanced or Low disposes High-only targets, binds the lightweight nebula/star shader, and leaves composition and transport state unchanged.
 - Star-preset changes update both the incident planet-light color and the seeded deep-space palette without introducing serialized renderer state.
 - Whenever composition state contains a star descriptor, reconciliation and the render loop maintain one attached central-star model with a visible surface, silhouette, and compact corona; a null or detached runtime is recreated or reattached independently of planet lane spacing and reduced-effects state.
+- Black Hole reconciliation maintains one bounded event-horizon/accretion-disk
+  assembly, while binary reconciliation maintains exactly two stellar bodies;
+  repeated profile changes dispose replaced geometry and materials.
+- Low quality and reduced effects retain the Black Hole silhouette, photon-ring
+  cause, and both binary bodies without requiring post-processing.
+
+### Celestial-system flow
+
+1. Choose Black Hole from the mood picker and confirm the half-speed, octave-down
+   description is available in semantic UI.
+2. Add a moon, change its behavior, mute it, then undo.
+3. Add an asteroid belt, change population and turbulence, then select it through
+   the HTML navigator.
+4. Add a binary companion and confirm the navigator names both palettes and the
+   selected rhythm relationship.
+5. Save, reload, copy a share link, and export WAV/MIDI.
+
+Acceptance:
+
+- State round-trips at schema version 3 and undo restores exact prior state.
+- The same projected event IDs drive audible occurrences and visible pulses.
+- Black Hole live and WAV output receive octave-down/digital/reverb treatment;
+  MIDI preserves the documented transformed pitched-note policy without
+  corrupting General MIDI drum mapping.
+- One companion never exceeds existing planet/source limits or creates a second
+  transport.
 
 ### Persistence
 

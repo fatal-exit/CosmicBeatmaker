@@ -23,6 +23,10 @@ import {
 } from "./effects/planetDestruction";
 import { SCENE_TICKS_PER_BEAT, spawnPhaseAtTick } from "./gates";
 import {
+  createBlackHoleModel,
+  type BlackHoleModel,
+} from "./materials/blackHoleMaterial";
+import {
   createCelestialOutlineMaterial,
   createPlanetSurfaceMaterial,
   createStarGlowMaterial,
@@ -70,11 +74,29 @@ interface RuntimePlanet {
   dispose: () => void;
 }
 
-interface RuntimeStar {
-  group: THREE.Group;
+interface RuntimeStandardStarBody {
+  anchor: THREE.Group;
   body: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   outline: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   glow: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  descriptor: {
+    id: string;
+    presetId: Exclude<SceneDescriptor["star"]["presetId"], "black-hole">;
+    visualSeed: number;
+    intensity: number;
+  };
+}
+
+interface RuntimeStar {
+  group: THREE.Group;
+  /** Primary body aliases retained for selection and existing probes. */
+  body: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+  outline: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+  glow: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+  primaryAnchor: THREE.Group;
+  companionAnchor: THREE.Group | null;
+  companionBody: RuntimeStandardStarBody | null;
+  blackHoleModel: BlackHoleModel | null;
   descriptor: SceneDescriptor["star"];
   dispose: () => void;
 }
@@ -183,6 +205,61 @@ const STAR_SCALE_PULSE_AMPLITUDE = 0.1;
 const STAR_GLOW_PULSE_AMPLITUDE = 0.12;
 const STAR_SURFACE_INTENSITY_PULSE = 0.22;
 const STAR_GLOW_INTENSITY_PULSE = 0.36;
+const BINARY_VISUAL_PERIOD_TICKS = 4 * 4 * SCENE_TICKS_PER_BEAT;
+const BINARY_SEPARATION_MIN = 2.1;
+const BINARY_SEPARATION_MAX = 2.65;
+const BINARY_PRIMARY_SCALE = 0.7;
+const BINARY_COMPANION_SCALE = 0.62;
+
+export interface BinaryBodyOffsets {
+  primary: readonly [number, number, number];
+  companion: readonly [number, number, number];
+}
+
+/**
+ * Pure visual binary motion. It consumes transport ticks but never schedules
+ * or mutates audio state. Reduced motion intentionally pins the barycenter.
+ */
+export function binaryBodyOffsetsAtTick(
+  transportTicks: number,
+  separation = 2.3,
+  reducedMotion = false,
+): BinaryBodyOffsets {
+  const safeTicks = Number.isFinite(transportTicks) ? transportTicks : 0;
+  const safeSeparation = clamp(
+    Number.isFinite(separation) ? separation : 1.18,
+    BINARY_SEPARATION_MIN,
+    BINARY_SEPARATION_MAX,
+  );
+  const phase = reducedMotion
+    ? 0
+    : (safeTicks / BINARY_VISUAL_PERIOD_TICKS) * Math.PI * 2;
+  const cos = Math.cos(phase);
+  const sin = Math.sin(phase);
+  return {
+    primary: [cos * safeSeparation * 0.45, 0, sin * safeSeparation * 0.45],
+    companion: [-cos * safeSeparation * 0.55, 0, -sin * safeSeparation * 0.55],
+  };
+}
+
+export function asteroidInstanceCountForQuality(
+  descriptorCount: number,
+  quality: QualityProfile,
+  reducedParticles: boolean,
+): number {
+  const safeCount = Math.max(
+    0,
+    Math.floor(Number.isFinite(descriptorCount) ? descriptorCount : 0),
+  );
+  const qualityMultiplier =
+    quality === "low" ? 0.42 : quality === "balanced" ? 0.72 : 1;
+  const comfortMultiplier = reducedParticles ? 0.42 : 1;
+  if (safeCount <= 0) return 0;
+  return Math.min(
+    safeCount,
+    Math.max(1, Math.round(safeCount * qualityMultiplier * comfortMultiplier)),
+  );
+}
 
 export const SCENE_CAMERA_ZOOM_MIN = 0.6;
 export const SCENE_CAMERA_ZOOM_MAX = 1.8;
@@ -525,7 +602,7 @@ export class SceneController {
   private descriptor: SceneDescriptor | null = null;
   private star: RuntimeStar | null = null;
   private planets = new Map<string, RuntimePlanet>();
-  private asteroidBelt: THREE.Points | null = null;
+  private asteroidBelt: THREE.InstancedMesh | null = null;
   private frame = 0;
   private selectedId: string | null = null;
   private gateEditingEnabled = false;
@@ -1010,21 +1087,61 @@ export class SceneController {
     this.canvas = null;
   }
 
+  private createStandardStarBody(
+    descriptor: {
+      id: string;
+      presetId: Exclude<SceneDescriptor["star"]["presetId"], "black-hole">;
+      visualSeed: number;
+      intensity: number;
+      hue: number;
+    },
+    anchor: THREE.Group,
+    selectionId: string,
+  ): RuntimeStandardStarBody {
+    const geometry = new THREE.IcosahedronGeometry(
+      0.78,
+      QUALITY_STAR_GEOMETRY_DETAIL[this.qualityProfile],
+    );
+    const body = new THREE.Mesh(
+      geometry,
+      createStarSurfaceMaterial(descriptor, this.shaderDetail()),
+    );
+    const glow = new THREE.Mesh(
+      geometry,
+      createStarGlowMaterial(descriptor, this.shaderDetail()),
+    );
+    const outline = new THREE.Mesh(
+      geometry,
+      createCelestialOutlineMaterial(
+        colorFromHue(descriptor.hue, 0.9),
+        0.075,
+        0.9,
+      ),
+    );
+    body.renderOrder = 2;
+    body.userData.entityId = selectionId;
+    body.userData.stellarBody = true;
+    glow.scale.setScalar(STAR_GLOW_BASE_SCALE);
+    glow.renderOrder = 1;
+    glow.userData.entityId = selectionId;
+    outline.renderOrder = 3;
+    outline.userData.entityId = selectionId;
+    body.add(outline);
+    anchor.add(glow, body);
+    anchor.scale.setScalar(0.9 + descriptor.intensity * 0.24);
+    updateStarGlowMaterial(glow.material, {
+      intensity: this.starGlowIntensity(descriptor.intensity),
+    });
+    return { anchor, body, outline, glow, descriptor };
+  }
+
   private reconcileStar(descriptor: SceneDescriptor): void {
     if (!this.scene) return;
-    if (
+    const sameDescriptor =
       this.star?.descriptor.id === descriptor.star.id &&
-      this.star.descriptor.presetId === descriptor.star.presetId &&
-      this.star.descriptor.visualSeed === descriptor.star.visualSeed
-    ) {
+      JSON.stringify(this.star.descriptor) === JSON.stringify(descriptor.star);
+    if (sameDescriptor && this.star) {
       this.star.descriptor = descriptor.star;
-      this.star.group.scale.setScalar(0.9 + descriptor.star.intensity * 0.24);
-      updateStarSurfaceMaterial(this.star.body.material, {
-        intensity: descriptor.star.intensity,
-      });
-      updateStarGlowMaterial(this.star.glow.material, {
-        intensity: this.starGlowIntensity(descriptor.star.intensity),
-      });
       this.ensureStarRuntimeVisible(this.star);
       this.updateStellarLighting(descriptor.star);
       return;
@@ -1033,48 +1150,104 @@ export class SceneController {
       this.scene.remove(this.star.group);
       this.star.dispose();
     }
-    const geometry = new THREE.IcosahedronGeometry(
-      0.78,
-      QUALITY_STAR_GEOMETRY_DETAIL[this.qualityProfile],
-    );
+
     const group = new THREE.Group();
-    const body = new THREE.Mesh(
-      geometry,
-      createStarSurfaceMaterial(descriptor.star, this.shaderDetail()),
-    );
-    const glow = new THREE.Mesh(
-      geometry,
-      createStarGlowMaterial(descriptor.star, this.shaderDetail()),
-    );
-    const outline = new THREE.Mesh(
-      geometry,
-      createCelestialOutlineMaterial(
-        colorFromHue(descriptor.star.hue, 0.9),
-        0.075,
-        0.9,
-      ),
-    );
-    body.renderOrder = 2;
-    body.userData.entityId = descriptor.star.id;
-    glow.scale.setScalar(STAR_GLOW_BASE_SCALE);
-    glow.renderOrder = 1;
-    glow.userData.entityId = descriptor.star.id;
-    outline.renderOrder = 3;
-    outline.userData.entityId = descriptor.star.id;
-    body.add(outline);
-    group.add(glow, body);
-    group.scale.setScalar(0.9 + descriptor.star.intensity * 0.24);
-    updateStarGlowMaterial(glow.material, {
-      intensity: this.starGlowIntensity(descriptor.star.intensity),
-    });
+    group.name = "stellar-aggregate";
+    group.userData.entityId = descriptor.star.id;
+    group.userData.starAggregate = true;
+    const primaryAnchor = new THREE.Group();
+    primaryAnchor.name = "primary-star-anchor";
+    const companionAnchor = descriptor.star.companion
+      ? new THREE.Group()
+      : null;
+    if (companionAnchor) companionAnchor.name = "companion-star-anchor";
+    group.add(primaryAnchor);
+    if (companionAnchor) group.add(companionAnchor);
+
+    let body: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    let outline: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    let glow: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    let blackHoleModel: BlackHoleModel | null = null;
+    let companionBody: RuntimeStandardStarBody | null = null;
+    const primaryPresetId = descriptor.star.presetId;
+
+    if (primaryPresetId === "black-hole") {
+      blackHoleModel = createBlackHoleModel(
+        descriptor.star,
+        this.shaderDetail(),
+      );
+      blackHoleModel.group.scale.setScalar(
+        0.9 + descriptor.star.intensity * 0.16,
+      );
+      body = blackHoleModel.eventHorizon;
+      glow = blackHoleModel.photonRing;
+      outline = new THREE.Mesh(
+        blackHoleModel.eventHorizon.geometry,
+        createCelestialOutlineMaterial(
+          colorFromHue(descriptor.star.hue, 0.9),
+          0.065,
+          0.9,
+        ),
+      );
+      outline.renderOrder = 8;
+      outline.userData.entityId = descriptor.star.id;
+      body.add(outline);
+      primaryAnchor.add(blackHoleModel.group);
+      body.renderOrder = 7;
+      body.userData.entityId = descriptor.star.id;
+      body.userData.stellarBody = true;
+      glow.renderOrder = 6;
+      glow.userData.entityId = descriptor.star.id;
+    } else {
+      const primary = this.createStandardStarBody(
+        {
+          id: descriptor.star.id,
+          presetId: primaryPresetId,
+          visualSeed: descriptor.star.visualSeed,
+          intensity: descriptor.star.intensity,
+          hue: descriptor.star.hue,
+        },
+        primaryAnchor,
+        descriptor.star.id,
+      );
+      body = primary.body;
+      outline = primary.outline;
+      glow = primary.glow;
+    }
+
+    if (descriptor.star.companion && companionAnchor) {
+      companionBody = this.createStandardStarBody(
+        {
+          id: descriptor.star.companion.id,
+          presetId: descriptor.star.companion.presetId,
+          visualSeed: descriptor.star.companion.visualSeed,
+          intensity: descriptor.star.companion.intensity,
+          hue: descriptor.star.companion.hue,
+        },
+        companionAnchor,
+        descriptor.star.id,
+      );
+      // A binary pair needs visual breathing room inside the innermost planet
+      // lane. Scale both bodies as one aggregate while preserving the larger
+      // primary silhouette, then let their barycentric offsets provide a real
+      // gap between the stellar surfaces rather than intersecting geometry.
+      primaryAnchor.scale.multiplyScalar(BINARY_PRIMARY_SCALE);
+      companionAnchor.scale.multiplyScalar(BINARY_COMPANION_SCALE);
+    }
+
     this.star = {
       group,
       body,
       outline,
       glow,
+      primaryAnchor,
+      companionAnchor,
+      companionBody,
+      blackHoleModel,
       descriptor: descriptor.star,
       dispose: () => disposeObject(group),
     };
+    this.updateBinaryBodyPositions(this.options.readTransportTicks());
     this.ensureStarRuntimeVisible(this.star);
     this.updateStellarLighting(descriptor.star);
   }
@@ -1450,12 +1623,23 @@ export class SceneController {
   private reconcileAsteroids(descriptor: SceneDescriptor): void {
     if (!this.scene) return;
     if (this.asteroidBelt) {
+      for (const eventId of (this.asteroidBelt.userData.eventIds as
+        string[] | undefined) ?? []) {
+        this.eventPulseWindows.delete(eventId);
+      }
       this.scene.remove(this.asteroidBelt);
       disposeObject(this.asteroidBelt);
       this.asteroidBelt = null;
     }
-    if (!descriptor.asteroidBelt || this.preferences.reducedParticles) return;
-    const positions = new Float32Array(descriptor.asteroidBelt.count * 3);
+    if (!descriptor.asteroidBelt) return;
+    const instanceCount = Math.max(
+      Math.min(6, descriptor.asteroidBelt.count),
+      asteroidInstanceCountForQuality(
+        descriptor.asteroidBelt.count,
+        this.qualityProfile,
+        this.preferences.reducedParticles,
+      ),
+    );
     let state = descriptor.asteroidBelt.visualSeed >>> 0;
     const random = () => {
       state = Math.imul(1664525, state) + 1013904223;
@@ -1467,19 +1651,79 @@ export class SceneController {
         (planet) => planet.orbitRadius + planet.visualExtent,
       ),
     );
-    for (let index = 0; index < descriptor.asteroidBelt.count; index += 1) {
-      const angle = random() * Math.PI * 2;
-      const radius = outerPlanetRadius + 0.9 + random() * 0.72;
-      positions[index * 3] = Math.cos(angle) * radius;
-      positions[index * 3 + 1] = (random() - 0.5) * 0.32;
-      positions[index * 3 + 2] = Math.sin(angle) * radius;
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    this.asteroidBelt = new THREE.Points(
-      geometry,
-      new THREE.PointsMaterial({ color: 0xb9a39b, size: 0.08 }),
+    const events = descriptor.asteroidBelt.events;
+    const clustering = clamp(descriptor.asteroidBelt.clustering, 0, 1);
+    const turbulence = clamp(descriptor.asteroidBelt.turbulence, 0, 1);
+    const beltColor = colorFromHue(
+      21 + ((descriptor.asteroidBelt.materialPresetId.length * 17) % 82),
+      0.58,
     );
+    const geometry = new THREE.IcosahedronGeometry(
+      this.qualityProfile === "low" ? 0.052 : 0.064,
+      0,
+    );
+    const material = new THREE.MeshStandardMaterial({
+      color: beltColor,
+      emissive: beltColor,
+      emissiveIntensity: 0.06,
+      roughness: 0.86,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.72,
+    });
+    this.asteroidBelt = new THREE.InstancedMesh(
+      geometry,
+      material,
+      instanceCount,
+    );
+    const matrix = new THREE.Matrix4();
+    const rotation = new THREE.Euler();
+    const scale = new THREE.Vector3();
+    const eventPhases: number[] = [];
+    for (let index = 0; index < instanceCount; index += 1) {
+      const event =
+        events.length > 0 ? events[index % events.length] : undefined;
+      const eventPhase = event?.phase ?? random();
+      eventPhases.push(eventPhase);
+      const spread = (1 - clustering) * 0.25 + turbulence * 0.08;
+      const angle =
+        eventPhase * Math.PI * 2 +
+        (random() - 0.5) * spread * Math.PI * 2 +
+        Math.sin(index * 1.7 + descriptor.asteroidBelt.visualSeed) *
+          turbulence *
+          0.035;
+      const radius =
+        outerPlanetRadius +
+        0.88 +
+        random() * (0.56 + turbulence * 0.34) +
+        Math.sin(angle * 3.0 + descriptor.asteroidBelt.visualSeed) *
+          turbulence *
+          0.06;
+      const y =
+        (random() - 0.5) * (0.18 + turbulence * 0.34) +
+        Math.sin(angle * 2.0) * turbulence * 0.08;
+      rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
+      const asteroidScale = 0.62 + random() * 0.9;
+      scale.setScalar(asteroidScale);
+      matrix.compose(
+        new THREE.Vector3(
+          Math.cos(angle) * radius,
+          y,
+          Math.sin(angle) * radius,
+        ),
+        new THREE.Quaternion().setFromEuler(rotation),
+        scale,
+      );
+      this.asteroidBelt.setMatrixAt(index, matrix);
+    }
+    this.asteroidBelt.instanceMatrix.needsUpdate = true;
+    this.asteroidBelt.userData.eventPhases = eventPhases;
+    this.asteroidBelt.userData.eventIds = events.map((event) => event.eventId);
+    this.asteroidBelt.userData.instanceCount = instanceCount;
+    this.asteroidBelt.userData.descriptorCount = descriptor.asteroidBelt.count;
+    this.asteroidBelt.userData.population = descriptor.asteroidBelt.population;
+    this.asteroidBelt.userData.clustering = clustering;
+    this.asteroidBelt.userData.turbulence = turbulence;
     this.asteroidBelt.userData.entityId = descriptor.asteroidBelt.id;
     this.scene.add(this.asteroidBelt);
   }
@@ -1489,9 +1733,21 @@ export class SceneController {
   ): THREE.Color {
     if (!star) return new THREE.Color(0xffffff);
     const profile = starMaterialProfile(star.presetId);
-    return new THREE.Color(profile.coreColor).lerp(
+    const primaryColor = new THREE.Color(profile.coreColor).lerp(
       new THREE.Color(profile.hotColor),
       0.34,
+    );
+    if (!star.companion) return primaryColor;
+    const companionProfile = starMaterialProfile(star.companion.presetId);
+    const companionColor = new THREE.Color(companionProfile.coreColor).lerp(
+      new THREE.Color(companionProfile.hotColor),
+      0.34,
+    );
+    const primaryWeight = Math.max(0.05, star.intensity);
+    const companionWeight = Math.max(0.05, star.companion.intensity);
+    return primaryColor.lerp(
+      companionColor,
+      companionWeight / (primaryWeight + companionWeight),
     );
   }
 
@@ -1500,9 +1756,13 @@ export class SceneController {
     starLightIntensity: number;
   } {
     const intensity = this.descriptor?.star.intensity ?? 0.8;
+    const companionIntensity = this.descriptor?.star.companion?.intensity ?? 0;
     return {
       starLightColor: this.starLightColor(),
-      starLightIntensity: 0.82 + intensity * 0.52,
+      starLightIntensity: Math.min(
+        2.5,
+        0.82 + (intensity + companionIntensity * 0.62) * 0.52,
+      ),
     };
   }
 
@@ -1511,19 +1771,33 @@ export class SceneController {
     const lightColor = this.starLightColor(star);
     if (this.starLight) {
       this.starLight.color.copy(lightColor);
-      this.starLight.intensity = 28 + star.intensity * 18;
+      this.starLight.intensity = Math.min(
+        62,
+        28 + (star.intensity + (star.companion?.intensity ?? 0) * 0.62) * 18,
+      );
     }
     if (this.deepSpaceMaterials) {
-      const nebulaA = new THREE.Color(profile.glowColor).offsetHSL(
-        0.12,
-        0.04,
-        -0.24,
-      );
-      const nebulaB = new THREE.Color(profile.edgeColor).offsetHSL(
-        -0.16,
-        0.08,
-        0.08,
-      );
+      const paletteProfile = star.companion
+        ? {
+            glowColor: new THREE.Color(profile.glowColor).lerp(
+              new THREE.Color(
+                starMaterialProfile(star.companion.presetId).glowColor,
+              ),
+              0.42,
+            ),
+            edgeColor: new THREE.Color(profile.edgeColor).lerp(
+              new THREE.Color(
+                starMaterialProfile(star.companion.presetId).edgeColor,
+              ),
+              0.42,
+            ),
+          }
+        : {
+            glowColor: new THREE.Color(profile.glowColor),
+            edgeColor: new THREE.Color(profile.edgeColor),
+          };
+      const nebulaA = paletteProfile.glowColor.offsetHSL(0.12, 0.04, -0.24);
+      const nebulaB = paletteProfile.edgeColor.offsetHSL(-0.16, 0.08, 0.08);
       for (const material of [
         this.deepSpaceMaterials.simple,
         this.deepSpaceMaterials.detailed,
@@ -1566,6 +1840,30 @@ export class SceneController {
     return QUALITY_GLOW_STRENGTH[this.qualityProfile] > 0;
   }
 
+  private updateBinaryBodyPositions(transportTicks: number): void {
+    const runtime = this.star;
+    if (!runtime) return;
+    if (!runtime.companionAnchor || !runtime.companionBody) {
+      runtime.primaryAnchor.position.set(0, 0, 0);
+      return;
+    }
+    const separation = clamp(
+      2.15 +
+        (runtime.descriptor.intensity +
+          runtime.descriptor.companion!.intensity) *
+          0.18,
+      BINARY_SEPARATION_MIN,
+      BINARY_SEPARATION_MAX,
+    );
+    const offsets = binaryBodyOffsetsAtTick(
+      transportTicks,
+      separation,
+      this.preferences.reducedMotion,
+    );
+    runtime.primaryAnchor.position.set(...offsets.primary);
+    runtime.companionAnchor.position.set(...offsets.companion);
+  }
+
   private ensureStarRuntimeVisible(runtime: RuntimeStar): void {
     if (!this.scene) return;
     if (runtime.group.parent !== this.scene) this.scene.add(runtime.group);
@@ -1576,8 +1874,31 @@ export class SceneController {
     runtime.body.frustumCulled = false;
     runtime.outline.visible = true;
     runtime.outline.frustumCulled = false;
-    runtime.glow.visible = this.starGlowEnabled();
+    // The photon ring is an essential Black Hole cause and stays visible in
+    // Low/reduced-effects profiles; ordinary stellar coronae remain optional.
+    runtime.glow.visible = runtime.blackHoleModel
+      ? true
+      : this.starGlowEnabled();
     runtime.glow.frustumCulled = false;
+    runtime.primaryAnchor.visible = true;
+    runtime.primaryAnchor.frustumCulled = false;
+    if (runtime.blackHoleModel) {
+      runtime.blackHoleModel.group.visible = true;
+      runtime.blackHoleModel.group.frustumCulled = false;
+      runtime.blackHoleModel.photonRing.visible = true;
+      runtime.blackHoleModel.eventHorizon.visible = true;
+      runtime.blackHoleModel.accretionDisk.visible = true;
+      runtime.blackHoleModel.lensingArc.visible =
+        this.qualityProfile !== "low" && !this.preferences.reducedParticles;
+    }
+    if (runtime.companionAnchor) {
+      runtime.companionAnchor.visible = true;
+      runtime.companionAnchor.frustumCulled = false;
+      if (runtime.companionBody) {
+        runtime.companionBody.body.visible = true;
+        runtime.companionBody.glow.visible = this.starGlowEnabled();
+      }
+    }
   }
 
   private ensureStarRuntime(): void {
@@ -1607,11 +1928,36 @@ export class SceneController {
     }
     this.ensureStarRuntime();
     if (this.star) {
-      updateStarSurfaceMaterial(this.star.body.material, { detail });
-      updateStarGlowMaterial(this.star.glow.material, {
-        detail,
-        intensity: this.starGlowIntensity(this.star.descriptor.intensity),
-      });
+      if (this.star.blackHoleModel) {
+        this.star.blackHoleModel.update({
+          detail,
+          intensity: this.star.descriptor.intensity,
+          reducedFlash: this.preferences.reducedFlash,
+        });
+      } else {
+        updateStarSurfaceMaterial(
+          this.star.body.material as THREE.ShaderMaterial,
+          { detail },
+        );
+        updateStarGlowMaterial(
+          this.star.glow.material as THREE.ShaderMaterial,
+          {
+            detail,
+            intensity: this.starGlowIntensity(this.star.descriptor.intensity),
+          },
+        );
+      }
+      if (this.star.companionBody) {
+        updateStarSurfaceMaterial(this.star.companionBody.body.material, {
+          detail,
+        });
+        updateStarGlowMaterial(this.star.companionBody.glow.material, {
+          detail,
+          intensity: this.starGlowIntensity(
+            this.star.companionBody.descriptor.intensity,
+          ),
+        });
+      }
       this.ensureStarRuntimeVisible(this.star);
     }
   }
@@ -1632,9 +1978,40 @@ export class SceneController {
     }
     if (this.star) {
       const selected = this.star.descriptor.id === this.selectedId;
-      updateStarSurfaceMaterial(this.star.body.material, { selected });
-      updateStarGlowMaterial(this.star.glow.material, { selected });
-      updateCelestialOutlineMaterial(this.star.outline.material, { selected });
+      if (this.star.blackHoleModel) {
+        this.star.blackHoleModel.update({ selected });
+      } else {
+        updateStarSurfaceMaterial(
+          this.star.body.material as THREE.ShaderMaterial,
+          {
+            selected,
+          },
+        );
+        updateStarGlowMaterial(
+          this.star.glow.material as THREE.ShaderMaterial,
+          {
+            selected,
+          },
+        );
+      }
+      updateCelestialOutlineMaterial(
+        this.star.outline.material as THREE.ShaderMaterial,
+        { selected },
+      );
+      if (this.star.companionBody) {
+        updateStarSurfaceMaterial(this.star.companionBody.body.material, {
+          selected,
+        });
+        updateStarGlowMaterial(this.star.companionBody.glow.material, {
+          selected,
+        });
+        updateCelestialOutlineMaterial(
+          this.star.companionBody.outline.material,
+          {
+            selected,
+          },
+        );
+      }
     }
   }
 
@@ -2288,6 +2665,30 @@ export class SceneController {
         }
       }
     }
+    if (this.asteroidBelt && this.descriptor?.asteroidBelt) {
+      let beltPulse = 0;
+      for (const event of this.descriptor.asteroidBelt.events) {
+        const window = this.activePulseWindow(
+          this.eventPulseWindows,
+          event.eventId,
+          now,
+        );
+        if (!window) continue;
+        beltPulse = Math.max(
+          beltPulse,
+          transientPulseFrame(window.startsAt, window.expiresAt, now).strength,
+        );
+      }
+      const motionPulse = this.preferences.reducedMotion ? 0 : beltPulse;
+      const brightnessPulse = this.preferences.reducedFlash
+        ? beltPulse * 0.18
+        : beltPulse;
+      this.asteroidBelt.scale.setScalar(1 + motionPulse * 0.035);
+      const beltMaterial = this.asteroidBelt
+        .material as THREE.MeshStandardMaterial;
+      beltMaterial.emissiveIntensity = 0.06 + brightnessPulse * 0.72;
+      beltMaterial.opacity = 0.72 + brightnessPulse * 0.2;
+    }
     this.updatePlanetDestructions(now);
     this.ensureStarRuntime();
     if (this.star) {
@@ -2302,37 +2703,90 @@ export class SceneController {
       const stellarBrightnessPulse = this.preferences.reducedFlash
         ? 0
         : quarterNotePulse * (this.preferences.reducedMotion ? 0.35 : 1);
-      const baseStarScale = 0.9 + this.star.descriptor.intensity * 0.24;
+      this.updateBinaryBodyPositions(ticks);
       this.star.group.scale.setScalar(
-        baseStarScale * (1 + stellarScalePulse * STAR_SCALE_PULSE_AMPLITUDE),
+        1 + stellarScalePulse * STAR_SCALE_PULSE_AMPLITUDE,
       );
       this.star.glow.scale.setScalar(
         STAR_GLOW_BASE_SCALE + stellarScalePulse * STAR_GLOW_PULSE_AMPLITUDE,
       );
-      updateStarSurfaceMaterial(this.star.body.material, {
-        time: materialTime,
-        pulse: stellarBrightnessPulse,
-        selected: this.star.descriptor.id === this.selectedId,
-        detail: this.shaderDetail(),
-        intensity:
-          this.star.descriptor.intensity +
-          stellarBrightnessPulse * STAR_SURFACE_INTENSITY_PULSE,
-      });
-      updateStarGlowMaterial(this.star.glow.material, {
-        time: materialTime,
-        pulse: stellarBrightnessPulse,
-        selected: this.star.descriptor.id === this.selectedId,
-        detail: this.shaderDetail(),
-        intensity:
-          this.starGlowIntensity(this.star.descriptor.intensity) *
-          (1 + stellarBrightnessPulse * STAR_GLOW_INTENSITY_PULSE),
-      });
-      updateCelestialOutlineMaterial(this.star.outline.material, {
-        pulse: stellarBrightnessPulse,
-        selected: this.star.descriptor.id === this.selectedId,
-      });
-      if (!this.preferences.reducedMotion) {
+      const selected = this.star.descriptor.id === this.selectedId;
+      if (this.star.blackHoleModel) {
+        this.star.blackHoleModel.update({
+          time: materialTime,
+          pulse: stellarBrightnessPulse,
+          selected,
+          detail: this.shaderDetail(),
+          intensity:
+            this.star.descriptor.intensity +
+            stellarBrightnessPulse * STAR_SURFACE_INTENSITY_PULSE,
+          reducedFlash: this.preferences.reducedFlash,
+        });
+      } else {
+        updateStarSurfaceMaterial(
+          this.star.body.material as THREE.ShaderMaterial,
+          {
+            time: materialTime,
+            pulse: stellarBrightnessPulse,
+            selected,
+            detail: this.shaderDetail(),
+            intensity:
+              this.star.descriptor.intensity +
+              stellarBrightnessPulse * STAR_SURFACE_INTENSITY_PULSE,
+          },
+        );
+        updateStarGlowMaterial(
+          this.star.glow.material as THREE.ShaderMaterial,
+          {
+            time: materialTime,
+            pulse: stellarBrightnessPulse,
+            selected,
+            detail: this.shaderDetail(),
+            intensity:
+              this.starGlowIntensity(this.star.descriptor.intensity) *
+              (1 + stellarBrightnessPulse * STAR_GLOW_INTENSITY_PULSE),
+          },
+        );
+      }
+      updateCelestialOutlineMaterial(
+        this.star.outline.material as THREE.ShaderMaterial,
+        {
+          pulse: stellarBrightnessPulse,
+          selected,
+        },
+      );
+      if (this.star.companionBody) {
+        const companion = this.star.companionBody;
+        companion.glow.scale.setScalar(
+          STAR_GLOW_BASE_SCALE + stellarScalePulse * STAR_GLOW_PULSE_AMPLITUDE,
+        );
+        updateStarSurfaceMaterial(companion.body.material, {
+          time: materialTime,
+          pulse: stellarBrightnessPulse,
+          selected,
+          detail: this.shaderDetail(),
+          intensity:
+            companion.descriptor.intensity +
+            stellarBrightnessPulse * STAR_SURFACE_INTENSITY_PULSE,
+        });
+        updateStarGlowMaterial(companion.glow.material, {
+          time: materialTime,
+          pulse: stellarBrightnessPulse,
+          selected,
+          detail: this.shaderDetail(),
+          intensity:
+            this.starGlowIntensity(companion.descriptor.intensity) *
+            (1 + stellarBrightnessPulse * STAR_GLOW_INTENSITY_PULSE),
+        });
+        updateCelestialOutlineMaterial(companion.outline.material, {
+          pulse: stellarBrightnessPulse,
+          selected,
+        });
+      }
+      if (!this.preferences.reducedMotion && !this.star.companionAnchor) {
         this.star.group.rotation.y = ticks / 2_600;
+      } else if (this.preferences.reducedMotion || this.star.companionAnchor) {
+        this.star.group.rotation.y = 0;
       }
     }
     if (this.deepSpace?.visible) {

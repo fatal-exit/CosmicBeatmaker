@@ -123,6 +123,15 @@ const ringSchema = z
     }
   });
 
+const binaryStarSchema = z.object({
+  id: z.string().min(1),
+  // A black hole can be the primary star, but never the companion.
+  presetId: z.enum(["radiant", "red-giant", "dwarf", "neutron", "void"]),
+  visualSeed: z.number().int(),
+  intensity: normalized,
+  rhythmMode: z.enum(["interlock", "mirror", "call-response"]),
+});
+
 const planetExpressionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("chords"),
@@ -185,10 +194,18 @@ export const compositionSchema = z
     swing: z.number().min(0).max(0.6),
     star: z.object({
       id: z.string().min(1),
-      presetId: z.enum(["radiant", "red-giant", "dwarf", "neutron", "void"]),
+      presetId: z.enum([
+        "radiant",
+        "red-giant",
+        "dwarf",
+        "neutron",
+        "void",
+        "black-hole",
+      ]),
       visualSeed: z.number().int(),
       intensity: normalized,
       locked: z.boolean(),
+      companion: binaryStarSchema.optional(),
     }),
     harmony: z.object({
       rootMidi: z.number().int().min(36).max(84),
@@ -260,6 +277,16 @@ export const compositionSchema = z
   })
   .superRefine((composition, context) => {
     const ids: EntityId[] = [composition.id, composition.star.id];
+    if (composition.star.companion) {
+      ids.push(composition.star.companion.id);
+      if (composition.star.companion.presetId === composition.star.presetId) {
+        context.addIssue({
+          code: "custom",
+          message: "Binary stars must contribute two distinct sound palettes.",
+          path: ["star", "companion", "presetId"],
+        });
+      }
+    }
 
     for (const planet of composition.planets) {
       ids.push(planet.id, ...planet.pattern.events.map((event) => event.id));

@@ -132,6 +132,16 @@ export const STAR_MATERIAL_PROFILES = {
     glowStrength: 0.42,
     turbulence: 0.36,
   },
+  "black-hole": {
+    presetId: "black-hole",
+    label: "Event-horizon accretion",
+    coreColor: 0x100b22,
+    hotColor: 0xffa34e,
+    edgeColor: 0x2a174b,
+    glowColor: 0xb94fdb,
+    glowStrength: 0.68,
+    turbulence: 1.18,
+  },
 } as const satisfies Record<StarPresetId, StarMaterialProfile>;
 
 export function normalizeVisualSeed(seed: number): number {

@@ -7,6 +7,11 @@ import {
   selectAudioRuntimeProfile,
   type AudioRuntimeProfile,
 } from "./AudioRuntimeProfile";
+import {
+  createCelestialEffectsRack,
+  resolveCelestialAudioProfile,
+  type CelestialEffectsRack,
+} from "./CelestialEffects";
 import { compileLiveSchedule } from "./CompositionCompiler";
 import { createLiveScheduleKey } from "./LiveScheduleKey";
 import {
@@ -45,6 +50,7 @@ export class AudioEngine {
   private composition?: Composition;
   private master?: Gain;
   private limiter?: Limiter;
+  private celestialEffects?: CelestialEffectsRack;
   private scheduler?: Scheduler;
   private readonly voices = new RuntimeVoiceRegistry();
   private readonly masterGainGate = new RuntimeValueGate(0);
@@ -71,7 +77,11 @@ export class AudioEngine {
       this.limiter = new Limiter(
         AUDIO_OUTPUT_SAFETY.limiterThresholdDb,
       ).toDestination();
-      this.master = new Gain(0).connect(this.limiter);
+      this.celestialEffects = createCelestialEffectsRack(
+        this.limiter,
+        resolveCelestialAudioProfile(this.composition ?? "radiant"),
+      );
+      this.master = new Gain(0).connect(this.celestialEffects.input);
       this.scheduler = new Scheduler(
         this.options.schedulerBackend ?? createToneSchedulerBackend(),
         (occurrence, scheduledAudioTime) => {
@@ -104,7 +114,7 @@ export class AudioEngine {
       throw new Error("Set a composition before playback.");
     if (this.safetyMuted) {
       if (this.masterDisconnected && this.master && this.limiter) {
-        this.master.connect(this.limiter);
+        this.master.connect(this.celestialEffects?.input ?? this.limiter);
         this.masterDisconnected = false;
       }
       this.scheduler?.resetPlaybackEpoch();
@@ -168,6 +178,7 @@ export class AudioEngine {
     this.scheduler?.dispose();
     this.voices.dispose(currentAudioTime);
     this.master?.dispose();
+    this.celestialEffects?.dispose();
     this.limiter?.dispose();
     this.disposed = true;
   }
@@ -179,6 +190,7 @@ export class AudioEngine {
   private rebuildRuntime(): void {
     if (!this.master || !this.scheduler || !this.composition) return;
     const composition = this.composition;
+    this.celestialEffects?.update(resolveCelestialAudioProfile(composition));
     const template = compileLiveSchedule(composition);
     const nextScheduleKey = createLiveScheduleKey(composition, template);
     const scheduleChanged = nextScheduleKey !== this.scheduleKey;

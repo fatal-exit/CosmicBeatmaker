@@ -236,6 +236,8 @@ export interface GenerateRolePlanetOptions {
   voicingId: VoicingPresetId;
   macros: MacroState;
   beatPattern?: PatternState;
+  /** Optional palette override for a binary planet affinity. */
+  soundPalette?: readonly string[];
 }
 
 export function generateRolePlanet(
@@ -293,7 +295,9 @@ export function generateRolePlanet(
     id: createStableId("planet", options.seed, options.role, String(ordinal)),
     role: options.role,
     name: random.pick(ROLE_NAMES[options.role]),
-    soundPresetId: random.pick(options.starPreset.sounds[options.role]),
+    soundPresetId: random.pick(
+      options.soundPalette ?? options.starPreset.sounds[options.role],
+    ),
     orbit: {
       loopBars,
       phase: random.pick([0, 0.125, 0.25, 0.375] as const),

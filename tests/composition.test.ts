@@ -43,7 +43,7 @@ describe("starter composition", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.composition.schemaVersion).toBe(2);
+      expect(result.composition.schemaVersion).toBe(3);
       expect(
         result.composition.planets.find((planet) => planet.role === "chords")
           ?.expression,
@@ -57,6 +57,26 @@ describe("starter composition", () => {
               : 0.5,
         chordComplexity: 0.18 + current.macros.complexity * 0.55,
       });
+    }
+  });
+
+  it("migrates a schema-version-2 single star without changing its music", () => {
+    const current = generateCompleteSystem("migration-v2");
+    const legacyStar = { ...current.star };
+    delete legacyStar.companion;
+    const legacy = {
+      ...current,
+      schemaVersion: 2,
+      star: legacyStar,
+    };
+    const result = deserializeComposition(JSON.stringify(legacy));
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.composition.schemaVersion).toBe(3);
+      expect(result.composition.star).toEqual(legacyStar);
+      expect(result.composition.planets).toEqual(current.planets);
+      expect(result.composition.asteroidBelt).toEqual(current.asteroidBelt);
     }
   });
 

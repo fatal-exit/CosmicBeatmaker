@@ -451,6 +451,10 @@ function midiToFrequency(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
+function shiftMidi(midi: number, semitones: number): number {
+  return Math.max(0, Math.min(127, midi + semitones));
+}
+
 class TrackStrip {
   readonly filter: Filter;
   private readonly panner: Panner;
@@ -505,10 +509,12 @@ class BeatFallbackVoice implements RuntimeVoice {
     FALLBACK_DRUM_SOURCE_CAPACITY * Object.keys(MIDI_DRUM_NOTES).length,
   );
   private readonly budgets = new Map<DrumVoiceId, RuntimeVoiceSourceBudget>();
+  private pitchShiftSemitones: -12 | 0;
   private disposed = false;
 
   constructor(track: CompiledTrack, output: InputNode) {
     this.strip = new TrackStrip(track, output, 0.42);
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
   }
 
   trigger(
@@ -566,7 +572,12 @@ class BeatFallbackVoice implements RuntimeVoice {
         ),
         () =>
           synth.triggerAttackRelease(
-            midiToFrequency(occurrence.midiNotes[0] ?? 36),
+            midiToFrequency(
+              shiftMidi(
+                occurrence.midiNotes[0] ?? 36,
+                this.pitchShiftSemitones,
+              ),
+            ),
             duration,
             scheduledAudioTime,
             occurrence.velocity,
@@ -630,7 +641,9 @@ class BeatFallbackVoice implements RuntimeVoice {
       ),
       () =>
         synth.triggerAttackRelease(
-          midiToFrequency(occurrence.midiNotes[0] ?? 50),
+          midiToFrequency(
+            shiftMidi(occurrence.midiNotes[0] ?? 50, this.pitchShiftSemitones),
+          ),
           duration,
           scheduledAudioTime,
           occurrence.velocity * 0.48,
@@ -640,6 +653,7 @@ class BeatFallbackVoice implements RuntimeVoice {
 
   update(track: CompiledTrack): void {
     if (this.disposed) return;
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
     this.strip.update(track);
   }
 
@@ -955,6 +969,7 @@ class DrumSampleVoice implements OptionalSampleVoice {
   private readonly statesByVoice = new Map<DrumVoiceId, DrumSampleState>();
   private readonly uniqueStates = new Map<string, DrumSampleState>();
   private readonly events: RuntimeVoiceEventPool;
+  private pitchShiftSemitones: -12 | 0;
   private disposed = false;
 
   constructor(
@@ -963,6 +978,7 @@ class DrumSampleVoice implements OptionalSampleVoice {
     definition: DrumSampleVoiceDefinition,
   ) {
     this.strip = new TrackStrip(track, output, 0.34);
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
     for (const [drumVoice, sampleId] of Object.entries(definition.samples) as [
       DrumVoiceId,
       string,
@@ -998,12 +1014,9 @@ class DrumSampleVoice implements OptionalSampleVoice {
     if (!state) throw new Error("No sample is mapped for this drum voice.");
     const buffer = this.bufferFor(state);
     if (!buffer) throw new Error("The drum sample is not ready.");
-    const frequency = midiToFrequency(state.rootMidi);
-    const plan = planSamplePlayback(
-      state.asset,
-      state.rootMidi,
-      state.rootMidi,
-    );
+    const targetMidi = shiftMidi(state.rootMidi, this.pitchShiftSemitones);
+    const frequency = midiToFrequency(targetMidi);
+    const plan = planSamplePlayback(state.asset, state.rootMidi, targetMidi);
     const endAudioTime =
       scheduledAudioTime +
       (plan.releaseStartSeconds === undefined
@@ -1047,6 +1060,7 @@ class DrumSampleVoice implements OptionalSampleVoice {
 
   update(track: CompiledTrack): void {
     if (this.disposed) return;
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
     this.strip.update(track);
   }
 
@@ -1485,10 +1499,12 @@ class OfflineBeatFallbackVoice implements RuntimeVoice {
     resonance: 4_800,
     octaves: 1.2,
   });
+  private pitchShiftSemitones: -12 | 0;
   private disposed = false;
 
   constructor(track: CompiledTrack, output: InputNode) {
     this.strip = new TrackStrip(track, output, 0.42);
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
     this.kick.connect(this.strip.filter);
     this.noise.connect(this.strip.filter);
     this.metal.connect(this.strip.filter);
@@ -1506,7 +1522,9 @@ class OfflineBeatFallbackVoice implements RuntimeVoice {
     );
     if (occurrence.drumVoice === "kick") {
       this.kick.triggerAttackRelease(
-        midiToFrequency(occurrence.midiNotes[0] ?? 36),
+        midiToFrequency(
+          shiftMidi(occurrence.midiNotes[0] ?? 36, this.pitchShiftSemitones),
+        ),
         duration,
         scheduledAudioTime,
         occurrence.velocity,
@@ -1526,7 +1544,9 @@ class OfflineBeatFallbackVoice implements RuntimeVoice {
       return;
     }
     this.metal.triggerAttackRelease(
-      midiToFrequency(occurrence.midiNotes[0] ?? 50),
+      midiToFrequency(
+        shiftMidi(occurrence.midiNotes[0] ?? 50, this.pitchShiftSemitones),
+      ),
       duration,
       scheduledAudioTime,
       occurrence.velocity * 0.48,
@@ -1534,6 +1554,7 @@ class OfflineBeatFallbackVoice implements RuntimeVoice {
   }
 
   update(track: CompiledTrack): void {
+    this.pitchShiftSemitones = track.pitchShiftSemitones ?? 0;
     this.strip.update(track);
   }
 

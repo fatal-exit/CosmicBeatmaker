@@ -73,7 +73,7 @@ function compatibilityKey(track: CompiledTrack): string {
 }
 
 function parameterKey(track: CompiledTrack): string {
-  return `${track.level}:${track.pan}:${track.filter}`;
+  return `${track.level}:${track.pan}:${track.filter}:${track.pitchShiftSemitones ?? 0}`;
 }
 
 function assertAudioTime(audioTime: number): void {

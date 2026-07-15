@@ -81,6 +81,11 @@ describe("role-aware ring patterns", () => {
 
   it("switches a chord planet from sustained voicings to an articulated arpeggio", () => {
     const composition = generateCompleteSystem("ring-chord-arp");
+    composition.star = {
+      ...composition.star,
+      presetId: "radiant",
+      companion: undefined,
+    };
     composition.swing = 0;
     composition.macros = {
       energy: 0.5,
@@ -130,6 +135,11 @@ describe("role-aware ring patterns", () => {
 
   it("adds bass octave pickups on syncopated eighth-note positions", () => {
     const composition = generateCompleteSystem("ring-bass-pickups");
+    composition.star = {
+      ...composition.star,
+      presetId: "radiant",
+      companion: undefined,
+    };
     composition.swing = 0;
     composition.macros = {
       energy: 0.5,

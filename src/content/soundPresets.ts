@@ -699,6 +699,13 @@ export const STAR_SOUND_PALETTES = {
     melody: ["signal-lead", "deep-signal", "organic-mallet", "ice-bell"],
     texture: ["void-drone", "nebula", "radio"],
   },
+  "black-hole": {
+    beat: ["heavy-void", "metallic-array", "soft-impact"],
+    bass: ["cosmic-drone", "deep-sub", "rough-drive"],
+    chords: ["pulsing-synth", "warm-pad", "glass-chords"],
+    melody: ["deep-signal", "midnight-lead", "signal-lead", "organic-mallet"],
+    texture: ["void-drone", "mechanical", "nebula"],
+  },
 } as const satisfies Record<
   StarPresetId,
   Record<PlanetRole, readonly string[]>

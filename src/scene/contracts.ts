@@ -1,4 +1,10 @@
-import type { LoopBars, PlanetRole, StarPresetId } from "../domain/composition";
+import type {
+  BinaryRhythmMode,
+  CompanionStarPresetId,
+  LoopBars,
+  PlanetRole,
+  StarPresetId,
+} from "../domain/composition";
 import type { GateStepEmphasis } from "../domain/rhythm";
 import type {
   PlanetRingVisualMetrics,
@@ -66,6 +72,14 @@ export interface RingSegmentSceneDescriptor {
   phase: number;
 }
 
+/** A projected asteroid attack that gives the belt a stable visual cause. */
+export interface AsteroidSceneEventDescriptor {
+  eventId: string;
+  step: number;
+  phase: number;
+  velocity: number;
+}
+
 export interface MoonSceneDescriptor {
   id: string;
   selectionTargetId: string;
@@ -73,7 +87,7 @@ export interface MoonSceneDescriptor {
   phase: number;
   /** Number of moon revolutions during one parent-planet orbit. */
   orbitRatio: number;
-  events: SceneEventDescriptor[];
+  events: Array<SceneEventDescriptor & { velocity: number }>;
 }
 
 export interface SceneDescriptor {
@@ -83,12 +97,25 @@ export interface SceneDescriptor {
     intensity: number;
     presetId: StarPresetId;
     visualSeed: number;
+    companion?: {
+      id: string;
+      hue: number;
+      intensity: number;
+      presetId: CompanionStarPresetId;
+      rhythmMode: BinaryRhythmMode;
+      visualSeed: number;
+    };
   };
   planets: PlanetSceneDescriptor[];
   asteroidBelt?: {
     id: string;
     count: number;
+    population: number;
+    clustering: number;
+    turbulence: number;
+    materialPresetId: string;
     visualSeed: number;
+    events: AsteroidSceneEventDescriptor[];
   };
 }
 

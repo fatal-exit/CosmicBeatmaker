@@ -279,6 +279,59 @@ selection without hiding audible causality. Exact one-slot buttons are clearer
 than an always-live arc gesture, and plain musical-time feedback helps a beginner
 spot one misplaced event while preserving syncopation as a valid creative choice.
 
+### D-035 — Black Hole performance profile and bounded binary companion
+
+**Decision:** Schema version 3 adds `black-hole` as a data-driven primary star
+preset and one optional serialized binary companion inside the existing star
+aggregate. The companion may use one of the five ordinary stellar presets and
+stores its stable ID, visual seed, intensity, and one rhythm mode: Interlock,
+Mirror, or Call and response. The existing star lock covers both bodies. Stable
+planet order alternates primary and companion affinity, with the initial side
+derived from the companion seed, so a system with at least two planets contains
+both sound palettes without doubling every voice. Primary and companion presets
+must remain distinct; generation and editing normalize an equal-preset request
+deterministically, while serialized equal-preset state is invalid.
+
+Black Hole half-speed is defined as a pure derived projection: take events in
+the first half of each planet or moon performance pattern and stretch their step
+positions and durations by two across the same stored orbit. Preserve event IDs,
+keep all steps bounded, and deterministically retain one event if that half was
+empty. Binary projection follows it when both features are active. Interlock
+rotates companion-affinity events by one subdivision, Mirror reflects them around
+the orbit, and Call and response rotates them by half an orbit. Canonical pattern
+state and loop periods are not destructively rewritten. The audio compiler and
+scene descriptor call the same projector.
+
+Moon behavior and asteroid accent controls follow the same derived-state rule.
+Six moon behavior projections preserve IDs, count, and grid before celestial
+transforms. Asteroid accent chance deterministically boosts existing event
+velocity from stable composition/belt/event identity. Neither feature adds a
+hidden sequence, and audio and scene share both projectors.
+
+Black Hole audio derives a -12-semitone intent, uses existing dark role-compatible
+sounds, and passes the combined mix through one bounded shared digital/reverb
+profile. Sample playback slows naturally under octave-down transposition;
+offline WAV uses the same processing intent, and MIDI keeps pitched-note
+transposition while preserving documented drum mapping. The renderer creates a
+bounded procedural event horizon, photon ring, and accretion disk; binary bodies
+orbit a visual barycenter while one authoritative Tone transport remains in
+control. Low quality attenuates optional detail, and no full-screen lensing pass,
+new dependency, new sample asset, arbitrary multi-star array, or second audio
+clock is introduced.
+
+Version-1 data still receives the D-025 expression migration before advancing;
+version-2 data advances to version 3 with no companion and no other musical
+change. This decision deliberately removes Binary star behavior from the deferred
+list in response to the dedicated celestial-systems milestone, and supersedes the
+one-rendered-star wording of the earlier MVP performance limit while preserving
+one authoritative star aggregate.
+
+**Reason:** A shared projection keeps the requested slow, gravitational and
+two-star behavior visibly causal, deterministic, undoable, and exportable. One
+companion and one global effects rack add distinctive creative depth without the
+voice multiplication, schema sprawl, or mobile cost of unrestricted multi-star
+systems and per-track DSP graphs.
+
 ### Current implementation note for D-014
 
 D-026 supersedes D-014's next-bar replacement behavior for live performance controls. Deterministic probability, transport reset/resume behavior, export loop indexing, and intentional playhead-relative macro, expression, step, ring, loop-length, harmony, voice, and pattern editing are implemented. Major regeneration remains an explicit whole-project action rather than a continuous performance control.
@@ -365,7 +418,6 @@ Decision deadline: Milestone 4.
 
 These should not block the MVP:
 
-- Binary star behavior
 - Eight-bar harmonic phrases; 8-bar planet orbits are already supported by D-020
 - Unusual time signatures
 - Comets and celestial event arrangement

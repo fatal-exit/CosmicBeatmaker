@@ -1,6 +1,7 @@
 export * from "./AudioEngine";
 export * from "./AudioHealth";
 export * from "./AudioRuntimeProfile";
+export * from "./CelestialEffects";
 export * from "./CompositionCompiler";
 export * from "./MidiExporter";
 export * from "./RuntimeVoiceRegistry";

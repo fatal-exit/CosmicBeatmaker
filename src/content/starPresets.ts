@@ -8,7 +8,8 @@ import type {
 import type { RhythmTemplateId } from "./rhythmTemplates";
 import { STAR_SOUND_PALETTES } from "./soundPresets";
 
-export type StarMood = "Radiant" | "Warm" | "Delicate" | "Pulsing" | "Void";
+export type StarMood =
+  "Radiant" | "Warm" | "Delicate" | "Pulsing" | "Void" | "Black Hole";
 
 export interface StarPresetDefinition {
   id: StarPresetId;
@@ -30,6 +31,7 @@ export const STAR_MOOD_PRESET_IDS = {
   Delicate: "dwarf",
   Pulsing: "neutron",
   Void: "void",
+  "Black Hole": "black-hole",
 } as const satisfies Record<StarMood, StarPresetId>;
 
 export const STAR_PRESETS = {
@@ -97,6 +99,19 @@ export const STAR_PRESETS = {
     voicings: ["wide", "open"],
     rhythmTemplates: ["minimal-pulse", "half-time", "broken-orbit"],
     sounds: STAR_SOUND_PALETTES.void,
+  },
+  "black-hole": {
+    id: "black-hole",
+    mood: "Black Hole",
+    name: "Black Hole",
+    description: "Slow, dark, and gravitationally spacious.",
+    bpmRange: [70, 88],
+    intensityRange: [0.32, 0.56],
+    scales: ["minor-pentatonic", "dorian"],
+    progressions: ["dark", "minimal", "reflective"],
+    voicings: ["wide", "open"],
+    rhythmTemplates: ["half-time", "minimal-pulse", "broken-orbit"],
+    sounds: STAR_SOUND_PALETTES["black-hole"],
   },
 } as const satisfies Record<StarPresetId, StarPresetDefinition>;
 

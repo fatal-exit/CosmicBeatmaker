@@ -13,6 +13,13 @@ import {
   performanceHumanizeOffsetSteps,
 } from "../domain/rhythm/performanceMacros";
 import { deriveRingPattern } from "../domain/rhythm/ringPatterns";
+import { projectCelestialRhythm } from "../domain/rhythm/celestialTransforms";
+import { deriveAsteroidPerformancePattern } from "../domain/rhythm/asteroidPatterns";
+import { projectMoonBehavior } from "../domain/rhythm/moonBehaviors";
+import {
+  blackHolePitchIntentSemitones,
+  getPlanetStarAffinity,
+} from "../domain/composition/starSystems";
 import { resolveMidiNotes } from "./harmony";
 import { shouldPlayProbability } from "./probability";
 import { applySwing, normalizePhase, ticksForBars } from "./timing";
@@ -111,6 +118,9 @@ function gatherTrackSources(
 ): TrackSource[] {
   const sources: TrackSource[] = [];
   const hasSolo = composition.planets.some((planet) => planet.soloed);
+  // Black Hole is a star-level performance profile. Its pitch intent applies
+  // to every source in the aggregate, including a binary companion's palette.
+  const pitchShiftSemitones = blackHolePitchIntentSemitones(composition.star);
 
   for (const planet of composition.planets) {
     if ((!includeMuted && planet.muted) || (hasSolo && !planet.soloed))
@@ -128,6 +138,12 @@ function gatherTrackSources(
       ),
       planet.expression,
     );
+    const affinity = getPlanetStarAffinity(composition, planet);
+    const projectedPattern = projectCelestialRhythm(
+      performancePattern,
+      composition.star,
+      affinity,
+    );
     const chordUsesRing = planet.role === "chords" && Boolean(planet.ring);
     if (!chordUsesRing) {
       sources.push({
@@ -140,8 +156,9 @@ function gatherTrackSources(
           level: planet.mix.level,
           pan: planet.mix.pan,
           filter: planet.mix.filter,
+          pitchShiftSemitones,
         },
-        pattern: performancePattern,
+        pattern: projectedPattern,
         loopTicks,
         phase: planet.orbit.phase,
         probability: 1,
@@ -151,6 +168,20 @@ function gatherTrackSources(
 
     for (const moon of planet.moons) {
       if (!includeMuted && moon.muted) continue;
+      const moonPerformancePattern = applyPlanetExpression(
+        derivePerformancePattern(
+          moon.pattern,
+          planet.role,
+          moon.id,
+          composition.macros,
+        ),
+        planet.expression,
+      );
+      const moonBehaviorPattern = projectMoonBehavior(
+        moonPerformancePattern,
+        moon.behaviorPresetId,
+        planet.role,
+      );
       sources.push({
         track: {
           id: moon.id,
@@ -162,15 +193,12 @@ function gatherTrackSources(
           level: planet.mix.level * moon.level,
           pan: planet.mix.pan,
           filter: planet.mix.filter,
+          pitchShiftSemitones,
         },
-        pattern: applyPlanetExpression(
-          derivePerformancePattern(
-            moon.pattern,
-            planet.role,
-            moon.id,
-            composition.macros,
-          ),
-          planet.expression,
+        pattern: projectCelestialRhythm(
+          moonBehaviorPattern,
+          composition.star,
+          affinity,
         ),
         loopTicks: ticksForBars(
           resolveMoonLoopBars(planet.orbit.loopBars, moon.orbitRatio),
@@ -219,8 +247,16 @@ function gatherTrackSources(
                 : planet.mix.level * ring.level,
             pan: planet.mix.pan,
             filter: planet.mix.filter,
+            pitchShiftSemitones,
           },
-          pattern: deriveRingPattern(planet, performancePattern, ring),
+          // Derive the role-aware ring from the macro/expression pattern, then
+          // project its own event IDs exactly once through the same relationship
+          // as the parent. This prevents a second half-speed/rotation pass.
+          pattern: projectCelestialRhythm(
+            deriveRingPattern(planet, performancePattern, ring),
+            composition.star,
+            affinity,
+          ),
           loopTicks,
           phase: normalizePhase(planet.orbit.phase + ring.phase),
           probability: 1,
@@ -242,12 +278,13 @@ function gatherTrackSources(
         level: belt.level,
         pan: 0,
         filter: 0.7,
+        pitchShiftSemitones,
       },
-      pattern: {
-        gridSize: belt.gridSize,
-        events: belt.events,
-        humanize: belt.turbulence,
-      },
+      pattern: projectCelestialRhythm(
+        deriveAsteroidPerformancePattern(composition.seed, belt),
+        composition.star,
+        "primary",
+      ),
       loopTicks: ticksForBars(composition.bars, composition.beatsPerBar),
       phase: 0,
       probability: 1,
@@ -358,16 +395,11 @@ function compileLiveCycle(
         durationTicks,
         velocity: Math.max(0, Math.min(1, event.velocity)),
         probability,
-        midiNotes: resolveMidiNotes(
+        midiNotes: compileMidiNotes(
           composition,
-          source.track.role,
+          source,
           startInTemplate,
-          event.pitch,
-          event.drumVoice,
-          {
-            expression: source.expression,
-            sourceKind: source.track.sourceKind,
-          },
+          event,
         ),
         ...(event.drumVoice ? { drumVoice: event.drumVoice } : {}),
       }),
@@ -378,6 +410,30 @@ function compileLiveCycle(
     localCycleIndex,
     events: Object.freeze(events),
   });
+}
+
+function compileMidiNotes(
+  composition: Composition,
+  source: TrackSource,
+  tick: number,
+  event: PatternState["events"][number],
+): readonly number[] {
+  const resolved = resolveMidiNotes(
+    composition,
+    source.track.role,
+    tick,
+    event.pitch,
+    event.drumVoice,
+    {
+      expression: source.expression,
+      sourceKind: source.track.sourceKind,
+    },
+  );
+  // General MIDI drum notes are semantic voice IDs and must remain canonical
+  // in compiled/MIDI data. Pitched sources carry the derived intent directly.
+  if (source.track.role === "beat") return resolved;
+  const shift = source.track.pitchShiftSemitones ?? 0;
+  return resolved.map((note) => Math.max(0, Math.min(127, note + shift)));
 }
 
 function compileLiveSources(

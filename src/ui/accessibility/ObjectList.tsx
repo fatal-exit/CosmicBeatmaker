@@ -6,6 +6,12 @@ import {
   formatOrbitRate,
 } from "../inspector/orbitRateOptions";
 
+const BINARY_RHYTHM_LABELS = {
+  interlock: "interlock rhythm",
+  mirror: "mirror rhythm",
+  "call-response": "call-and-response rhythm",
+} as const;
+
 export interface ObjectListProps {
   composition: Composition;
   selectedId: string | null;
@@ -32,7 +38,9 @@ export function ObjectList({
           <p className="panel-label">Navigator</p>
           <h2 id={headingId}>Your system</h2>
         </div>
-        <span>{composition.planets.length + 1}</span>
+        <span>
+          {composition.planets.length + 1 + (composition.asteroidBelt ? 1 : 0)}
+        </span>
       </div>
       <div className="object-list">
         <button
@@ -40,11 +48,17 @@ export function ObjectList({
           className={`object-row${selectedId === composition.star.id ? " selected" : ""}`}
           onClick={() => onSelect(composition.star.id)}
           aria-pressed={selectedId === composition.star.id}
+          aria-label={`Primary ${composition.star.presetId.replace("-", " ")} star palette, ${composition.star.presetId === "black-hole" ? "half-speed, octave-down, digital-edge, larger-darker-reverb behavior" : "system mood"}${composition.star.companion ? `; binary companion ${composition.star.companion.presetId.replace("-", " ")} palette, ${BINARY_RHYTHM_LABELS[composition.star.companion.rhythmMode]}` : "; no binary companion"}`}
         >
           <span aria-hidden="true" className="object-symbol star-symbol" />
           <span>
             <strong>{composition.star.presetId.replace("-", " ")} star</strong>
-            <small>{advanced ? "Sets mood and harmony" : "System mood"}</small>
+            <small>
+              {advanced ? "Sets mood and harmony" : "System mood"}
+              {composition.star.companion
+                ? ` · binary: ${composition.star.companion.presetId.replace("-", " ")} palette · ${BINARY_RHYTHM_LABELS[composition.star.companion.rhythmMode]}`
+                : " · single star"}
+            </small>
           </span>
         </button>
         {composition.planets.map((planet) => {
@@ -96,16 +110,31 @@ export function ObjectList({
           );
         })}
         {composition.asteroidBelt ? (
-          <div className="object-row structural-object" role="status">
+          <button
+            type="button"
+            className={`object-row structural-object${selectedId === composition.asteroidBelt.id ? " selected" : ""}`}
+            onClick={() => onSelect(composition.asteroidBelt!.id)}
+            aria-pressed={selectedId === composition.asteroidBelt.id}
+            aria-label={`Asteroid belt, ${composition.asteroidBelt.events.length} seeded dust hits, ${composition.asteroidBelt.locked ? "locked" : "unlocked"}`}
+          >
             <span
               aria-hidden="true"
               className="object-symbol asteroid-symbol"
             />
             <span>
               <strong>Asteroid belt</strong>
-              <small>Seeded irregular percussion</small>
+              <small>
+                Seeded irregular percussion ·{" "}
+                {composition.asteroidBelt.events.length} dust hits
+                {composition.asteroidBelt.locked ? " · locked" : ""}
+              </small>
             </span>
-          </div>
+            {composition.asteroidBelt.locked ? (
+              <span className="state-glyph" title="Locked" aria-hidden="true">
+                ◆
+              </span>
+            ) : null}
+          </button>
         ) : null}
       </div>
     </nav>

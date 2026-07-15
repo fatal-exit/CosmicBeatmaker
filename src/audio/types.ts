@@ -13,6 +13,8 @@ export interface CompiledTrack {
   level: number;
   pan: number;
   filter: number;
+  /** Derived playback intent. Beat MIDI notes stay canonical; live voices use this shift. */
+  readonly pitchShiftSemitones?: -12 | 0;
 }
 
 /**

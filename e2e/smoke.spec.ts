@@ -347,6 +347,168 @@ test("controls the density of a selected planet ring", async ({
   );
 });
 
+test("describes and edits a Black Hole primary mood", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("button", { name: "Start creating" }).click();
+  await expect(page.locator(".mood-option")).toHaveCount(6);
+  await page.getByRole("button", { name: /^Black Hole/ }).click();
+
+  let inspector: Locator;
+  if (testInfo.project.name === "mobile-chrome") {
+    await page.getByRole("button", { name: "Controls" }).click();
+    const editor = page.getByRole("dialog", { name: "Objects and controls" });
+    const star = editor.getByRole("button", {
+      name: /Primary black hole star palette/,
+    });
+    await star.focus();
+    await star.press("Enter");
+    inspector = editor.locator(".star-inspector");
+  } else {
+    const star = page.getByRole("button", {
+      name: /Primary black hole star palette/,
+    });
+    await star.click();
+    inspector = page.locator(".workspace .star-inspector");
+  }
+  await expect(
+    inspector.getByRole("heading", { name: "Black Hole" }),
+  ).toBeVisible();
+  await expect(inspector.getByText("Black Hole behavior")).toBeVisible();
+  await expect(
+    inspector.getByText(
+      /Half-speed gravity.*octave down.*digital edge.*larger, darker reverb/i,
+    ),
+  ).toBeVisible();
+  if (testInfo.project.name === "mobile-chrome") {
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await inspector.locator("button, select").evaluateAll((elements) =>
+        elements.every((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width >= 44 && rect.height >= 44;
+        }),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("adds, edits, mutes, and undoes a generated moon", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  const exploreDemo = page.getByRole("button", { name: "Explore the demo" });
+  await exploreDemo.click();
+  await expect(exploreDemo).toBeHidden();
+  await page.getByRole("button", { name: /, beat role,/ }).click();
+  await page.getByRole("button", { name: "Add object" }).click();
+  await page.getByRole("button", { name: /^Orbiting moon/ }).click();
+
+  const inspector = page.locator(".workspace .inspector");
+  const behavior = inspector.getByLabel("Moon 1 behavior");
+  await expect(behavior).toBeVisible();
+  await behavior.selectOption("echo");
+  const mute = inspector.getByRole("button", { name: "Mute moon 1" });
+  await mute.click();
+  await expect(mute).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(
+    inspector.getByRole("button", { name: "Mute moon 1" }),
+  ).toHaveAttribute("aria-pressed", "false");
+});
+
+test("selects and edits the asteroid belt inspector", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  const exploreDemo = page.getByRole("button", { name: "Explore the demo" });
+  await exploreDemo.click();
+  await expect(exploreDemo).toBeHidden();
+  await page.getByRole("button", { name: /^Asteroid belt/ }).click();
+
+  const inspector = page.locator(".workspace .asteroid-inspector");
+  await expect(
+    inspector.getByRole("heading", { name: "Asteroid belt" }),
+  ).toBeVisible();
+  const population = inspector.getByLabel("Population");
+  await population.fill("0.8");
+  await expect(inspector.getByText("80%", { exact: true })).toBeVisible();
+  const lock = inspector.getByRole("button", { name: "Lock" });
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+  await expect(population).toBeDisabled();
+  await inspector.getByRole("button", { name: "Unlock" }).click();
+  await inspector.getByRole("button", { name: "Remove belt" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Asteroid belt/ }),
+  ).toHaveCount(0);
+});
+
+test("configures and removes one binary companion", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium");
+  const exploreDemo = page.getByRole("button", { name: "Explore the demo" });
+  await exploreDemo.click();
+  await expect(exploreDemo).toBeHidden();
+  await page
+    .getByRole("button", { name: /Primary radiant star palette/ })
+    .click();
+
+  const inspector = page.locator(".workspace .star-inspector");
+  await inspector.getByRole("button", { name: "Add binary companion" }).click();
+  await expect(inspector.getByText(/palette · Interlock/)).toBeVisible();
+  await page.getByRole("button", { name: "Add object" }).click();
+  await expect(
+    page.getByRole("button", { name: /^Binary companion/ }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Close add menu" }).click();
+
+  await inspector.getByLabel("Companion palette").selectOption("dwarf");
+  await inspector
+    .getByLabel("Rhythm relationship")
+    .selectOption("call-response");
+  await expect(
+    inspector.getByText(/Dwarf palette · Call and response/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: /binary companion dwarf palette, call-and-response rhythm/,
+    }),
+  ).toBeVisible();
+
+  await inspector
+    .getByRole("button", { name: "Remove binary companion" })
+    .click();
+  await expect(
+    inspector.getByRole("button", { name: "Add binary companion" }),
+  ).toBeVisible();
+});
+
+test("renders star and belt inspectors inside the mobile editor", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile-chrome");
+  const exploreDemo = page.getByRole("button", { name: "Explore the demo" });
+  await exploreDemo.click();
+  await expect(exploreDemo).toBeHidden();
+  await page.getByRole("button", { name: "Controls" }).click();
+  const editor = page.getByRole("dialog", { name: "Objects and controls" });
+
+  await editor
+    .getByRole("button", { name: /Primary radiant star palette/ })
+    .click();
+  await expect(editor.locator(".star-inspector")).toBeVisible();
+  const belt = editor.getByRole("button", { name: /Asteroid belt/ });
+  await belt.focus();
+  await belt.press("Enter");
+  await expect(editor.locator(".asteroid-inspector")).toBeVisible();
+});
+
 test("keeps the groove running through a live-control edit storm", async ({
   page,
 }, testInfo) => {

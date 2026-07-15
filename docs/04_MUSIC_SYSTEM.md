@@ -73,6 +73,37 @@ Star types are data-driven preset bundles, not separate audio engines.
 - Sub bass, textured impacts, drones, filtered percussion
 - Large negative space
 
+### Black Hole
+
+- Slow, gravitational, degraded, and spacious
+- Minor pentatonic or Dorian harmony with restrained density
+- Heavy percussion, drones, low signals, and dark processed textures
+- Every planet and moon projects the first half of its pattern across its full
+  existing orbit, doubling event positions and durations without changing the
+  stored loop period
+- Playback is pitched down one octave, passed through a restrained digital edge,
+  and placed in a larger reverb field
+
+## Binary star systems
+
+A system may contain one optional companion star inside the same authoritative
+star aggregate. The primary preset and companion preset keep their independent
+sound palettes. Stable planet order alternates affinity between them, with the
+starting side derived from the companion visual seed, so systems with at least
+two planets always contain both palettes.
+
+The companion selects one deterministic rhythm relationship:
+
+- Interlock rotates companion-affinity events by one natural subdivision.
+- Mirror reflects companion-affinity event positions around the orbit.
+- Call and response rotates companion-affinity events by half an orbit.
+
+These are derived projections rather than destructive pattern edits. Stable
+event IDs, orbit lengths, pattern bounds, undo state, and the canonical stored
+events remain unchanged. The compiler and scene descriptor consume the same
+projection so every transformed audible event keeps a visible cause. A Black
+Hole primary applies its half-speed projection before the binary relationship.
+
 ## Safe Harmony
 
 Safe Harmony is enabled by default.
@@ -255,12 +286,12 @@ Default limit: three moons per planet.
 
 Moon types are behavior presets:
 
-- Accent
-- Echo
-- Harmony
-- Pickup
-- Fill
-- Counterpulse
+- Accent raises velocity and probability without moving the saved hits.
+- Echo answers one subdivision later at a quieter level.
+- Harmony keeps timing and chooses a safe related tone or drum voice.
+- Pickup anticipates each hit by one subdivision with a raised, shorter note.
+- Fill gathers the same stable events into the final quarter of the loop.
+- Counterpulse moves the response by half a pattern.
 
 Rules:
 
@@ -269,6 +300,9 @@ Rules:
 - Use a related subdivision or longer cycle.
 - Do not become a fully independent unrestricted track in beginner mode.
 - Complexity and probability determine activity.
+- Behavior is a pure performance projection applied after macro and expression
+  shaping and before Black Hole or binary transforms. It preserves event IDs,
+  count, grid, and canonical saved events, and is shared by audio and scene.
 
 Examples:
 
@@ -334,7 +368,9 @@ Musical implementation:
 - Use seeded patterns, not physics collisions, as the authoritative source.
 - Visual asteroid spacing should reflect the generated rhythm.
 - Small timing humanization is allowed, but events remain scheduled from audio time.
-- Occasional accent events may be generated at phrase boundaries.
+- Accent chance deterministically boosts existing hit velocity from composition
+  seed, belt ID, and event ID. It never creates a hidden event or changes timing,
+  and audio and scene consume the same derived result.
 
 ## Macro transformations
 

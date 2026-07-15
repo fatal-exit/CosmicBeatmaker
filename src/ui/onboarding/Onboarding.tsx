@@ -37,6 +37,12 @@ const MOODS: Array<{
     description: "Dark, sparse, and atmospheric",
     color: "void",
   },
+  {
+    label: "Black Hole",
+    presetId: "black-hole",
+    description: "Half-speed, octave-down, digital edge, larger, darker reverb",
+    color: "black-hole",
+  },
 ];
 
 export interface OnboardingProps {

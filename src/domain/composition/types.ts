@@ -1,11 +1,13 @@
-export const CURRENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SCHEMA_VERSION = 3 as const;
 
 import type { SupportedLoopBars } from "./loopRates";
 
 export type SchemaVersion = typeof CURRENT_SCHEMA_VERSION;
 export type EntityId = string;
 export type StarPresetId =
-  "radiant" | "red-giant" | "dwarf" | "neutron" | "void";
+  "radiant" | "red-giant" | "dwarf" | "neutron" | "void" | "black-hole";
+export type CompanionStarPresetId = Exclude<StarPresetId, "black-hole">;
+export type BinaryRhythmMode = "interlock" | "mirror" | "call-response";
 export type ScaleId =
   "major-pentatonic" | "minor-pentatonic" | "dorian" | "major";
 export type ProgressionId =
@@ -54,6 +56,16 @@ export interface StarState {
   visualSeed: number;
   intensity: number;
   locked: boolean;
+  /** Optional secondary star. Its generation lock is covered by `star`. */
+  companion?: BinaryStarState;
+}
+
+export interface BinaryStarState {
+  id: EntityId;
+  presetId: CompanionStarPresetId;
+  visualSeed: number;
+  intensity: number;
+  rhythmMode: BinaryRhythmMode;
 }
 
 export type ChordDegree = number;

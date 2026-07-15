@@ -2,6 +2,7 @@ import { Midi } from "@tonejs/midi";
 import { describe, expect, it } from "vitest";
 
 import { exportCompositionToMidi } from "../src/audio/MidiExporter";
+import { compileComposition } from "../src/audio/CompositionCompiler";
 import { createStarterComposition } from "../src/domain/composition/starter";
 import type { PlanetRole, PlanetState } from "../src/domain/composition/types";
 
@@ -73,5 +74,28 @@ describe("MIDI export", () => {
       9, 0, 1, 2, 3,
     ]);
     expect(parsed.tracks.every((track) => track.notes.length > 0)).toBe(true);
+  });
+
+  it("transposes Black Hole pitched notes while preserving GM drum mapping", () => {
+    const composition = createStarterComposition("midi-black-hole");
+    composition.star = { ...composition.star, presetId: "black-hole" };
+    composition.planets = [makePlanet("melody", 0), makePlanet("beat", 0)];
+
+    const sequence = compileComposition(composition);
+    const parsed = new Midi(exportCompositionToMidi(composition));
+    const melodyTrack = parsed.tracks.find((track) =>
+      track.name.includes("melody"),
+    );
+    const beatTrack = parsed.tracks.find((track) =>
+      track.name.includes("beat"),
+    );
+    const melodyOccurrence = sequence.occurrences.find(
+      (occurrence) => occurrence.role === "melody",
+    );
+    expect(melodyTrack?.channel).not.toBe(9);
+    expect(melodyTrack?.notes[0].midi).toBe(melodyOccurrence?.midiNotes[0]);
+    expect(melodyTrack?.notes[0].midi).toBe(48);
+    expect(beatTrack?.channel).toBe(9);
+    expect(beatTrack?.notes[0].midi).toBe(36);
   });
 });

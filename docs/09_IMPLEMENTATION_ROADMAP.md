@@ -446,6 +446,47 @@ This milestone does not add a sample marketplace, cloud sync, destructive editin
 
 The primary agent verifies built-in sound switching, one tonal import, one partial drum kit, deterministic Surprise and undo behavior, local reload/fallback copy, and the complete repository quality suite. Physical-device listening and storage-quota behavior remain release checks.
 
+## Milestone 13 — Celestial Ecosystems, Event Horizon & Binary Stars
+
+### Goal
+
+Finish the distinctive moon and asteroid ecosystem, then add one bounded Black
+Hole mood and optional binary companion without creating a second timing model.
+
+### Deliverables
+
+- Schema-version-3 Black Hole preset and optional serialized binary companion
+- Version-1 and version-2 migration coverage
+- Deterministic complete-system moon and asteroid-belt generation
+- Audible, visible, ID-preserving moon behavior projections plus accessible
+  behavior, mute, and removal controls
+- Accessible asteroid population, clustering, turbulence, accent, level, lock,
+  and removal controls
+- Stable asteroid accent derivation shared by audio and scene
+- Shared visible/audio Black Hole half-speed pattern projection
+- Octave-down Black Hole playback with restrained digital edge and larger reverb
+- Deterministic, distinct primary/companion palette affinity and interlock,
+  mirror, or call-and-response rhythm projection
+- Procedural event horizon, photon ring, accretion disk, and two-body stellar
+  presentation with Low/Balanced/High and reduced-effects behavior
+- Black Hole and binary showcase systems
+
+### Scope boundary
+
+This milestone supports one companion only. It does not add arbitrary multi-star
+systems, new time signatures, a song arranger, full-screen lensing, per-track DSP
+panels, timestretch editing, new sample dependencies, or physics-driven musical
+timing. The audio clock, canonical loop-rate catalog, planet limit, and four-bar
+harmony phrase remain unchanged.
+
+### Stopping condition
+
+Same-seed generation, migration, save/share, live playback, scene gates, WAV,
+and MIDI policies are deterministic; transformed audible events retain visible
+causes; all quality gates and critical desktop/mobile browser flows pass; the
+checkpoint is pushed and its Pages deployment is smoke-tested. Physical iOS and
+Android performance/listening remain explicitly unverified until run on devices.
+
 ## Nine-day build sequence
 
 ### Day 1

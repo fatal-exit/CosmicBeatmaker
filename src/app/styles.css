@@ -335,6 +335,11 @@ p {
   color: var(--muted);
 }
 
+.structural-object:hover,
+.structural-object.selected {
+  color: var(--ink);
+}
+
 .object-row.selected {
   outline: 1px solid color-mix(in oklch, var(--primary) 44%, var(--border));
   outline-offset: -1px;
@@ -386,6 +391,22 @@ p {
   background: var(--celestial-star);
 }
 
+.star-symbol-black-hole {
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      oklch(0.04 0.02 302) 0 35%,
+      transparent 37%
+    ),
+    conic-gradient(
+      from 20deg,
+      oklch(0.76 0.18 320),
+      oklch(0.28 0.12 260),
+      oklch(0.76 0.18 320)
+    );
+  box-shadow: 0 0 13px color-mix(in oklch, var(--primary) 52%, transparent);
+}
+
 .role-beat {
   background: var(--role-beat);
 }
@@ -397,6 +418,11 @@ p {
     transparent 3px 6px
   );
   border: 1px solid var(--muted);
+}
+
+.large-object-symbol.asteroid-symbol {
+  width: 46px;
+  height: 46px;
 }
 
 .role-bass {
@@ -620,6 +646,245 @@ p {
   color: var(--ink);
   font-size: 0.74rem;
   font-weight: 680;
+}
+
+.selected-star-summary {
+  margin: 4px 0 0;
+  display: grid;
+  gap: 2px;
+}
+
+.selected-star-summary strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.selected-star-summary span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.star-mood-control,
+.binary-companion-control,
+.belt-parameter-controls,
+.moon-controls {
+  margin: 18px 0 0;
+  padding: 14px 0;
+  display: grid;
+  gap: 8px;
+  border: 0;
+  border-block: 1px solid var(--border);
+}
+
+.star-mood-control legend,
+.belt-parameter-controls legend,
+.moon-controls legend {
+  padding: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.star-mood-control p,
+.binary-companion-control > p,
+.belt-parameter-controls > p,
+.moon-controls > p {
+  margin: -2px 0 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.star-mood-control label,
+.binary-companion-control label,
+.moon-control label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.star-mood-control select,
+.binary-companion-control select,
+.moon-control select {
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.star-behavior-note {
+  margin-top: 12px;
+  padding: 11px 12px;
+  background: color-mix(in oklch, var(--primary) 9%, var(--surface-raised));
+  border: 1px solid color-mix(in oklch, var(--primary) 35%, var(--border));
+  border-radius: 9px;
+}
+
+.star-behavior-note strong {
+  font-size: 0.78rem;
+}
+
+.star-behavior-note p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.binary-companion-control {
+  border-bottom: 0;
+}
+
+.binary-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.binary-section-heading h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.binary-section-heading .panel-label {
+  margin-bottom: 2px;
+}
+
+.binary-status {
+  padding: 4px 7px;
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 11%, transparent);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 720;
+}
+
+.binary-summary {
+  margin: 1px 0 2px;
+  padding: 9px 10px;
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.binary-summary strong {
+  font-size: 0.72rem;
+}
+
+.binary-summary span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.belt-parameter-controls {
+  padding-bottom: 0;
+}
+
+.belt-slider {
+  display: grid;
+  gap: 4px;
+}
+
+.belt-slider > span,
+.belt-slider > small {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.belt-slider > span strong,
+.belt-slider output {
+  font-size: 0.74rem;
+}
+
+.belt-slider output,
+.belt-slider > small {
+  color: var(--muted);
+}
+
+.belt-slider input {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.belt-slider > small {
+  flex-wrap: wrap;
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.belt-slider > small em {
+  flex-basis: 100%;
+  font-style: normal;
+}
+
+.moon-controls {
+  padding-bottom: 0;
+}
+
+.moon-list {
+  display: grid;
+  gap: 8px;
+}
+
+.moon-control {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: var(--surface-raised);
+  border-radius: 9px;
+}
+
+.moon-control-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moon-control-heading strong {
+  font-size: 0.74rem;
+}
+
+.moon-control-heading span {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.moon-control-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.moon-control-actions button {
+  min-height: 44px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.moon-control-actions button[aria-pressed="true"] {
+  background: var(--surface-active);
+  border-color: var(--primary);
 }
 
 .segmented-actions {
@@ -1610,7 +1875,7 @@ p {
 
 .mood-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1668,6 +1933,22 @@ p {
 
 .mood-option[data-mood-color="void"] .mood-star {
   background: oklch(0.55 0.14 260);
+}
+
+.mood-option[data-mood-color="black-hole"] .mood-star {
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      oklch(0.04 0.02 302) 0 36%,
+      transparent 38%
+    ),
+    conic-gradient(
+      from 20deg,
+      oklch(0.76 0.18 320),
+      oklch(0.24 0.1 260),
+      oklch(0.76 0.18 320)
+    );
+  box-shadow: 0 0 12px color-mix(in oklch, var(--primary) 48%, transparent);
 }
 
 .sheet-backdrop {

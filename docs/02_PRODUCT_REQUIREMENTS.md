@@ -47,6 +47,11 @@ A polished Build Week web application that works well on desktop and modern mobi
 ### C. Celestial construction
 
 - **MUST** provide a central star.
+- **MUST** provide a Black Hole mood whose visible gates and audible events use
+  the same deterministic half-speed projection, with octave-down processed
+  playback and a bounded larger-space effect profile.
+- **MUST** allow one optional binary companion that combines two existing star
+  sound palettes and applies one visible, deterministic rhythm relationship.
 - **MUST** allow adding, selecting, muting, soloing, duplicating, and deleting planets.
 - **MUST** show a circular representation of each pattern.
 - **MUST** allow changing a planet's visible and musical period through the exact 0.25-, 0.5-, 1-, 1.5-, 2-, 3-, 4-, 6-, and 8-bar orbit-rate catalog.
@@ -142,8 +147,7 @@ Cut these before compromising timing, accessibility, or mobile stability:
 
 1. Audio stems
 2. Celestial event arrangement features
-3. Binary star mechanics
-4. Hardware MIDI
-5. PWA installation
-6. Complex synthesis panels
-7. Eight-bar harmonic phrases and unusual-time-signature systems; an 8-bar planet orbit remains supported inside the four-bar-phrase polymetric system
+3. Hardware MIDI
+4. PWA installation
+5. Complex synthesis panels
+6. Eight-bar harmonic phrases and unusual-time-signature systems; an 8-bar planet orbit remains supported inside the four-bar-phrase polymetric system

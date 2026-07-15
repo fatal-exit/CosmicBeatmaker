@@ -13,6 +13,7 @@ import {
   SHOWCASE_SYSTEMS,
   type ShowcaseSystemDefinition,
 } from "../content/showcaseSystems";
+import { STAR_PRESETS } from "../content/starPresets";
 import {
   isUserSoundPreset,
   registerUserSoundRecord,
@@ -21,11 +22,12 @@ import {
   type UserSoundRecord,
 } from "../content";
 import type {
-  AsteroidBeltState,
+  BinaryRhythmMode,
+  CompanionStarPresetId,
   Composition,
   DrumVoiceId,
   LoopBars,
-  MoonState,
+  MoonBehaviorPresetId,
   PatternGridSize,
   PlanetExpressionState,
   PlanetRole,
@@ -34,7 +36,14 @@ import type {
   StarPresetId,
 } from "../domain/composition";
 import {
+  getPlanetStarAffinity,
+  starPresetIdForAffinity,
+} from "../domain/composition";
+import {
+  generateAsteroidBeltForComposition,
+  generateBinaryCompanionForComposition,
   generateCompleteSystem,
+  generateMoonForPlanet,
   generatePlanetForRole,
   surprisePlanet,
   surpriseWholeSystem,
@@ -75,8 +84,13 @@ import {
   sanitizeFilename,
 } from "../ui/export/downloads";
 import { FocusView } from "../ui/focus/FocusView";
+import {
+  AsteroidBeltInspector,
+  type BeltParameter,
+} from "../ui/inspector/AsteroidBeltInspector";
 import { PlanetInspector } from "../ui/inspector/PlanetInspector";
 import { formatOrbitLoop } from "../ui/inspector/orbitRateOptions";
+import { StarInspector } from "../ui/inspector/StarInspector";
 import { LibraryPanel } from "../ui/library/LibraryPanel";
 import {
   MacroControls,
@@ -141,6 +155,30 @@ function defaultRingDensity(role: PlanetRole): number {
   return 0.5;
 }
 
+const COMPANION_PRESET_IDS = Object.keys(STAR_PRESETS).filter(
+  (presetId): presetId is CompanionStarPresetId => presetId !== "black-hole",
+);
+
+function generateOrdinaryCompanion(
+  composition: Pick<Composition, "seed" | "star">,
+  options: {
+    presetId?: CompanionStarPresetId;
+    rhythmMode?: BinaryRhythmMode;
+  } = {},
+) {
+  const generated = generateBinaryCompanionForComposition(composition, options);
+  if (generated.presetId !== composition.star.presetId) return generated;
+  const fallback = COMPANION_PRESET_IDS.find(
+    (presetId) => presetId !== composition.star.presetId,
+  );
+  if (!fallback) return generated;
+  return generateBinaryCompanionForComposition(composition, {
+    ...options,
+    presetId: fallback,
+    rhythmMode: options.rhythmMode ?? generated.rhythmMode,
+  });
+}
+
 function makeRing(parent: PlanetState): RingState {
   const ring: RingState = {
     id: createId("ring"),
@@ -163,75 +201,6 @@ function makeRing(parent: PlanetState): RingState {
     defaultRingDensity(parent.role),
   );
   return ring;
-}
-
-function makeAsteroidBelt(): AsteroidBeltState {
-  return {
-    id: createId("asteroids"),
-    materialPresetId: "dust-percussion",
-    gridSize: 16,
-    events: [2, 7, 11, 15].map((step) => ({
-      id: createId("event"),
-      step,
-      velocity: step === 15 ? 0.72 : 0.46,
-      probability: 0.72,
-      durationSteps: 0.5,
-      drumVoice: "perc",
-    })),
-    population: 0.48,
-    clustering: 0.35,
-    turbulence: 0.12,
-    accentChance: 0.2,
-    level: 0.24,
-    locked: false,
-    visualSeed: Date.now() % 100_000,
-  };
-}
-
-function makeMoon(parent: PlanetState): MoonState {
-  const step = Math.max(1, Math.floor(parent.pattern.gridSize * 0.375));
-  return {
-    id: createId("moon"),
-    behaviorPresetId:
-      parent.role === "beat"
-        ? "accent"
-        : parent.role === "bass"
-          ? "pickup"
-          : parent.role === "chords"
-            ? "harmony"
-            : parent.role === "melody"
-              ? "echo"
-              : "counterpulse",
-    pattern: {
-      gridSize: parent.pattern.gridSize,
-      humanize: Math.min(0.12, parent.pattern.humanize + 0.02),
-      events: [
-        {
-          id: createId("event"),
-          step,
-          velocity: 0.58,
-          probability: 0.76,
-          durationSteps: 0.5,
-          ...(parent.role === "beat"
-            ? { drumVoice: "clap" as const }
-            : {
-                pitch: {
-                  kind: "scaleDegree" as const,
-                  degree: parent.role === "bass" ? 0 : 2,
-                  octaveOffset: parent.role === "bass" ? 1 : 0,
-                },
-              }),
-        },
-      ],
-    },
-    orbitRatio: 2,
-    phase: 0.125,
-    level: 0.42,
-    probability: 0.78,
-    appearanceSeed: Date.now() % 100_000,
-    muted: false,
-    locked: false,
-  };
 }
 
 function clonePlanet(planet: PlanetState): PlanetState {
@@ -294,6 +263,19 @@ export function App() {
   const setQuality = useAppStore((state) => state.setQuality);
   const setReducedEffects = useAppStore((state) => state.setReducedEffects);
   const setReducedFlash = useAppStore((state) => state.setReducedFlash);
+
+  const selectedStar =
+    composition.star.id === ui.selectedObjectId ? composition.star : undefined;
+  const selectedBelt =
+    composition.asteroidBelt?.id === ui.selectedObjectId
+      ? composition.asteroidBelt
+      : undefined;
+  const selectedPlanetStarPresetId = selectedPlanet
+    ? starPresetIdForAffinity(
+        composition,
+        getPlanetStarAffinity(composition, selectedPlanet),
+      )
+    : composition.star.presetId;
 
   const audioRef = useRef<AudioEngine | null>(null);
   const audioLoadRef = useRef<Promise<AudioEngine> | null>(null);
@@ -639,6 +621,7 @@ export function App() {
     const system = generateCompleteSystem(showcase.seed, {
       name: showcase.name,
       starPresetId: showcase.starPresetId,
+      binaryCompanion: showcase.binaryCompanion,
       createdAt: new Date().toISOString(),
     });
     replaceComposition(system);
@@ -653,6 +636,47 @@ export function App() {
     replaceComposition(starter);
     if (!shouldPlay) setPlaying(false);
     setOnboardingStep("add-bass");
+  };
+
+  const setStarPreset = (presetId: StarPresetId) => {
+    dispatch({ type: "SetStarPreset", presetId });
+  };
+
+  const addBinaryCompanion = () => {
+    if (composition.star.companion) return;
+    dispatch({
+      type: "SetBinaryCompanion",
+      companion: generateOrdinaryCompanion(composition, {
+        rhythmMode: "interlock",
+      }),
+    });
+    handleSelectObject(composition.star.id);
+    setOpenPanel(null);
+    setToast(
+      "A binary companion is orbiting. Choose its palette and rhythm relationship.",
+    );
+  };
+
+  const updateBinaryCompanion = (options: {
+    presetId?: CompanionStarPresetId;
+    rhythmMode?: BinaryRhythmMode;
+  }) => {
+    const current = composition.star.companion;
+    if (!current) return;
+    dispatch({
+      type: "SetBinaryCompanion",
+      companion: {
+        ...current,
+        presetId: options.presetId ?? current.presetId,
+        rhythmMode: options.rhythmMode ?? current.rhythmMode,
+      },
+    });
+  };
+
+  const removeBinaryCompanion = () => {
+    if (!composition.star.companion) return;
+    dispatch({ type: "SetBinaryCompanion", companion: null });
+    setToast("Binary companion removed. Your primary star stays intact.");
   };
 
   const playPause = async () => {
@@ -851,13 +875,89 @@ export function App() {
 
   const addMoon = () => {
     if (!selectedPlanet || selectedPlanet.moons.length >= 3) return;
+    const existingIds = new Set(selectedPlanet.moons.map((moon) => moon.id));
+    let ordinal = selectedPlanet.moons.length;
+    let moon = generateMoonForPlanet(composition, selectedPlanet, ordinal);
+    while (existingIds.has(moon.id)) {
+      ordinal += 1;
+      moon = generateMoonForPlanet(composition, selectedPlanet, ordinal);
+    }
     dispatch({
       type: "AddMoon",
       planetId: selectedPlanet.id,
-      moon: makeMoon(selectedPlanet),
+      moon,
     });
     setOpenPanel(null);
     setToast(`${selectedPlanet.name} has a new moon.`);
+  };
+
+  const setMoonBehavior = (
+    moonId: string,
+    behaviorPresetId: MoonBehaviorPresetId,
+  ) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "SetMoonBehavior",
+      planetId: selectedPlanet.id,
+      moonId,
+      behaviorPresetId,
+    });
+  };
+
+  const toggleMoonMute = (moonId: string) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "ToggleMoonMute",
+      planetId: selectedPlanet.id,
+      moonId,
+    });
+  };
+
+  const removeMoon = (moonId: string) => {
+    if (!selectedPlanet) return;
+    dispatch({
+      type: "RemoveMoon",
+      planetId: selectedPlanet.id,
+      moonId,
+    });
+  };
+
+  const beginBeltParameterEdit = (parameter: BeltParameter) => {
+    const labels: Record<BeltParameter, string> = {
+      population: "asteroid population",
+      clustering: "asteroid clustering",
+      turbulence: "asteroid turbulence",
+      accentChance: "asteroid accent chance",
+      level: "asteroid belt level",
+    };
+    beginHistoryGroup(`asteroid-${parameter}`, `Changed ${labels[parameter]}`);
+  };
+
+  const setBeltParameter = (parameter: BeltParameter, value: number) => {
+    if (!selectedBelt) return;
+    dispatch({
+      type: "SetAsteroidBeltParameters",
+      beltId: selectedBelt.id,
+      parameters: {
+        [parameter]: value,
+      },
+    });
+  };
+
+  const commitBeltParameterEdit = () => {
+    commitHistoryGroup();
+  };
+
+  const toggleBeltLock = () => {
+    if (!selectedBelt) return;
+    dispatch({ type: "ToggleAsteroidBeltLock", beltId: selectedBelt.id });
+  };
+
+  const removeBelt = () => {
+    if (!selectedBelt) return;
+    dispatch({ type: "SetAsteroidBelt", belt: undefined });
+    handleSelectObject(composition.star.id);
+    setToast("Asteroid belt removed. Undo restores its seeded dust.");
   };
 
   const activateUserSound = async (
@@ -1144,6 +1244,82 @@ export function App() {
     }
   };
 
+  const renderInspector = (headingId: string) => {
+    if (selectedStar) {
+      return (
+        <StarInspector
+          star={selectedStar}
+          headingId={headingId}
+          onPreset={setStarPreset}
+          onAddBinary={addBinaryCompanion}
+          onUpdateBinary={updateBinaryCompanion}
+          onRemoveBinary={removeBinaryCompanion}
+        />
+      );
+    }
+    if (selectedBelt) {
+      return (
+        <AsteroidBeltInspector
+          belt={selectedBelt}
+          headingId={headingId}
+          onParametersBegin={beginBeltParameterEdit}
+          onParametersChange={setBeltParameter}
+          onParametersCommit={commitBeltParameterEdit}
+          onLock={toggleBeltLock}
+          onRemove={removeBelt}
+        />
+      );
+    }
+    return (
+      <PlanetInspector
+        planet={selectedPlanet}
+        starPresetId={selectedPlanetStarPresetId}
+        superLoopBars={superLoopBars}
+        advanced={ui.advancedControls}
+        onAdvancedChange={setAdvancedControls}
+        onSurprise={surpriseSelectedPlanet}
+        onSound={setSelectedSound}
+        onImportPitched={importPitchedSound}
+        onImportDrumKit={importDrumKit}
+        onMute={toggleSelectedMute}
+        onSolo={toggleSelectedSolo}
+        onLock={toggleSelectedLock}
+        onOrbit={setOrbit}
+        onPatternGridSize={setPatternGridSize}
+        onExpressionBegin={beginExpressionEdit}
+        onExpressionCommit={commitHistoryGroup}
+        onChordExpression={setChordExpression}
+        onMelodyExpression={setMelodyExpression}
+        gateRhythmPreset={
+          selectedPlanet
+            ? inferGateRhythmPreset(selectedPlanet.pattern)
+            : "custom"
+        }
+        onGateRhythmPreset={setGateRhythm}
+        onGateOffsetNudge={nudgeSelectedGateOffset}
+        onGateOffsetReset={resetSelectedGateOffset}
+        onPattern={openPatternEditor}
+        onRing={addRing}
+        onRingDensityBegin={() =>
+          selectedPlanet &&
+          beginHistoryGroup(
+            `ring-density-${selectedPlanet.id}`,
+            "Changed ring density",
+          )
+        }
+        onRingDensityChange={setRingDensity}
+        onRingDensityCommit={commitHistoryGroup}
+        onMoonBehavior={setMoonBehavior}
+        onMoonMute={toggleMoonMute}
+        onRemoveMoon={removeMoon}
+        onDuplicate={duplicateSelectedPlanet}
+        onDelete={deleteSelectedPlanet}
+        canDelete={composition.planets.length > 1}
+        headingId={headingId}
+      />
+    );
+  };
+
   return (
     <main className="app-shell" data-reduced-motion={ui.reducedEffects}>
       <TransportBar
@@ -1272,48 +1448,7 @@ export function App() {
             </button>
           </div>
         </section>
-        <PlanetInspector
-          planet={selectedPlanet}
-          starPresetId={composition.star.presetId}
-          superLoopBars={superLoopBars}
-          advanced={ui.advancedControls}
-          onAdvancedChange={setAdvancedControls}
-          onSurprise={surpriseSelectedPlanet}
-          onSound={setSelectedSound}
-          onImportPitched={importPitchedSound}
-          onImportDrumKit={importDrumKit}
-          onMute={toggleSelectedMute}
-          onSolo={toggleSelectedSolo}
-          onLock={toggleSelectedLock}
-          onOrbit={setOrbit}
-          onPatternGridSize={setPatternGridSize}
-          onExpressionBegin={beginExpressionEdit}
-          onExpressionCommit={commitHistoryGroup}
-          onChordExpression={setChordExpression}
-          onMelodyExpression={setMelodyExpression}
-          gateRhythmPreset={
-            selectedPlanet
-              ? inferGateRhythmPreset(selectedPlanet.pattern)
-              : "custom"
-          }
-          onGateRhythmPreset={setGateRhythm}
-          onGateOffsetNudge={nudgeSelectedGateOffset}
-          onGateOffsetReset={resetSelectedGateOffset}
-          onPattern={openPatternEditor}
-          onRing={addRing}
-          onRingDensityBegin={() =>
-            selectedPlanet &&
-            beginHistoryGroup(
-              `ring-density-${selectedPlanet.id}`,
-              "Changed ring density",
-            )
-          }
-          onRingDensityChange={setRingDensity}
-          onRingDensityCommit={commitHistoryGroup}
-          onDuplicate={duplicateSelectedPlanet}
-          onDelete={deleteSelectedPlanet}
-          canDelete={composition.planets.length > 1}
-        />
+        {renderInspector("inspector-heading")}
       </div>
 
       <MacroControls
@@ -1330,14 +1465,26 @@ export function App() {
         <div>
           <span
             aria-hidden="true"
-            className={`object-symbol role-${selectedPlanet?.role ?? "beat"}`}
+            className={`object-symbol ${selectedStar ? "star-symbol" : selectedBelt ? "asteroid-symbol" : `role-${selectedPlanet?.role ?? "beat"}`}`}
           />
           <span>
-            <strong>{selectedPlanet?.name ?? "Select a planet"}</strong>
+            <strong>
+              {selectedStar
+                ? `${STAR_PRESETS[selectedStar.presetId].name} star`
+                : selectedBelt
+                  ? "Asteroid belt"
+                  : (selectedPlanet?.name ?? "Select an object")}
+            </strong>
             <small>
-              {selectedPlanet
-                ? `${selectedPlanet.role} · ${formatOrbitLoop(selectedPlanet.orbit.loopBars)}`
-                : "Use the object list to edit"}
+              {selectedStar
+                ? selectedStar.companion
+                  ? `Binary · ${selectedStar.companion.presetId.replace("-", " ")} palette · ${selectedStar.companion.rhythmMode}`
+                  : `${STAR_PRESETS[selectedStar.presetId].mood} mood · primary palette`
+                : selectedBelt
+                  ? `${selectedBelt.events.length} seeded dust hits${selectedBelt.locked ? " · locked" : ""}`
+                  : selectedPlanet
+                    ? `${selectedPlanet.role} · ${formatOrbitLoop(selectedPlanet.orbit.loopBars)}`
+                    : "Use the object list to edit"}
             </small>
           </span>
         </div>
@@ -1398,13 +1545,23 @@ export function App() {
             Boolean(selectedPlanet) && (selectedPlanet?.moons.length ?? 3) < 3
           }
           canAddAsteroids={!composition.asteroidBelt}
+          canAddBinary={!composition.star.companion}
           onRole={addRole}
           onMoon={addMoon}
           onRing={addRing}
           onAsteroids={() => {
-            dispatch({ type: "SetAsteroidBelt", belt: makeAsteroidBelt() });
+            const belt = generateAsteroidBeltForComposition(composition);
+            dispatch({
+              type: "SetAsteroidBelt",
+              belt,
+            });
+            handleSelectObject(belt.id);
             setOpenPanel(null);
+            setToast(
+              "Asteroid belt added. Shape its seeded dust in the inspector.",
+            );
           }}
+          onBinary={addBinaryCompanion}
           onClose={() => setOpenPanel(null)}
         />
       ) : null}
@@ -1469,49 +1626,7 @@ export function App() {
             advanced={ui.advancedControls}
             headingId="mobile-object-list-heading"
           />
-          <PlanetInspector
-            planet={selectedPlanet}
-            starPresetId={composition.star.presetId}
-            superLoopBars={superLoopBars}
-            advanced={ui.advancedControls}
-            onAdvancedChange={setAdvancedControls}
-            onSurprise={surpriseSelectedPlanet}
-            onSound={setSelectedSound}
-            onImportPitched={importPitchedSound}
-            onImportDrumKit={importDrumKit}
-            headingId="mobile-inspector-heading"
-            onMute={toggleSelectedMute}
-            onSolo={toggleSelectedSolo}
-            onLock={toggleSelectedLock}
-            onOrbit={setOrbit}
-            onPatternGridSize={setPatternGridSize}
-            onExpressionBegin={beginExpressionEdit}
-            onExpressionCommit={commitHistoryGroup}
-            onChordExpression={setChordExpression}
-            onMelodyExpression={setMelodyExpression}
-            gateRhythmPreset={
-              selectedPlanet
-                ? inferGateRhythmPreset(selectedPlanet.pattern)
-                : "custom"
-            }
-            onGateRhythmPreset={setGateRhythm}
-            onGateOffsetNudge={nudgeSelectedGateOffset}
-            onGateOffsetReset={resetSelectedGateOffset}
-            onPattern={openPatternEditor}
-            onRing={addRing}
-            onRingDensityBegin={() =>
-              selectedPlanet &&
-              beginHistoryGroup(
-                `ring-density-${selectedPlanet.id}`,
-                "Changed ring density",
-              )
-            }
-            onRingDensityChange={setRingDensity}
-            onRingDensityCommit={commitHistoryGroup}
-            onDuplicate={duplicateSelectedPlanet}
-            onDelete={deleteSelectedPlanet}
-            canDelete={composition.planets.length > 1}
-          />
+          {renderInspector("mobile-inspector-heading")}
         </section>
       ) : null}
       {focusOpen ? (

@@ -44,9 +44,16 @@ function chordIndexForEvent(planet: PlanetState, step: number): number {
 }
 
 describe("complete-system generation", () => {
-  it("maps all five beginner mood labels to schema preset IDs", () => {
+  it("maps every authored mood label to schema preset IDs", () => {
     const moods = Object.keys(STAR_MOOD_PRESET_IDS) as StarMood[];
-    expect(moods).toEqual(["Radiant", "Warm", "Delicate", "Pulsing", "Void"]);
+    expect(moods).toEqual([
+      "Radiant",
+      "Warm",
+      "Delicate",
+      "Pulsing",
+      "Void",
+      "Black Hole",
+    ]);
 
     for (const mood of moods) {
       const preset = getStarPresetForMood(mood);

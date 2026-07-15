@@ -1,4 +1,8 @@
-import type { StarPresetId } from "../domain/composition/types";
+import type {
+  BinaryRhythmMode,
+  CompanionStarPresetId,
+  StarPresetId,
+} from "../domain/composition/types";
 
 export interface ShowcaseSystemDefinition {
   id: string;
@@ -6,6 +10,10 @@ export interface ShowcaseSystemDefinition {
   description: string;
   seed: string;
   starPresetId: StarPresetId;
+  binaryCompanion?: {
+    presetId: CompanionStarPresetId;
+    rhythmMode: BinaryRhythmMode;
+  };
 }
 
 /** Curated deterministic entry points for demos and first exploration. */
@@ -44,6 +52,26 @@ export const SHOWCASE_SYSTEMS = [
     description: "Sparse, atmospheric rhythm with room between events.",
     seed: "showcase-dark-matter-v1",
     starPresetId: "void",
+  },
+  {
+    id: "event-horizon",
+    name: "Event Horizon",
+    description:
+      "Half-speed gravity, octave-down shadows, and a spacious digital edge.",
+    seed: "showcase-event-horizon-v1",
+    starPresetId: "black-hole",
+  },
+  {
+    id: "binary-dawn",
+    name: "Binary Dawn",
+    description:
+      "Radiant and delicate palettes interlock into a friendly two-star groove.",
+    seed: "showcase-binary-dawn-v1",
+    starPresetId: "radiant",
+    binaryCompanion: {
+      presetId: "dwarf",
+      rhythmMode: "interlock",
+    },
   },
 ] as const satisfies readonly ShowcaseSystemDefinition[];
 

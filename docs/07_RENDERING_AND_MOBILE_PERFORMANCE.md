@@ -240,7 +240,8 @@ Target rather than guarantee:
 
 Initial safe limits:
 
-- 1 star
+- 1 authoritative star aggregate, with at most 2 rendered stellar bodies when a
+  binary companion is present
 - 8 primary planets
 - 8 unique derived planet lanes
 - 24 bars maximum supported active super-loop
@@ -249,6 +250,14 @@ Initial safe limits:
 - 1 asteroid belt
 - 32 visible pattern nodes per planet maximum
 - Pooled transient effects
+
+The Black Hole uses a bounded procedural event horizon, photon ring, and
+accretion-disk assembly. The binary companion reuses the existing stellar
+geometry/material system. When a companion is present, both stellar bodies are
+scaled down as one central aggregate and their barycentric centers retain a
+surface-to-surface gap; the single-star silhouette remains larger. Low quality
+reduces disk detail and optional glow; neither feature adds a full-screen
+gravitational-lensing pass or changes audio scheduling quality.
 
 The default generated system should use fewer than the maximum.
 

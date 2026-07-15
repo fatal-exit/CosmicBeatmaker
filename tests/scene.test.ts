@@ -77,6 +77,7 @@ describe("scene contracts", () => {
       "dwarf",
       "neutron",
       "void",
+      "black-hole",
     ]);
     expect(STAR_MATERIAL_PROFILES.neutron.glowStrength).toBeGreaterThan(
       STAR_MATERIAL_PROFILES.void.glowStrength,

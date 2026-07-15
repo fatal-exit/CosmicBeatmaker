@@ -9,17 +9,33 @@ import type { CompiledLiveSchedule } from "./CompositionCompiler";
  * by Tone transport and does not require a rebuild.
  */
 export function createLiveScheduleKey(
-  composition: Pick<Composition, "seed">,
+  composition: Pick<Composition, "seed"> &
+    Partial<Pick<Composition, "planets" | "asteroidBelt">>,
   template: Pick<CompiledLiveSchedule, "superLoopTicks" | "sources">,
 ): string {
   return JSON.stringify([
     composition.seed,
+    // Retain canonical event edits even when a macro/projection currently
+    // suppresses the edited event. This keeps reconciliation and cancellation
+    // semantics deterministic for the next cycle rather than leaving a stale
+    // profile in a compatible voice.
+    composition.planets?.map((planet) => [
+      planet.id,
+      planet.pattern,
+      planet.expression,
+      planet.moons.map((moon) => [moon.id, moon.pattern]),
+      planet.ring,
+    ]),
+    composition.asteroidBelt
+      ? [composition.asteroidBelt.id, composition.asteroidBelt.events]
+      : undefined,
     template.superLoopTicks,
     template.sources.map((source) => [
       source.track.id,
       source.track.role,
       source.track.sourceKind,
       source.track.soundPresetId,
+      source.track.pitchShiftSemitones ?? 0,
       source.loopTicks,
       source.musicalTemplateTicks,
       source.cycles,

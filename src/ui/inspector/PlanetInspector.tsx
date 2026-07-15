@@ -4,6 +4,7 @@ import { getSoundPresetDefinition } from "../../content/soundPresets";
 import type {
   LoopBars,
   MelodyContour,
+  MoonBehaviorPresetId,
   PatternGridSize,
   PlanetExpressionState,
   PlanetState,
@@ -72,6 +73,12 @@ export interface PlanetInspectorProps {
   onRingDensityBegin: () => void;
   onRingDensityChange: (density: number) => void;
   onRingDensityCommit: () => void;
+  onMoonBehavior: (
+    moonId: string,
+    behaviorPresetId: MoonBehaviorPresetId,
+  ) => void;
+  onMoonMute: (moonId: string) => void;
+  onRemoveMoon: (moonId: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   canDelete: boolean;
@@ -99,6 +106,7 @@ function varietyLabel(variety: number): string {
 export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
   const gateRhythmId = useId();
   const ringDensityId = useId();
+  const moonControlPrefix = useId();
   const deleteHintId = useId();
   const voicingId = useId();
   const chordComplexityId = useId();
@@ -559,6 +567,75 @@ export function PlanetInspector({ planet, ...actions }: PlanetInspectorProps) {
           Add rhythmic ring
         </button>
       )}
+      {planet.moons.length > 0 ? (
+        <fieldset className="moon-controls">
+          <legend>Orbiting moons</legend>
+          <p>
+            Each moon adds a small linked accent. Choose its behavior, silence
+            it, or remove it without touching the parent planet.
+          </p>
+          <div className="moon-list">
+            {planet.moons.map((moon, index) => (
+              <div className="moon-control" key={moon.id}>
+                <div className="moon-control-heading">
+                  <strong>Moon {index + 1}</strong>
+                  <span>{moon.muted ? "Muted" : "Playing"}</span>
+                </div>
+                <label htmlFor={`${moonControlPrefix}-${moon.id}`}>
+                  Behavior
+                  <select
+                    id={`${moonControlPrefix}-${moon.id}`}
+                    aria-label={`Moon ${index + 1} behavior`}
+                    value={moon.behaviorPresetId}
+                    disabled={planet.locked}
+                    onChange={(event) =>
+                      actions.onMoonBehavior(
+                        moon.id,
+                        event.target.value as MoonBehaviorPresetId,
+                      )
+                    }
+                  >
+                    <option value="accent">
+                      Accent · highlight the groove
+                    </option>
+                    <option value="echo">Echo · answer nearby hits</option>
+                    <option value="harmony">
+                      Harmony · support pitched notes
+                    </option>
+                    <option value="pickup">
+                      Pickup · lead into the next beat
+                    </option>
+                    <option value="fill">Fill · add a short flourish</option>
+                    <option value="counterpulse">
+                      Counterpulse · fill the gaps
+                    </option>
+                  </select>
+                </label>
+                <div className="moon-control-actions">
+                  <button
+                    type="button"
+                    onClick={() => actions.onMoonMute(moon.id)}
+                    disabled={planet.locked}
+                    aria-pressed={moon.muted}
+                    aria-label={`${moon.muted ? "Unmute" : "Mute"} moon ${index + 1}`}
+                  >
+                    {moon.muted ? "Unmute" : "Mute"}
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-action"
+                    onClick={() => actions.onRemoveMoon(moon.id)}
+                    disabled={planet.locked}
+                    aria-label={`Remove moon ${index + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
       <button
         type="button"
         className="inspector-depth-toggle"

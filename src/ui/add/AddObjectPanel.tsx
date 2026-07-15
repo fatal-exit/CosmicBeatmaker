@@ -25,10 +25,12 @@ export interface AddObjectPanelProps {
   selectedRole?: PlanetRole;
   selectedCanAddMoon: boolean;
   canAddAsteroids: boolean;
+  canAddBinary: boolean;
   onRole: (role: PlanetRole) => void;
   onMoon: () => void;
   onRing: () => void;
   onAsteroids: () => void;
+  onBinary: () => void;
   onClose: () => void;
 }
 
@@ -121,6 +123,19 @@ export function AddObjectPanel(props: AddObjectPanelProps) {
             {props.canAddAsteroids
               ? "Organic, scattered percussion"
               : "This system already has one"}
+          </small>
+        </button>
+        <button
+          type="button"
+          onClick={props.onBinary}
+          disabled={!props.canAddBinary}
+          aria-describedby="binary-companion-add-hint"
+        >
+          <span>Binary companion</span>
+          <small id="binary-companion-add-hint">
+            {props.canAddBinary
+              ? "A second ordinary star palette with its own rhythm relationship"
+              : "This system already has one binary companion"}
           </small>
         </button>
       </div>

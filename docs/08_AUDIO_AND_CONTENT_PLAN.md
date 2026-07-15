@@ -106,6 +106,28 @@ Each star preset selects recommended sounds and effect defaults.
 - Sparse signal lead
 - Filtered noise and large space
 
+### Black Hole
+
+- Heavy Void or Metallic percussion slowed one octave where the voice supports
+  pitched playback
+- Cosmic Drone or Deep Sub bass
+- Warm Pad or Pulsing Synth chords
+- Deep Signal or Midnight Lead melody
+- Void Drone, Mechanical, or Nebula texture
+- First-half-to-full-orbit half-speed pattern projection for planets and moons
+- One shared restrained digital degradation stage and a larger dark reverb field
+
+The Black Hole is a star-level performance profile, not a new hidden track. Its
+projection preserves event IDs and is shared with the renderer. Sample playback
+uses octave-down transposition so its natural duration expands; synthesized and
+offline voices follow the same pitch intent. The global effect rack is bounded
+and does not duplicate one degradation or reverb graph per celestial source.
+
+Binary companions do not layer two voices for every event. Instead, stable
+planet affinity selects one of the two existing star palettes and the companion
+rhythm mode projects those planets into interlock, mirror, or call-and-response
+placement. This keeps source counts and gain staging within the existing limits.
+
 ## Asset constraints
 
 - Keep initial download reasonable for mobile.

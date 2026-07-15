@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { getSoundPresetsForRole } from "../src/content/soundPresets";
 import {
   generateCompleteSystem,
+  regenerateSystem,
   surprisePlanet,
   surpriseWholeSystem,
 } from "../src/domain/generation";
+import { validateComposition } from "../src/domain/composition";
 
 describe("deterministic surprise controls", () => {
   it("builds the same safe surprise from the same revision", () => {
@@ -56,5 +58,31 @@ describe("deterministic surprise controls", () => {
       ),
     };
     expect(surprisePlanet(locked, target.id)).toBe(locked);
+  });
+
+  it("keeps surprised moon periods valid across deterministic planet revisions", () => {
+    for (let index = 0; index < 48; index += 1) {
+      const original = generateCompleteSystem(`surprise-moon-rate-${index}`);
+      const target = original.planets.find((planet) => planet.moons.length > 0);
+      if (!target) throw new Error("Missing moon parent.");
+
+      const surprised = surprisePlanet(original, target.id);
+
+      expect(validateComposition(surprised).success).toBe(true);
+    }
+  });
+
+  it("keeps regenerated binary palettes distinct and schema-valid", () => {
+    for (let index = 0; index < 32; index += 1) {
+      const original = generateCompleteSystem(`binary-surprise-${index}`, {
+        binaryCompanion: true,
+      });
+      const regenerated = regenerateSystem(original, { domains: ["star"] });
+      const companion = regenerated.star.companion;
+
+      expect(companion).toBeDefined();
+      expect(companion?.presetId).not.toBe(regenerated.star.presetId);
+      expect(validateComposition(regenerated).success).toBe(true);
+    }
   });
 });

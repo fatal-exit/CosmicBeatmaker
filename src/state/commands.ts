@@ -1,10 +1,12 @@
 import type {
   AsteroidBeltState,
+  BinaryStarState,
   Composition,
   HarmonyState,
   LoopBars,
   MacroState,
   MoonState,
+  MoonBehaviorPresetId,
   PatternGridSize,
   PatternState,
   PlanetExpressionState,
@@ -13,6 +15,11 @@ import type {
   StarPresetId,
   TrackMixState,
 } from "../domain/composition/types";
+import {
+  applyBinaryCompanion,
+  removeBinaryCompanion,
+  reconcilePlanetSoundPalettes,
+} from "../domain/composition/starSystems";
 import {
   fitPatternGridToLoopBars,
   naturalPatternGridSizesForLoopBars,
@@ -38,6 +45,11 @@ export type CompositionCommand =
   | { type: "SetSwing"; value: number; timestamp?: string }
   | { type: "SetMasterLevel"; value: number; timestamp?: string }
   | { type: "SetStarPreset"; presetId: StarPresetId; timestamp?: string }
+  | {
+      type: "SetBinaryCompanion";
+      companion?: BinaryStarState | null;
+      timestamp?: string;
+    }
   | {
       type: "SetHarmony";
       harmony: Partial<HarmonyState>;
@@ -112,6 +124,19 @@ export type CompositionCommand =
     }
   | { type: "AddMoon"; planetId: string; moon: MoonState; timestamp?: string }
   | { type: "RemoveMoon"; planetId: string; moonId: string; timestamp?: string }
+  | {
+      type: "SetMoonBehavior";
+      planetId: string;
+      moonId: string;
+      behaviorPresetId: MoonBehaviorPresetId;
+      timestamp?: string;
+    }
+  | {
+      type: "ToggleMoonMute";
+      planetId: string;
+      moonId: string;
+      timestamp?: string;
+    }
   | { type: "SetRing"; planetId: string; ring?: RingState; timestamp?: string }
   | {
       type: "SetRingDensity";
@@ -126,6 +151,23 @@ export type CompositionCommand =
       timestamp?: string;
     }
   | { type: "SetAsteroidBelt"; belt?: AsteroidBeltState; timestamp?: string }
+  | {
+      type: "SetAsteroidBeltParameters";
+      parameters?: Partial<
+        Pick<
+          AsteroidBeltState,
+          "population" | "clustering" | "turbulence" | "accentChance" | "level"
+        >
+      >;
+      beltId?: string;
+      population?: number;
+      clustering?: number;
+      turbulence?: number;
+      accentChance?: number;
+      level?: number;
+      timestamp?: string;
+    }
+  | { type: "ToggleAsteroidBeltLock"; beltId?: string; timestamp?: string }
   | { type: "RemovePlanet"; planetId: string; timestamp?: string };
 
 export interface CommandResult {
@@ -196,15 +238,27 @@ export function applyCompositionCommand(
         },
         description: "Changed master volume",
       };
-    case "SetStarPreset":
+    case "SetStarPreset": {
+      const nextComposition = reconcilePlanetSoundPalettes({
+        ...composition,
+        star: { ...composition.star, presetId: command.presetId },
+      });
       return {
-        composition: {
-          ...composition,
-          star: { ...composition.star, presetId: command.presetId },
-          updatedAt: timestamp,
-        },
+        composition: { ...nextComposition, updatedAt: timestamp },
         description: "Changed the system mood",
       };
+    }
+    case "SetBinaryCompanion": {
+      const next = command.companion
+        ? applyBinaryCompanion(composition, command.companion)
+        : removeBinaryCompanion(composition);
+      return {
+        composition: { ...next, updatedAt: timestamp },
+        description: command.companion
+          ? "Added a binary companion"
+          : "Removed the binary companion",
+      };
+    }
     case "SetHarmony":
       return {
         composition: {
@@ -215,7 +269,7 @@ export function applyCompositionCommand(
         description: "Changed harmony",
       };
     case "AddPlanet":
-    case "DuplicatePlanet":
+    case "DuplicatePlanet": {
       if (
         composition.planets.length >= 8 ||
         composition.planets.some((planet) => planet.id === command.planet.id)
@@ -225,10 +279,13 @@ export function applyCompositionCommand(
           description: "The system is already at its planet limit",
         };
       }
+      const nextComposition = reconcilePlanetSoundPalettes({
+        ...composition,
+        planets: [...composition.planets, command.planet],
+      });
       return {
         composition: {
-          ...composition,
-          planets: [...composition.planets, command.planet],
+          ...nextComposition,
           updatedAt: timestamp,
         },
         description:
@@ -236,6 +293,7 @@ export function applyCompositionCommand(
             ? `${command.planet.name} added`
             : `${command.planet.name} duplicated`,
       };
+    }
     case "TogglePlanetMute":
       return {
         composition: {
@@ -542,6 +600,69 @@ export function applyCompositionCommand(
         },
         description: "Removed a moon",
       };
+    case "SetMoonBehavior": {
+      const parent = composition.planets.find(
+        (planet) => planet.id === command.planetId,
+      );
+      const moon = parent?.moons.find(
+        (candidate) => candidate.id === command.moonId,
+      );
+      if (!parent || !moon) {
+        return { composition, description: "Moon was not found" };
+      }
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId
+              ? {
+                  ...planet,
+                  moons: planet.moons.map((candidate) =>
+                    candidate.id === command.moonId
+                      ? {
+                          ...candidate,
+                          behaviorPresetId: command.behaviorPresetId,
+                        }
+                      : candidate,
+                  ),
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Changed moon behavior",
+      };
+    }
+    case "ToggleMoonMute": {
+      const parent = composition.planets.find(
+        (planet) => planet.id === command.planetId,
+      );
+      const moon = parent?.moons.find(
+        (candidate) => candidate.id === command.moonId,
+      );
+      if (!parent || !moon) {
+        return { composition, description: "Moon was not found" };
+      }
+      return {
+        composition: {
+          ...composition,
+          planets: composition.planets.map((planet) =>
+            planet.id === command.planetId
+              ? {
+                  ...planet,
+                  moons: planet.moons.map((candidate) =>
+                    candidate.id === command.moonId
+                      ? { ...candidate, muted: !candidate.muted }
+                      : candidate,
+                  ),
+                }
+              : planet,
+          ),
+          updatedAt: timestamp,
+        },
+        description: "Toggled moon mute",
+      };
+    }
     case "SetRing":
       return {
         composition: {
@@ -607,6 +728,57 @@ export function applyCompositionCommand(
           ? "Added an asteroid belt"
           : "Removed the asteroid belt",
       };
+    case "SetAsteroidBeltParameters": {
+      const belt = composition.asteroidBelt;
+      if (!belt || (command.beltId && command.beltId !== belt.id))
+        return { composition, description: "Asteroid belt was not found" };
+      const parameters = {
+        ...command.parameters,
+        population: command.population ?? command.parameters?.population,
+        clustering: command.clustering ?? command.parameters?.clustering,
+        turbulence: command.turbulence ?? command.parameters?.turbulence,
+        accentChance: command.accentChance ?? command.parameters?.accentChance,
+        level: command.level ?? command.parameters?.level,
+      };
+      return {
+        composition: {
+          ...composition,
+          asteroidBelt: {
+            ...belt,
+            population: clamp(parameters.population ?? belt.population, 0, 1),
+            clustering: clamp(parameters.clustering ?? belt.clustering, 0, 1),
+            turbulence: clamp(parameters.turbulence ?? belt.turbulence, 0, 1),
+            accentChance: clamp(
+              parameters.accentChance ?? belt.accentChance,
+              0,
+              1,
+            ),
+            level: clamp(parameters.level ?? belt.level, 0, 1),
+          },
+          updatedAt: timestamp,
+        },
+        description: "Changed asteroid belt parameters",
+      };
+    }
+    case "ToggleAsteroidBeltLock": {
+      if (
+        !composition.asteroidBelt ||
+        (command.beltId && command.beltId !== composition.asteroidBelt.id)
+      ) {
+        return { composition, description: "Asteroid belt was not found" };
+      }
+      return {
+        composition: {
+          ...composition,
+          asteroidBelt: {
+            ...composition.asteroidBelt,
+            locked: !composition.asteroidBelt.locked,
+          },
+          updatedAt: timestamp,
+        },
+        description: "Toggled asteroid belt lock",
+      };
+    }
     case "RemovePlanet": {
       const removedPlanet = composition.planets.find(
         (planet) => planet.id === command.planetId,
@@ -618,12 +790,15 @@ export function applyCompositionCommand(
           composition,
           description: "Kept at least one planet in orbit",
         };
+      const nextComposition = reconcilePlanetSoundPalettes({
+        ...composition,
+        planets: composition.planets.filter(
+          (planet) => planet.id !== command.planetId,
+        ),
+      });
       return {
         composition: {
-          ...composition,
-          planets: composition.planets.filter(
-            (planet) => planet.id !== command.planetId,
-          ),
+          ...nextComposition,
           updatedAt: timestamp,
         },
         description: `${removedPlanet.name} removed`,

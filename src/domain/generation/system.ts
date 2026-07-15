@@ -2,9 +2,13 @@ import {
   STAR_PRESETS,
   type StarPresetDefinition,
 } from "../../content/starPresets";
+import { STAR_SOUND_PALETTES } from "../../content/soundPresets";
 import {
   CURRENT_SCHEMA_VERSION,
   type AsteroidBeltState,
+  type BinaryRhythmMode,
+  type BinaryStarState,
+  type CompanionStarPresetId,
   type Composition,
   type GenerationDomain,
   type HarmonyState,
@@ -19,6 +23,11 @@ import {
   type StarState,
 } from "../composition/types";
 import {
+  getPlanetStarAffinity,
+  reconcilePlanetSoundPalettes,
+  starPresetIdForAffinity,
+} from "../composition/starSystems";
+import {
   createGateEvent,
   fitPatternGridToLoopBars,
   ringActiveSegmentsForDensity,
@@ -28,10 +37,13 @@ import { createSeededRandom, deriveSeed } from "./prng";
 import { generateRolePlanet } from "./rolePatterns";
 import { createSafeMasterMix } from "./rules";
 
-export const GENERATOR_VERSION = "2.1.0";
+export const GENERATOR_VERSION = "3.0.0";
 
 const DEFAULT_CREATED_AT = "2026-01-01T00:00:00.000Z";
 const STAR_PRESET_IDS = Object.keys(STAR_PRESETS) as StarPresetId[];
+const COMPANION_PRESET_IDS = STAR_PRESET_IDS.filter(
+  (presetId): presetId is CompanionStarPresetId => presetId !== "black-hole",
+);
 const PLANET_ROLES = [
   "beat",
   "bass",
@@ -89,7 +101,7 @@ function generateMacros(
 ): MacroState {
   const random = createSeededRandom(generationSeed).derive("macros");
   const densityRange: readonly [number, number] =
-    presetId === "void" || presetId === "dwarf"
+    presetId === "void" || presetId === "dwarf" || presetId === "black-hole"
       ? [0.25, 0.48]
       : presetId === "neutron"
         ? [0.52, 0.72]
@@ -102,7 +114,11 @@ function generateMacros(
     ),
     groove: round(0.24 + random.next() * 0.42),
     space: round(
-      (presetId === "void" || presetId === "red-giant" ? 0.58 : 0.32) +
+      (presetId === "void" ||
+      presetId === "red-giant" ||
+      presetId === "black-hole"
+        ? 0.62
+        : 0.32) +
         random.next() * 0.25,
     ),
     complexity: round(0.18 + random.next() * 0.36),
@@ -111,14 +127,23 @@ function generateMacros(
 
 function generatePlanets(
   generationSeed: string,
-  starPreset: StarPresetDefinition,
+  star: StarState,
   harmony: HarmonyState,
   macros: MacroState,
 ): PlanetState[] {
+  const starPreset = STAR_PRESETS[star.presetId];
   const planets: PlanetState[] = [];
   let beatPattern: PlanetState["pattern"] | undefined;
 
+  const affinityContext = {
+    star,
+    planets,
+  };
+
   for (const role of PLANET_ROLES) {
+    const planetIndex = planets.length;
+    const affinity = getPlanetStarAffinity(affinityContext, planetIndex);
+    const affinityPresetId = starPresetIdForAffinity(affinityContext, affinity);
     const planet = generateRolePlanet({
       seed: deriveSeed(generationSeed, "role", role),
       role,
@@ -126,6 +151,7 @@ function generatePlanets(
       voicingId: harmony.voicingId,
       macros,
       beatPattern,
+      soundPalette: STAR_SOUND_PALETTES[affinityPresetId][role],
     });
     planets.push(planet);
     if (role === "beat") beatPattern = planet.pattern;
@@ -140,6 +166,154 @@ export interface GenerateCompleteSystemOptions {
   starPresetId?: StarPresetId;
   harmony?: HarmonyState;
   lockedDomains?: readonly GenerationDomain[];
+  /** Optional deterministic binary companion configuration. */
+  binaryCompanion?:
+    | boolean
+    | {
+        presetId?: CompanionStarPresetId;
+        rhythmMode?: BinaryRhythmMode;
+      };
+}
+
+export interface GenerateBinaryCompanionOptions {
+  presetId?: CompanionStarPresetId;
+  rhythmMode?: BinaryRhythmMode;
+}
+
+const BINARY_RHYTHM_MODES = [
+  "interlock",
+  "mirror",
+  "call-response",
+] as const satisfies readonly BinaryRhythmMode[];
+
+/** Creates a deterministic standard-star companion (never a black hole). */
+export function generateBinaryCompanionForComposition(
+  composition: Pick<Composition, "seed" | "star">,
+  options: GenerateBinaryCompanionOptions | CompanionStarPresetId = {},
+): BinaryStarState {
+  const normalizedOptions =
+    typeof options === "string" ? { presetId: options } : options;
+  const random = createSeededRandom(
+    deriveSeed(composition.seed, "star", "companion"),
+  );
+  const availablePresetIds = COMPANION_PRESET_IDS.filter(
+    (candidate) => candidate !== composition.star.presetId,
+  );
+  const presetId =
+    normalizedOptions.presetId &&
+    normalizedOptions.presetId !== composition.star.presetId
+      ? normalizedOptions.presetId
+      : random.pick(availablePresetIds);
+  const preset = STAR_PRESETS[presetId];
+
+  return {
+    id: createStableId("companion", composition.seed),
+    presetId,
+    visualSeed: random.integer(0, 0x7fff_ffff),
+    intensity: round(
+      preset.intensityRange[0] +
+        random.next() * (preset.intensityRange[1] - preset.intensityRange[0]),
+    ),
+    rhythmMode:
+      normalizedOptions.rhythmMode ?? random.pick(BINARY_RHYTHM_MODES),
+  };
+}
+
+function supportedMoonRatios(loopBars: LoopBars): readonly number[] {
+  return [1, 2, 4, 8].filter((ratio) =>
+    [0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8].includes(loopBars / ratio),
+  );
+}
+
+/** Generates one role-compatible moon from a stable parent namespace. */
+export function generateMoonForPlanet(
+  composition: Pick<Composition, "seed">,
+  parent: PlanetState,
+  ordinal = 0,
+): MoonState {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) {
+    throw new Error("Generated moon ordinal must be a non-negative integer.");
+  }
+  const moonSeed = deriveSeed(
+    composition.seed,
+    "moon",
+    parent.id,
+    String(ordinal),
+  );
+  const random = createSeededRandom(moonSeed);
+  const id = createStableId(
+    "moon",
+    composition.seed,
+    parent.id,
+    String(ordinal),
+  );
+  const gridSize = 8 as const;
+  const eventCount = random.integer(1, 4);
+  const steps = new Set<number>();
+  while (steps.size < eventCount) steps.add(random.integer(0, gridSize));
+  const events = [...steps]
+    .sort((left, right) => left - right)
+    .map((step, index) =>
+      createGateEvent(
+        parent.role,
+        step,
+        createStableId("event", composition.seed, id, String(index)),
+      ),
+    );
+  const ratios = supportedMoonRatios(parent.orbit.loopBars);
+
+  return {
+    id,
+    behaviorPresetId: random.pick(MOON_BEHAVIORS[parent.role]),
+    pattern: {
+      gridSize,
+      events,
+      humanize: round(0.01 + random.next() * 0.04),
+    },
+    orbitRatio: random.pick(ratios.length > 0 ? ratios : [1]),
+    phase: random.pick([0, 0.125, 0.25, 0.375] as const),
+    level: round(0.2 + random.next() * 0.18),
+    probability: round(0.72 + random.next() * 0.24),
+    appearanceSeed: random.integer(0, 0x7fff_ffff),
+    muted: false,
+    locked: false,
+  };
+}
+
+/** Generates the single bounded asteroid belt used by a complete system. */
+export function generateAsteroidBeltForComposition(
+  composition: Pick<Composition, "seed">,
+): AsteroidBeltState {
+  const beltSeed = deriveSeed(composition.seed, "asteroids");
+  const random = createSeededRandom(beltSeed);
+  const gridSize = 16 as const;
+  const id = createStableId("asteroid-belt", composition.seed);
+  const eventCount = random.integer(3, 7);
+  const steps = new Set<number>();
+  while (steps.size < eventCount) steps.add(random.integer(0, gridSize));
+
+  return {
+    id,
+    materialPresetId: "dust-percussion",
+    gridSize,
+    events: [...steps]
+      .sort((left, right) => left - right)
+      .map((step, index) => ({
+        id: createStableId("event", composition.seed, id, String(index)),
+        step,
+        velocity: round(0.4 + random.next() * 0.3),
+        probability: round(0.62 + random.next() * 0.3),
+        durationSteps: 0.5,
+        drumVoice: "perc" as const,
+      })),
+    population: round(0.3 + random.next() * 0.3),
+    clustering: round(0.18 + random.next() * 0.4),
+    turbulence: round(0.08 + random.next() * 0.28),
+    accentChance: round(0.08 + random.next() * 0.24),
+    level: round(0.14 + random.next() * 0.12),
+    locked: false,
+    visualSeed: random.integer(0, 0x7fff_ffff),
+  };
 }
 
 export function generateCompleteSystem(
@@ -150,14 +324,28 @@ export function generateCompleteSystem(
 
   const createdAt = options.createdAt ?? DEFAULT_CREATED_AT;
   const generationSeed = deriveSeed(seed, "generation", "0");
-  const star = generateStar(seed, generationSeed, options.starPresetId);
+  const generatedStar = generateStar(
+    seed,
+    generationSeed,
+    options.starPresetId,
+  );
+  const binaryOption = options.binaryCompanion;
+  const companion = binaryOption
+    ? generateBinaryCompanionForComposition(
+        { seed, star: generatedStar },
+        binaryOption === true ? {} : binaryOption,
+      )
+    : undefined;
+  const star: StarState = companion
+    ? { ...generatedStar, companion }
+    : generatedStar;
   const starPreset = STAR_PRESETS[star.presetId];
   const harmony =
     options.harmony ?? generateHarmony(generationSeed, starPreset);
   const macros = generateMacros(generationSeed, star.presetId);
   const tempoRandom = createSeededRandom(generationSeed).derive("tempo");
 
-  return {
+  const baseComposition: Composition = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     id: createStableId("composition", seed),
     name: options.name ?? `${starPreset.mood} System`,
@@ -179,12 +367,28 @@ export function generateCompleteSystem(
     mix: createSafeMasterMix(
       createSeededRandom(generationSeed).derive("master-mix"),
     ),
-    planets: generatePlanets(generationSeed, starPreset, harmony, macros),
+    planets: generatePlanets(generationSeed, star, harmony, macros),
     generation: {
       revision: 0,
       generatorVersion: GENERATOR_VERSION,
       lockedDomains: [...(options.lockedDomains ?? [])],
     },
+  };
+  const moonParent =
+    baseComposition.planets.find((planet) => planet.role === "bass") ??
+    baseComposition.planets[0];
+
+  return {
+    ...baseComposition,
+    planets: baseComposition.planets.map((planet) =>
+      planet.id === moonParent.id
+        ? {
+            ...planet,
+            moons: [generateMoonForPlanet(baseComposition, planet)],
+          }
+        : planet,
+    ),
+    asteroidBelt: generateAsteroidBeltForComposition(baseComposition),
   };
 }
 
@@ -208,6 +412,9 @@ export function generatePlanetForRole(
 ): PlanetState {
   const existingIds = new Set(composition.planets.map((planet) => planet.id));
   const starPreset = STAR_PRESETS[composition.star.presetId];
+  const newPlanetIndex = composition.planets.length;
+  const affinity = getPlanetStarAffinity(composition, newPlanetIndex);
+  const affinityPresetId = starPresetIdForAffinity(composition, affinity);
   const beatPattern = composition.planets.find(
     (planet) => planet.role === "beat",
   )?.pattern;
@@ -235,6 +442,7 @@ export function generatePlanetForRole(
       voicingId: composition.harmony.voicingId,
       macros: composition.macros,
       beatPattern,
+      soundPalette: STAR_SOUND_PALETTES[affinityPresetId][role],
     });
 
     if (!existingIds.has(planet.id)) return planet;
@@ -260,15 +468,22 @@ export function regenerateSystem(
     requestedDomains.has(domain) && !lockedDomains.has(domain);
 
   const generatedStar = generateStar(composition.seed, generationSeed);
+  const generatedStarWithCompanion = composition.star.companion
+    ? {
+        ...generatedStar,
+        companion: { ...composition.star.companion },
+      }
+    : generatedStar;
   const star =
     canRegenerate("star") && !composition.star.locked
       ? {
-          ...generatedStar,
+          ...generatedStarWithCompanion,
           id: composition.star.id,
           locked: composition.star.locked,
         }
       : composition.star;
   const starPreset = STAR_PRESETS[star.presetId];
+  const affinityComposition: Composition = { ...composition, star };
   const harmony = canRegenerate("harmony")
     ? generateHarmony(generationSeed, starPreset)
     : composition.harmony;
@@ -302,6 +517,16 @@ export function regenerateSystem(
         voicingId: harmony.voicingId,
         macros: composition.macros,
         beatPattern,
+        soundPalette:
+          STAR_SOUND_PALETTES[
+            starPresetIdForAffinity(
+              affinityComposition,
+              getPlanetStarAffinity(
+                affinityComposition,
+                composition.planets.indexOf(existing),
+              ),
+            )
+          ][role],
       });
       const replacement: PlanetState = {
         ...generated,
@@ -329,6 +554,16 @@ export function regenerateSystem(
         voicingId: harmony.voicingId,
         macros: composition.macros,
         beatPattern,
+        soundPalette:
+          STAR_SOUND_PALETTES[
+            starPresetIdForAffinity(
+              affinityComposition,
+              getPlanetStarAffinity(
+                affinityComposition,
+                composition.planets.length + additions.length,
+              ),
+            )
+          ][role],
       });
       additions.push(generated);
       generatedForRole.push(generated);
@@ -339,7 +574,7 @@ export function regenerateSystem(
     }
   }
 
-  return {
+  const regenerated: Composition = {
     ...composition,
     updatedAt: options.updatedAt ?? composition.updatedAt,
     star,
@@ -356,6 +591,11 @@ export function regenerateSystem(
       generatorVersion: GENERATOR_VERSION,
     },
   };
+
+  // A regenerated primary can land on the existing companion's preset. Keep
+  // binary palettes distinct, then align every unlocked built-in voice with
+  // the side it now orbits before the composition leaves generation.
+  return reconcilePlanetSoundPalettes(regenerated);
 }
 
 export const regenerateUnlockedSystem = regenerateSystem;
@@ -392,6 +632,7 @@ function surpriseMoon(
     steps.add(random.integer(0, moon.pattern.gridSize));
   }
   const orderedSteps = [...steps].sort((left, right) => left - right);
+  const orbitRatios = supportedMoonRatios(parent.orbit.loopBars);
   const events = orderedSteps.map((step, index): PatternEvent => {
     const generated = createGateEvent(
       parent.role,
@@ -416,7 +657,7 @@ function surpriseMoon(
       events,
       humanize: round(0.01 + random.next() * 0.05),
     },
-    orbitRatio: random.pick([1, 2, 4] as const),
+    orbitRatio: random.pick(orbitRatios.length > 0 ? orbitRatios : [1]),
     phase: random.pick([0, 0.125, 0.25, 0.375] as const),
     level: round(0.3 + random.next() * 0.18),
     probability: round(0.68 + random.next() * 0.28),
@@ -606,6 +847,9 @@ export function surprisePlanet(
   const ordinal = composition.planets
     .filter((planet) => planet.role === existing.role)
     .findIndex((planet) => planet.id === existing.id);
+  const existingIndex = composition.planets.indexOf(existing);
+  const affinity = getPlanetStarAffinity(composition, existingIndex);
+  const affinityPresetId = starPresetIdForAffinity(composition, affinity);
   const generated = generateRolePlanet({
     seed: generationSeed,
     role: existing.role,
@@ -615,6 +859,7 @@ export function surprisePlanet(
     macros: composition.macros,
     beatPattern: composition.planets.find((planet) => planet.role === "beat")
       ?.pattern,
+    soundPalette: STAR_SOUND_PALETTES[affinityPresetId][existing.role],
   });
   const replacement = surprisePlanetAttachments(
     withSurprisedOrbit(

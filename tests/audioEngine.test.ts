@@ -315,6 +315,14 @@ describe("audio engine runtime generations", () => {
 
   it("keeps one bounded voice generation through rapid live-control edits", async () => {
     let current = generateCompleteSystem("engine-live-control-stress");
+    // This lifecycle fixture exercises cancellation/reconciliation itself;
+    // keep it on the ordinary path so a seeded Black Hole projection cannot
+    // make a canonical gate edit intentionally silent.
+    current.star = {
+      ...current.star,
+      presetId: "radiant",
+      companion: undefined,
+    };
     const { adapter, backend, engine, voices } = await createHarness(current);
     engine.play();
     adapter.ticks = 1_100;

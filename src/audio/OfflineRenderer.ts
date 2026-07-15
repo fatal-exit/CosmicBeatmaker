@@ -1,6 +1,10 @@
 import { Gain, Limiter, Offline } from "tone";
 
 import type { Composition } from "../domain/composition/types";
+import {
+  createCelestialEffectsRack,
+  resolveCelestialAudioProfile,
+} from "./CelestialEffects";
 import { compileComposition } from "./CompositionCompiler";
 import { ticksToSeconds } from "./timing";
 import type { CompiledSequence } from "./types";
@@ -35,7 +39,9 @@ export function getOfflineRenderTiming(
   options: Pick<OfflineRenderOptions, "loops" | "tailSeconds"> = {},
 ): OfflineRenderTiming {
   const loops = options.loops ?? 1;
-  const tailSeconds = options.tailSeconds ?? 0.4;
+  const tailSeconds =
+    options.tailSeconds ??
+    resolveCelestialAudioProfile(composition).tailSeconds;
   if (!Number.isFinite(tailSeconds) || tailSeconds < 0 || tailSeconds > 10) {
     throw new Error(
       "Offline render tail must be between zero and ten seconds.",
@@ -74,7 +80,11 @@ export async function renderCompositionToWav(
   const buffer = await Offline(
     () => {
       const limiter = new Limiter(-1).toDestination();
-      const master = new Gain(composition.mix.level).connect(limiter);
+      const effects = createCelestialEffectsRack(
+        limiter,
+        resolveCelestialAudioProfile(composition),
+      );
+      const master = new Gain(composition.mix.level).connect(effects.input);
       const voices = new Map(
         sequence.tracks.map((track) => [
           track.id,

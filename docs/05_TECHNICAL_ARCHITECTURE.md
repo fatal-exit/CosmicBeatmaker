@@ -120,6 +120,13 @@ Pure logic only:
 
 No DOM, Three.js, Tone.js, or browser-storage dependencies.
 
+The domain owns pure performance projectors for moon behavior, asteroid accents,
+and celestial star relationships. They derive behavior from serializable state,
+stable IDs, planet affinity, and the already-derived macro/expression pattern.
+Moon behavior runs before the Black Hole half-speed and binary companion rhythm
+relationship. Audio compilation and scene descriptors call the same projectors;
+neither layer carries a private version of any transform.
+
 ### State layer
 
 Responsibilities:
@@ -144,6 +151,12 @@ Responsibilities:
 - Export MIDI
 
 The audio layer subscribes to relevant state changes but does not own the canonical composition.
+
+Black Hole systems insert one bounded shared processing rack before the limiter.
+The rack supplies octave-down playback intent, restrained digital degradation,
+and a larger reverb field. It is global to the star mood rather than one
+expensive effect graph per planet, and offline rendering uses the same profile.
+Other star moods remain effectively bypassed.
 
 ### Scene layer
 

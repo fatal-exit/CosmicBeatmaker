@@ -65,10 +65,22 @@ export interface StarState {
   visualSeed: number;
   intensity: number;
   locked: boolean;
+  companion?: BinaryStarState;
+}
+
+export interface BinaryStarState {
+  id: string;
+  presetId: Exclude<StarPresetId, "black-hole">;
+  visualSeed: number;
+  intensity: number;
+  rhythmMode: "interlock" | "mirror" | "call-response";
 }
 ```
 
 Star preset definitions live in content data, not inside saved compositions.
+The optional companion is part of the same star lock domain. Planet affinity is
+derived from stable composition order and the companion seed rather than stored
+on every planet.
 
 ## Harmony state
 
@@ -237,7 +249,10 @@ export interface MoonState {
 }
 ```
 
-Moons inherit parent harmony and sound family unless an advanced setting overrides them.
+Moons inherit parent harmony and sound family. `behaviorPresetId` selects a pure
+runtime pattern projection that preserves the moon's event IDs, event count,
+grid, and canonical saved pattern. Audio and scene apply that same projection
+after macro/expression shaping and before star-level celestial transforms.
 
 ## Rings
 
@@ -277,7 +292,10 @@ export interface AsteroidBeltState {
 }
 ```
 
-The belt's musical events are authoritative. Asteroid positions are generated to visually correspond to those events.
+The belt's musical events are authoritative. Asteroid positions are generated to
+visually correspond to those events. `accentChance` derives a stable per-event
+velocity boost from composition seed, belt ID, and event ID; it does not add
+events or mutate their timing.
 
 ## Mix state
 
@@ -397,6 +415,12 @@ Serialized composition must:
 Use a runtime schema validator or explicit validation functions.
 
 Schema version 2 introduces role-specific planet expression state. Version-1 compositions migrate deterministically: chord voicing spread is initialized from the saved global harmony voicing, chord complexity and melody pitch variety are initialized from the saved macro complexity, and other roles receive the default expression variant.
+
+Schema version 3 adds the Black Hole preset and optional binary companion. A
+version-2 composition migrates by advancing the schema version with no companion;
+all prior musical state remains unchanged. Primary and companion presets must be
+distinct so every binary save contributes two sound palettes; generation and
+editing normalize same-preset requests deterministically before validation.
 
 ## Migrations
 
