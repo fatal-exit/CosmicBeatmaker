@@ -50,6 +50,82 @@ test("loads the responsive onboarding promise", async ({ page }) => {
   ).toBe(true);
 });
 
+test("keeps welcome actions reachable in a short landscape viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 320 });
+
+  const layer = page.locator(".onboarding-layer");
+  await expect(layer).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Your first beat is already in orbit.",
+    }),
+  ).toBeVisible();
+
+  for (const name of [
+    "Start creating",
+    "Surprise me Build a complete, good-sounding system",
+    "Explore the demo",
+  ]) {
+    const action = page.getByRole("button", { name });
+    await action.scrollIntoViewIfNeeded();
+    await expect(action).toBeInViewport();
+    expect((await action.boundingBox())?.height ?? 0).toBeGreaterThan(0);
+  }
+
+  expect(
+    await page.evaluate(() => {
+      const layer = document.querySelector<HTMLElement>(".onboarding-layer");
+      return (
+        document.documentElement.scrollWidth <= window.innerWidth &&
+        !!layer &&
+        layer.scrollWidth <= layer.clientWidth
+      );
+    }),
+  ).toBe(true);
+});
+
+test("keeps the guided add action clear of desktop scene controls", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium",
+    "The collision is specific to the desktop three-column shell.",
+  );
+  await page.setViewportSize({ width: 1200, height: 861 });
+
+  await page.getByRole("button", { name: "Start creating" }).click();
+  await page.getByRole("button", { name: /^Radiant/ }).click();
+
+  const coachmark = page.locator(".coachmark");
+  const controls = page.locator(".scene-view-controls");
+  const addBass = page.getByRole("button", { name: "Add bass" });
+  await expect(coachmark).toBeVisible();
+  await expect(controls).toBeVisible();
+  await expect(addBass).toBeInViewport();
+
+  const [coachmarkBox, controlsBox, addBassBox] = await Promise.all([
+    coachmark.boundingBox(),
+    controls.boundingBox(),
+    addBass.boundingBox(),
+  ]);
+  expect(coachmarkBox).not.toBeNull();
+  expect(controlsBox).not.toBeNull();
+  expect(addBassBox).not.toBeNull();
+  if (!coachmarkBox || !controlsBox || !addBassBox) return;
+
+  const overlaps =
+    coachmarkBox.x < controlsBox.x + controlsBox.width &&
+    coachmarkBox.x + coachmarkBox.width > controlsBox.x &&
+    coachmarkBox.y < controlsBox.y + controlsBox.height &&
+    coachmarkBox.y + coachmarkBox.height > controlsBox.y;
+  expect(overlaps).toBe(false);
+  expect(addBassBox.x + addBassBox.width).toBeLessThanOrEqual(
+    coachmarkBox.x + coachmarkBox.width,
+  );
+});
+
 test("completes the guided first-minute create and save flow", async ({
   page,
 }, testInfo) => {

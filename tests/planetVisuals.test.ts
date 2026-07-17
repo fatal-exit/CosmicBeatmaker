@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_PLANET_ORBIT_RADIUS,
   PLANET_ORBIT_LANE_GAP,
+  PLANET_RENDER_SCALE,
   PLANET_VISUAL_PROFILES,
   deriveSizeAwareOrbitRadii,
   planetBodyRadius,
@@ -80,5 +81,18 @@ describe("planet visual scale and lane spacing", () => {
 
     expect(ringed.visualExtent).toBeGreaterThan(bare.visualExtent);
     expect(moonSystem.visualExtent).toBeGreaterThan(ringed.visualExtent);
+  });
+
+  it("accounts for permanent terrain render scale before selection margin", () => {
+    const metrics = planetVisualMetrics("melody", 1);
+    const profile = PLANET_VISUAL_PROFILES.melody;
+    const expectedBodyExtent =
+      metrics.bodyRadius *
+      Math.max(...profile.bodyScale) *
+      (1 + profile.terrainAmplitude) *
+      PLANET_RENDER_SCALE;
+
+    expect(metrics.bodyExtent).toBeCloseTo(expectedBodyExtent);
+    expect(metrics.visualExtent).toBeGreaterThan(metrics.bodyExtent);
   });
 });

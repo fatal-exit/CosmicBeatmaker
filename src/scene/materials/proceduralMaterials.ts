@@ -3,7 +3,10 @@ import * as THREE from "three";
 import type { PlanetRole, StarPresetId } from "../../domain/composition";
 import {
   normalizeVisualSeed,
+  planetMaterialColorsForPalette,
   planetMaterialProfile,
+  starMaterialColorsForPalette,
+  type ScenePalette,
   starMaterialProfile,
 } from "./profiles";
 
@@ -13,6 +16,8 @@ export interface PlanetSurfaceDescriptor {
   visualSeed: number;
   roughness: number;
   muted: boolean;
+  /** Optional renderer-only mood projection for this material instance. */
+  palette?: ScenePalette;
 }
 
 /** The subset of SceneDescriptor["star"] required to construct a surface. */
@@ -20,6 +25,9 @@ export interface StarSurfaceDescriptor {
   presetId: StarPresetId;
   visualSeed: number;
   intensity: number;
+  palette?: ScenePalette;
+  /** Use the authored binary companion accent instead of the primary star. */
+  companion?: boolean;
 }
 
 export interface PlanetSurfaceUpdate {
@@ -35,6 +43,7 @@ export interface PlanetSurfaceUpdate {
   /** Color and level of the central star's incident light. */
   starLightColor?: THREE.ColorRepresentation;
   starLightIntensity?: number;
+  palette?: ScenePalette;
 }
 
 export interface StarSurfaceUpdate {
@@ -46,11 +55,14 @@ export interface StarSurfaceUpdate {
   /** Normalized visual detail. */
   detail?: number;
   intensity?: number;
+  palette?: ScenePalette;
+  companion?: boolean;
 }
 
 export type StarGlowUpdate = StarSurfaceUpdate;
 
 export interface CelestialOutlineUpdate {
+  color?: THREE.ColorRepresentation;
   pulse?: number;
   selected?: boolean;
   muted?: boolean;
@@ -129,26 +141,30 @@ varying vec3 vWorldNormal;
 
 float surfaceWave(vec3 point) {
   float time = uTick / 1920.0;
-  float broad = sin(dot(point, vec3(5.7, 7.3, 4.9)) + uSeed * 29.0);
-  float fine = sin(dot(point, vec3(15.1, -12.7, 10.9)) - uSeed * 47.0);
-  float detailWave = mix(broad, broad * 0.65 + fine * 0.35, uDetail);
+  float broad = sin(dot(point, vec3(3.2, 4.4, 2.7)) + uSeed * 17.0);
 
   if (uRole < 0.5) {
-    float faults = abs(sin(point.y * 18.0 + point.x * 9.0 + uSeed * 13.0));
-    return detailWave * 0.45 - pow(faults, 9.0) * 0.55;
+    float plates = sin(point.y * 5.0 + point.x * 2.7 + uSeed * 4.0);
+    float fault = smoothstep(0.72, 0.96,
+      abs(sin(point.x * 3.2 - point.z * 2.4 + uSeed * 3.0)));
+    return broad * 0.18 + plates * 0.18 - fault * 0.26;
   }
   if (uRole < 1.5) {
-    return sin(point.y * 10.0 + broad * 0.8 + time * uMotion * 8.0) * 0.42;
+    float bands = sin(point.y * 5.4 + broad * 0.7 + time * uMotion * 3.5);
+    float storm = exp(-length(point - vec3(0.28, 0.18, -0.18)) * 4.8);
+    return bands * 0.26 + storm * 0.2;
   }
   if (uRole < 2.5) {
-    float strata = sin(point.y * 23.0 + broad * 2.2);
-    return strata * 0.3 + detailWave * 0.22;
+    float terraces = sin(point.y * 6.2 + broad * 0.65);
+    return terraces * 0.24 + smoothstep(0.25, 0.78, terraces) * 0.12;
   }
   if (uRole < 3.5) {
-    float angle = atan(point.z, point.x);
-    return sin(angle * 4.0 + point.y * 13.0 + broad + time * uMotion * 7.0) * 0.35;
+    float facets = sin(point.x * 3.4 + point.z * 2.8 + broad * 0.7);
+    float facetBreak = sin(point.y * 3.6 - point.x * 2.2 + uSeed * 2.0);
+    return facets * 0.2 + facetBreak * 0.14 + time * uMotion * 0.012;
   }
-  return detailWave * 0.48 + sin(point.y * 27.0 + broad * 4.0) * 0.12;
+  float erosion = sin(point.x * 3.8 - point.z * 3.1 + broad * 0.8);
+  return broad * 0.22 + erosion * 0.16;
 }
 
 void main() {
@@ -226,13 +242,15 @@ vec2 sphereCoordinates(vec3 direction) {
 }
 
 float craterField(vec2 sphereUv) {
-  vec2 grid = sphereUv * vec2(10.0, 5.0);
+  // A few broad basins keep the beat body legible as terrain instead of
+  // turning the surface into a repeated micro-speckle texture.
+  vec2 grid = sphereUv * vec2(4.0, 2.5);
   vec2 cell = floor(grid);
   vec2 offset = vec2(
     hash13(vec3(cell, 1.7)),
     hash13(vec3(cell, 8.3))
   ) - 0.5;
-  float radius = mix(0.17, 0.36, hash13(vec3(cell, 4.1)));
+  float radius = mix(0.2, 0.42, hash13(vec3(cell, 4.1)));
   float distanceToCenter = length(fract(grid) - 0.5 - offset * 0.42);
   float rim = 1.0 - smoothstep(0.035, 0.105, abs(distanceToCenter - radius));
   float basin = 1.0 - smoothstep(0.0, radius, distanceToCenter);
@@ -242,106 +260,112 @@ float craterField(vec2 sphereUv) {
 vec3 planetPattern(vec3 direction, vec3 viewDirection) {
   vec2 sphereUv = sphereCoordinates(direction);
   float time = uTick / 1920.0;
-  float broadNoise = valueNoise(direction * 3.1 + uSeed * 17.0);
+  float broadNoise = valueNoise(direction * 2.6 + uSeed * 13.0);
+  // Detail controls restrained relief in the vertex normal, not a second
+  // layer of static pixel-like color noise.
   float fineNoise = broadNoise;
-  if (uDetail > 0.12) {
-    fineNoise = valueNoise(direction * mix(6.0, 11.0, uDetail) - uSeed * 31.0);
-  }
-  vec3 color = mix(uShadowColor, uBaseColor, 0.64 + broadNoise * 0.3);
+  vec3 color = mix(uShadowColor, uBaseColor, 0.78 + broadNoise * 0.2);
 
   // Beat: crater basins and sharp fault lines communicate hard transients.
   if (uRole < 0.5) {
     float craters = craterField(sphereUv + vec2(uSeed, uSeed * 0.37));
-    float faultDistance = abs(fract(
-      sphereUv.x * 7.0 + sphereUv.y * 11.0 + broadNoise * 0.45 + uSeed * 5.0
-    ) - 0.5);
-    float faults = 1.0 - smoothstep(0.018, 0.075, faultDistance);
-    color = mix(color, uShadowColor, smoothstep(-0.45, -0.05, -craters) * 0.64);
-    color = mix(color, uAccentColor, max(craters, faults) * 0.78);
-    color = mix(color, uSecondaryColor, fineNoise * 0.18);
+    float faultDistance = abs(sin(
+      sphereUv.x * 3.5 + sphereUv.y * 5.0 + uSeed * 4.0
+    ));
+    float faults = 1.0 - smoothstep(0.12, 0.32, faultDistance);
+    color = mix(color, uShadowColor,
+      smoothstep(-0.42, -0.04, -craters) * 0.54);
+    color = mix(color, uAccentColor, max(craters, faults) * 0.62);
+    color = mix(color, uSecondaryColor, broadNoise * 0.12);
     return color;
   }
 
   // Bass: broad tidal gas bands move slowly without obscuring the silhouette.
   if (uRole < 1.5) {
-    float tide = direction.y * 11.0 + broadNoise * 2.6 + time * uMotion * 5.0;
+    float tide = direction.y * 5.4 + broadNoise * 1.4 + time * uMotion * 3.5;
     float bands = 0.5 + 0.5 * sin(tide);
-    float brightEdge = pow(max(0.0, sin(tide)), 8.0);
-    color = mix(uShadowColor, uSecondaryColor, smoothstep(0.12, 0.88, bands));
-    color = mix(color, uBaseColor, 0.34 + broadNoise * 0.42);
-    color = mix(color, uAccentColor, brightEdge * (0.24 + uDetail * 0.3));
+    float brightEdge = pow(max(0.0, sin(tide)), 5.0);
+    float storm = exp(-length(direction - vec3(0.28, 0.18, -0.18)) * 5.0);
+    color = mix(uShadowColor, uSecondaryColor,
+      0.28 + smoothstep(0.12, 0.88, bands) * 0.72);
+    color = mix(color, uBaseColor, 0.5 + broadNoise * 0.22);
+    color = mix(color, uAccentColor, brightEdge * 0.2 + storm * 0.42);
     return color;
   }
 
   // Chords: stepped mineral strata are crossed by connected luminous veins.
   if (uRole < 2.5) {
-    float strataCoordinate = direction.y * 7.5 + broadNoise * 0.75;
-    float strata = smoothstep(0.1, 0.92, fract(strataCoordinate));
+    float strataCoordinate = direction.y * 4.6 + broadNoise * 0.42;
+    float strata = smoothstep(0.08, 0.92, fract(strataCoordinate));
     float veinDistance = abs(sin(
-      direction.x * 14.0 - direction.z * 12.0 + broadNoise * 6.0 + uSeed * 19.0
+      direction.x * 4.8 - direction.z * 4.2 + uSeed * 7.0
     ));
-    float veins = 1.0 - smoothstep(0.0, mix(0.09, 0.2, uDetail), veinDistance);
-    color = mix(uShadowColor, uBaseColor, strata);
-    color = mix(color, uSecondaryColor, (1.0 - strata) * 0.42);
-    color = mix(color, uAccentColor, veins * (0.7 + uPulse * 0.3));
+    float veins = 1.0 - smoothstep(0.08, 0.28, veinDistance);
+    color = mix(uShadowColor, uBaseColor, 0.22 + strata * 0.78);
+    color = mix(color, uSecondaryColor, (1.0 - strata) * 0.25);
+    color = mix(color, uAccentColor, veins * (0.46 + uPulse * 0.24));
     return color;
   }
 
   // Melody: pearlescent signal ribbons orbit the surface at musical speed.
   if (uRole < 3.5) {
-    float angle = atan(direction.z, direction.x);
-    float phase = angle * 4.0 + direction.y * 16.0 + broadNoise * 4.0;
-    phase += time * uMotion * 7.0;
-    float swirl = 0.5 + 0.5 * sin(phase);
-    float signal = pow(max(0.0, sin(phase + fineNoise * 2.0)), 12.0);
+    float planes = 0.5 + 0.5 * sin(
+      direction.x * 3.4 + direction.z * 2.8 + broadNoise * 1.3
+    );
+    float facetBreak = 0.5 + 0.5 * sin(
+      direction.y * 3.6 - direction.x * 2.2 + uSeed * 2.0
+    );
+    float crystal = smoothstep(0.66, 0.9, planes * 0.66 + facetBreak * 0.34);
     float pearl = pow(1.0 - max(dot(normalize(vWorldNormal), viewDirection), 0.0), 2.0);
-    color = mix(uSecondaryColor, uBaseColor, swirl);
-    color = mix(color, uAccentColor, signal * 0.88 + pearl * 0.22);
+    color = mix(uSecondaryColor, uBaseColor, 0.2 + planes * 0.8);
+    color = mix(color, uAccentColor, crystal * 0.62 + pearl * 0.14);
     return color;
   }
 
   // Texture: fine dusty crust sits over a slowly eroding cool cloud layer.
-  float erosion = smoothstep(0.3, 0.72, broadNoise * 0.65 + fineNoise * 0.45);
-  float dustNoise = valueNoise(
-    direction * mix(8.0, 15.0, uDetail) + vec3(0.0, time * uMotion, 0.0)
+  float erosion = smoothstep(0.3, 0.72, broadNoise);
+  float cut = 0.5 + 0.5 * sin(
+    direction.x * 4.2 - direction.z * 3.6 + time * uMotion * 1.5
   );
-  float dust = smoothstep(0.66, 0.84, dustNoise);
-  color = mix(uShadowColor, uSecondaryColor, erosion);
-  color = mix(color, uBaseColor, 0.35 + fineNoise * 0.45);
-  return mix(color, uAccentColor, dust * (0.3 + uDetail * 0.4));
+  float dust = smoothstep(0.72, 0.9, cut);
+  color = mix(uShadowColor, uSecondaryColor, 0.24 + erosion * 0.76);
+  color = mix(color, uBaseColor, 0.52 + broadNoise * 0.22);
+  return mix(color, uAccentColor, dust * 0.3);
 }
 
 float terrainHeight(vec3 direction) {
   vec2 sphereUv = sphereCoordinates(direction);
-  float broad = valueNoise(direction * 3.4 + uSeed * 17.0);
-  float fine = valueNoise(direction * 17.0 - uSeed * 31.0);
+  float broad = valueNoise(direction * 2.8 + uSeed * 13.0);
 
   if (uRole < 0.5) {
     float craters = craterField(sphereUv + vec2(uSeed, uSeed * 0.37));
     float faults = 1.0 - smoothstep(
-      0.015,
-      0.07,
-      abs(fract(sphereUv.x * 7.0 + sphereUv.y * 11.0 + broad * 0.45) - 0.5)
+      0.1,
+      0.3,
+      abs(sin(sphereUv.x * 3.5 + sphereUv.y * 5.0 + uSeed * 4.0))
     );
-    return broad * 0.22 + craters * 0.52 + faults * 0.34;
+    return broad * 0.18 + craters * 0.42 + faults * 0.22;
   }
   if (uRole < 1.5) {
-    return sin(direction.y * 15.0 + broad * 3.0) * 0.34 + fine * 0.1;
+    float bands = sin(direction.y * 5.4 + broad * 1.4);
+    float storm = exp(-length(direction - vec3(0.28, 0.18, -0.18)) * 5.0);
+    return bands * 0.26 + storm * 0.16;
   }
   if (uRole < 2.5) {
-    float strata = fract(direction.y * 9.0 + broad * 1.2);
+    float strata = fract(direction.y * 4.6 + broad * 0.42);
     float veins = 1.0 - smoothstep(
-      0.0,
-      0.16,
-      abs(sin(direction.x * 18.0 - direction.z * 15.0 + broad * 7.0))
+      0.08,
+      0.28,
+      abs(sin(direction.x * 4.8 - direction.z * 4.2 + uSeed * 7.0))
     );
-    return strata * 0.34 + veins * 0.28;
+    return strata * 0.24 + veins * 0.18;
   }
   if (uRole < 3.5) {
-    float angle = atan(direction.z, direction.x);
-    return sin(angle * 5.0 + direction.y * 19.0 + broad * 4.0) * 0.3 + fine * 0.14;
+    float planes = sin(direction.x * 3.4 + direction.z * 2.8 + broad * 1.3);
+    float facets = sin(direction.y * 3.6 - direction.x * 2.2 + uSeed * 2.0);
+    return planes * 0.2 + facets * 0.14;
   }
-  return broad * 0.32 + fine * 0.3;
+  return broad * 0.24 + sin(direction.x * 4.2 - direction.z * 3.6) * 0.12;
 }
 
 vec3 proceduralSurfaceNormal(vec3 direction, vec3 geometricNormal) {
@@ -383,20 +407,36 @@ void main() {
   float backScatter = max(dot(-normal, starDirection), 0.0);
   float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.35);
 
+  // Icosahedron bodies are deliberately rendered non-indexed by the scene
+  // controller. Quantizing the broad incident light keeps those face planes
+  // readable at phone scale instead of dissolving into smooth plastic.
+  float facetedDiffuse = floor(diffuse * 4.0) / 4.0;
+  diffuse = mix(diffuse, facetedDiffuse, 0.72);
+  float facetValue = smoothstep(0.08, 0.92, diffuse);
+
   vec3 halfDirection = normalize(starDirection + viewDirection);
   float specularPower = mix(86.0, 7.0, uRoughness);
   float specular = pow(max(dot(normal, halfDirection), 0.0), specularPower);
   specular *= mix(0.62, 0.07, uRoughness) * attenuation;
 
   vec3 albedo = planetPattern(surfaceDirection, viewDirection);
-  vec3 incidentColor = mix(vec3(1.0), uStarLightColor, 0.82);
-  float directLight = diffuse * attenuation * 1.42 * uStarLightIntensity;
-  vec3 outgoingLight = albedo * 0.115;
+  // Keep the incident light chromatic. A full-white specular path made every
+  // role collapse to pale outlines at the zoomed-out system fit, especially
+  // when the active mood uses an icy highlight color. The neutral lift keeps
+  // dark-side faces legible while the palette tint carries the surface hue.
+  vec3 incidentColor = mix(vec3(0.78, 0.81, 0.86), uStarLightColor, 0.9);
+  float directLight = diffuse * attenuation * 1.62 * uStarLightIntensity;
+  // Keep the unlit hemisphere saturated and readable at zoomed-out camera
+  // fits. The star still sculpts the lit side, but no role becomes an outline
+  // floating in black when its face points away from the origin.
+  vec3 outgoingLight = albedo * 0.4;
   outgoingLight += albedo * incidentColor * directLight;
-  outgoingLight += albedo * incidentColor * backScatter * 0.026;
-  outgoingLight += mix(uAccentColor, incidentColor, 0.68) * specular * uStarLightIntensity;
+  outgoingLight += albedo * incidentColor * backScatter * 0.09;
+  outgoingLight += mix(uAccentColor, incidentColor, 0.38) * specular *
+    uStarLightIntensity * 0.62;
   outgoingLight += uAccentColor * rim * (0.1 + uSelected * 0.44);
   outgoingLight += uAccentColor * uPulse * (0.2 + rim * 0.54 + uDetail * 0.42);
+  outgoingLight *= 0.96 + facetValue * 0.18;
 
   float luminance = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
   outgoingLight = mix(outgoingLight, vec3(luminance) * 0.48, uMuted * 0.72);
@@ -472,6 +512,7 @@ uniform float uSelected;
 uniform float uDetail;
 uniform float uIntensity;
 uniform float uTurbulence;
+uniform float uVoidSurfaceScale;
 
 varying vec3 vObjectPosition;
 varying vec3 vWorldPosition;
@@ -508,7 +549,8 @@ void main() {
   vec3 direction = normalize(vObjectPosition);
   vec3 normal = normalize(vWorldNormal);
   vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-  float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.4);
+  float facing = max(dot(normal, viewDirection), 0.0);
+  float limb = pow(1.0 - facing, 1.4);
   float time = uTick / 1920.0;
   float broad = valueNoise(direction * mix(2.4, 4.2, uTurbulence) + vec3(time * 0.13));
   float fine = broad;
@@ -541,21 +583,61 @@ void main() {
     color = mix(color, uHotColor, lanes * (0.76 + uPulse * 0.24));
   // Void: sparse dark-plasma veils with restrained luminous fractures.
   } else {
-    float veil = smoothstep(0.42, 0.77, broad * 0.72 + fine * 0.28);
-    float fracture = pow(max(0.0, sin(fine * 15.0 + direction.y * 7.0)), 11.0);
-    color = mix(uEdgeColor * 0.32, uCoreColor, veil * 0.78);
-    color = mix(color, uHotColor, fracture * 0.38);
+    // Void is a dark plasma shell, not a white light source. Keep its
+    // low-frequency granulation in the indigo/lavender family and reserve a
+    // very small hot tint for the compact core.
+    float macro = 0.5 + 0.5 * sin(
+      dot(direction, vec3(2.8, 3.1, 2.3)) + uSeed * 11.0
+    );
+    float granulation = smoothstep(0.26, 0.74, macro);
+    float hotCore = pow(facing, 2.8);
+    color = mix(uEdgeColor, uCoreColor, 0.48 + granulation * 0.28);
+    color = mix(color, uHotColor, hotCore * 0.08 + granulation * 0.035);
+    color += uCoreColor * hotCore * (0.08 + uDetail * 0.04);
+    color = mix(color, uEdgeColor, pow(1.0 - facing, 1.55) * 0.34);
+    color *= (0.72 + clamp(uIntensity, 0.0, 1.0) * 0.1) * uVoidSurfaceScale;
   }
 
-  color = mix(color, uEdgeColor, limb * mix(0.42, 0.7, step(3.5, uPreset)));
-  color += uHotColor * (uPulse * 0.3 + uSelected * limb * 0.3);
-  color *= mix(0.72, 1.38, clamp(uIntensity, 0.0, 1.5));
-  if (uPreset > 3.5) {
-    vec3 voidVisibilityFloor = mix(uEdgeColor, uCoreColor, 0.58);
-    voidVisibilityFloor *= 0.48 + clamp(uIntensity, 0.0, 1.0) * 0.12;
-    color = max(color, voidVisibilityFloor);
+  // Keep Void's selected and resting face dark enough to remain distinct
+  // under the High compositor while preserving a colored internal core.
+  if (uPreset < 3.5 || uPreset > 4.5) {
+    float stellarCore = smoothstep(0.2, 0.94, facing);
+    float coreLift = pow(facing, 3.4);
+    vec3 hotCoreColor = mix(uCoreColor, uHotColor, stellarCore * 0.62);
+    color = mix(color, hotCoreColor, 0.2 + stellarCore * 0.14);
+    color += mix(uCoreColor, uHotColor, 0.72) * coreLift * 0.22;
+    if (uPreset < 3.5) {
+      // Ordinary stars keep a luminous limb rather than a dark, hard shell.
+      // Black Hole's legacy edge treatment remains isolated in its branch.
+      vec3 luminousLimbColor = mix(uCoreColor, uHotColor, 0.72);
+      float luminousLimb = smoothstep(0.14, 0.96, limb);
+      color = mix(color, luminousLimbColor, luminousLimb * 0.16);
+    } else {
+      color = mix(color, uEdgeColor, limb * 0.18);
+    }
+    color += mix(uCoreColor, uHotColor, 0.68)
+      * (uPulse * 0.16 + uSelected * limb * 0.16);
+    color *= mix(0.78, 1.16, clamp(uIntensity, 0.0, 1.5));
+    color += mix(uCoreColor, uHotColor, 0.72)
+      * uDetail * (0.024 + uPulse * 0.08);
   }
-  color += uHotColor * uDetail * (0.045 + uPulse * 0.16);
+  if (uPreset > 3.5 && uPreset < 4.5) {
+    vec3 voidVisibilityFloor = mix(uEdgeColor, uCoreColor, 0.58);
+    voidVisibilityFloor *= (0.5 + clamp(uIntensity, 0.0, 1.0) * 0.12)
+      * uVoidSurfaceScale;
+    color = max(color, voidVisibilityFloor);
+    float voidCore = pow(facing, 3.2);
+    color += mix(uCoreColor, uHotColor, 0.18) * voidCore
+      * (0.12 + uDetail * 0.05);
+    color = mix(color, uEdgeColor, limb * 0.3);
+    color += uCoreColor * (uPulse * 0.1 + uSelected * limb * 0.08);
+    float voidPeak = max(max(color.r, color.g), color.b);
+    color *= min(1.0, 0.76 / max(voidPeak, 0.001));
+  }
+  // Keep intensity changes and High bloom from clipping every channel into a
+  // featureless white disc. Scaling preserves the authored hue and granules.
+  float peak = max(max(color.r, color.g), color.b);
+  color *= min(1.0, 1.22 / max(peak, 0.001));
   gl_FragColor = vec4(color, 1.0);
 
   #include <tonemapping_fragment>
@@ -604,6 +686,7 @@ uniform float uSelected;
 uniform float uDetail;
 uniform float uIntensity;
 uniform float uGlowStrength;
+uniform float uVoidCoronaScale;
 
 varying vec3 vObjectPosition;
 varying vec3 vWorldPosition;
@@ -617,7 +700,10 @@ void main() {
   vec3 direction = normalize(vObjectPosition);
   vec3 normal = normalize(vWorldNormal);
   vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-  float fresnel = pow(1.0 - abs(dot(normal, viewDirection)), 2.15);
+  // The shell is a compact corona, not a second opaque star disc. A
+  // front-side sphere only contributes around its limb; the surface material
+  // owns the saturated, granular face underneath it.
+  float facing = max(dot(normal, viewDirection), 0.0);
   float time = uTick / 1920.0;
   float shimmer = 0.5 + 0.5 * sin(
     dot(direction, vec3(10.7, -8.9, 12.3)) + uSeed * 41.0 + time * 1.6
@@ -631,10 +717,24 @@ void main() {
     variation *= 0.64 + shimmer * 0.2;
   }
 
-  float strength = uGlowStrength * mix(0.38, 1.0, clamp(uIntensity, 0.0, 1.0));
+  float strength = uGlowStrength * mix(0.28, 0.72, clamp(uIntensity, 0.0, 1.0));
+  strength *= uVoidCoronaScale;
   strength *= variation * (1.0 + uPulse * 0.42 + uSelected * 0.14);
-  float alpha = fresnel * strength * 0.58;
-  gl_FragColor = vec4(uGlowColor * strength, alpha);
+  // The enlarged shell is a soft corona band, not a second star disc. It
+  // fades in away from the exact silhouette, peaks between the silhouette
+  // and body edge, then fades out before its front-facing center. This keeps
+  // the body emissive while preventing a crisp outer circular shield.
+  float outerFalloff = smoothstep(0.0, 0.24, facing);
+  float innerFalloff = 1.0 - smoothstep(0.58, 0.86, facing);
+  float coronaBand = outerFalloff * innerFalloff;
+  float alpha = clamp(
+    coronaBand * strength * (0.34 + uDetail * 0.08),
+    0.0,
+    1.0
+  );
+  vec3 emitted = uGlowColor * strength * (0.54 + coronaBand * 0.64);
+  emitted += uGlowColor * coronaBand * strength * 0.14;
+  gl_FragColor = vec4(emitted * 0.9, alpha);
 
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -654,6 +754,13 @@ function normalizedDetail(detail: number): number {
 
 function indexOfPlanetRole(role: PlanetRole): number {
   return PLANET_ROLES.indexOf(role);
+}
+
+function planetRoleFromMaterial(material: THREE.ShaderMaterial): PlanetRole {
+  const value: unknown = material.uniforms.uRole?.value;
+  const numericValue = typeof value === "number" ? value : 0;
+  const index = Number.isFinite(numericValue) ? Math.round(numericValue) : 0;
+  return PLANET_ROLES[Math.min(PLANET_ROLES.length - 1, Math.max(0, index))];
 }
 
 function indexOfStarPreset(presetId: StarPresetId): number {
@@ -777,6 +884,9 @@ export function updateCelestialOutlineMaterial(
   update: CelestialOutlineUpdate,
 ): void {
   assertMaterialKind(material, "celestial-outline");
+  if (update.color !== undefined) {
+    setColorUniform(material, "uColor", update.color);
+  }
   if (update.pulse !== undefined) {
     setNumberUniform(material, "uPulse", clampFinite(update.pulse, 0, 1));
   }
@@ -800,14 +910,22 @@ export function createPlanetSurfaceMaterial(
   detail: number,
 ): THREE.ShaderMaterial {
   const profile = planetMaterialProfile(descriptor.role);
+  const palette = descriptor.palette;
+  const paletteColors = palette
+    ? planetMaterialColorsForPalette(descriptor.role, palette)
+    : profile;
   const material = createProceduralMaterial(
     "planet-surface",
     {
-      uBaseColor: { value: new THREE.Color(profile.baseColor) },
-      uShadowColor: { value: new THREE.Color(profile.shadowColor) },
-      uAccentColor: { value: new THREE.Color(profile.accentColor) },
-      uSecondaryColor: { value: new THREE.Color(profile.secondaryColor) },
-      uStarLightColor: { value: new THREE.Color(0xffffff) },
+      uBaseColor: { value: new THREE.Color(paletteColors.baseColor) },
+      uShadowColor: { value: new THREE.Color(paletteColors.shadowColor) },
+      uAccentColor: { value: new THREE.Color(paletteColors.accentColor) },
+      uSecondaryColor: {
+        value: new THREE.Color(paletteColors.secondaryColor),
+      },
+      uStarLightColor: {
+        value: new THREE.Color(palette?.starLightColor ?? 0xffffff),
+      },
       uRole: { value: indexOfPlanetRole(descriptor.role) },
       uSeed: { value: normalizeVisualSeed(descriptor.visualSeed) },
       uTick: { value: 0 },
@@ -872,6 +990,18 @@ export function updatePlanetSurfaceMaterial(
       clampFinite(update.starLightIntensity, 0, 2.5),
     );
   }
+  const palette = update.palette;
+  if (palette) {
+    const colors = planetMaterialColorsForPalette(
+      planetRoleFromMaterial(material),
+      palette,
+    );
+    setColorUniform(material, "uBaseColor", colors.baseColor);
+    setColorUniform(material, "uShadowColor", colors.shadowColor);
+    setColorUniform(material, "uAccentColor", colors.accentColor);
+    setColorUniform(material, "uSecondaryColor", colors.secondaryColor);
+    setColorUniform(material, "uStarLightColor", palette.starLightColor);
+  }
 }
 
 /** Creates a preset-specific, procedural stellar surface. */
@@ -880,12 +1010,27 @@ export function createStarSurfaceMaterial(
   detail: number,
 ): THREE.ShaderMaterial {
   const profile = starMaterialProfile(descriptor.presetId);
+  const palette = descriptor.palette;
+  const paletteColors = palette
+    ? starMaterialColorsForPalette(palette, descriptor.companion)
+    : {
+        coreColor: profile.coreColor,
+        hotColor: profile.hotColor,
+        edgeColor: profile.edgeColor,
+        glowColor: profile.glowColor,
+      };
   const material = createProceduralMaterial(
     "star-surface",
     {
-      uCoreColor: { value: new THREE.Color(profile.coreColor) },
-      uHotColor: { value: new THREE.Color(profile.hotColor) },
-      uEdgeColor: { value: new THREE.Color(profile.edgeColor) },
+      uCoreColor: {
+        value: new THREE.Color(paletteColors.coreColor),
+      },
+      uHotColor: {
+        value: new THREE.Color(paletteColors.hotColor),
+      },
+      uEdgeColor: {
+        value: new THREE.Color(paletteColors.edgeColor),
+      },
       uPreset: { value: indexOfStarPreset(descriptor.presetId) },
       uSeed: { value: normalizeVisualSeed(descriptor.visualSeed) },
       uTick: { value: 0 },
@@ -894,6 +1039,9 @@ export function createStarSurfaceMaterial(
       uDetail: { value: normalizedDetail(detail) },
       uIntensity: { value: clampFinite(descriptor.intensity, 0, 1.5) },
       uTurbulence: { value: profile.turbulence },
+      uVoidSurfaceScale: {
+        value: descriptor.presetId === "void" ? 0.64 : 1,
+      },
     },
     STAR_VERTEX_SHADER,
     STAR_FRAGMENT_SHADER,
@@ -924,10 +1072,21 @@ export function createStarGlowMaterial(
   detail: number,
 ): THREE.ShaderMaterial {
   const profile = starMaterialProfile(descriptor.presetId);
+  const palette = descriptor.palette;
+  const paletteColors = palette
+    ? starMaterialColorsForPalette(palette, descriptor.companion)
+    : {
+        coreColor: profile.coreColor,
+        hotColor: profile.hotColor,
+        edgeColor: profile.edgeColor,
+        glowColor: profile.glowColor,
+      };
   const material = createProceduralMaterial(
     "star-glow",
     {
-      uGlowColor: { value: new THREE.Color(profile.glowColor) },
+      uGlowColor: {
+        value: new THREE.Color(paletteColors.glowColor),
+      },
       uPreset: { value: indexOfStarPreset(descriptor.presetId) },
       uSeed: { value: normalizeVisualSeed(descriptor.visualSeed) },
       uTick: { value: 0 },
@@ -936,6 +1095,9 @@ export function createStarGlowMaterial(
       uDetail: { value: normalizedDetail(detail) },
       uIntensity: { value: clampFinite(descriptor.intensity, 0, 1.5) },
       uGlowStrength: { value: profile.glowStrength },
+      // Void's dark surface needs a smaller, colored corona so selection and
+      // High bloom cannot turn its silhouette into a pale halo.
+      uVoidCoronaScale: { value: descriptor.presetId === "void" ? 0.42 : 1 },
     },
     GLOW_VERTEX_SHADER,
     GLOW_FRAGMENT_SHADER,
@@ -943,7 +1105,10 @@ export function createStarGlowMaterial(
       blending: THREE.AdditiveBlending,
       depthTest: true,
       depthWrite: false,
-      side: THREE.BackSide,
+      // The glow shell is an outer corona. Front-side fragments keep the
+      // saturated halo visible around the smaller surface body; BackSide
+      // culling would leave only an occluded dark rim at system zoom.
+      side: THREE.FrontSide,
       transparent: true,
     },
   );
@@ -980,5 +1145,17 @@ function updateStarUniforms(
       "uIntensity",
       clampFinite(update.intensity, 0, 1.5),
     );
+  }
+  const palette = update.palette;
+  if (palette) {
+    const colors = starMaterialColorsForPalette(palette, update.companion);
+    if (material.uniforms.uCoreColor) {
+      setColorUniform(material, "uCoreColor", colors.coreColor);
+      setColorUniform(material, "uHotColor", colors.hotColor);
+      setColorUniform(material, "uEdgeColor", colors.edgeColor);
+    }
+    if (material.uniforms.uGlowColor) {
+      setColorUniform(material, "uGlowColor", colors.glowColor);
+    }
   }
 }

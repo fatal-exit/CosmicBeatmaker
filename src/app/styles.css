@@ -1,39 +1,38 @@
 :root {
   color-scheme: dark;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  --font-ui:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-display:
+    "Avenir Next Condensed Heavy", "Avenir Next Condensed", "Arial Black",
+    "Franklin Gothic Heavy", Impact, "Arial Narrow", sans-serif;
+  font-family: var(--font-ui);
   font-synthesis: none;
-  color: oklch(0.94 0.018 310);
-  background: oklch(0.085 0.018 302);
-  --bg: oklch(0.085 0.018 302);
-  --scene-bg: oklch(0.055 0.014 300);
-  --surface: oklch(0.135 0.022 302);
-  --surface-raised: oklch(0.185 0.028 302);
-  --surface-active: oklch(0.245 0.045 310);
-  --surface-selected: oklch(0.225 0.06 320);
-  --ink: oklch(0.94 0.018 310);
-  --muted: oklch(0.72 0.035 305);
-  --primary: oklch(0.72 0.22 328);
-  --primary-strong: oklch(0.54 0.22 328);
-  --primary-hover: oklch(0.58 0.22 328);
-  --accent: oklch(0.75 0.17 292);
-  --focus: oklch(0.84 0.12 300);
-  --on-primary: oklch(0.98 0.01 320);
-  --on-accent: oklch(0.12 0.02 300);
-  --danger: oklch(0.69 0.17 25);
-  --border: oklch(0.3 0.04 300);
-  --celestial-star: oklch(0.82 0.16 85);
-  --role-beat: oklch(0.69 0.2 43.2);
-  --role-bass: oklch(0.78 0.15 195);
-  --role-chords: oklch(0.78 0.15 92);
-  --role-melody: oklch(0.72 0.18 325);
-  --role-texture: oklch(0.7 0.14 245);
+  color: oklch(0.96 0.03 88);
+  background: oklch(0.095 0.024 72);
+  --bg: oklch(0.095 0.024 72);
+  --scene-bg: oklch(0.058 0.022 74);
+  --surface: oklch(0.15 0.03 72);
+  --surface-raised: oklch(0.2 0.038 70);
+  --surface-active: oklch(0.275 0.065 66);
+  --surface-selected: oklch(0.235 0.065 62);
+  --ink: oklch(0.95 0.025 88);
+  --muted: oklch(0.74 0.045 78);
+  --primary: oklch(0.8 0.18 74);
+  --primary-strong: oklch(0.59 0.16 68);
+  --primary-hover: oklch(0.68 0.18 65);
+  --accent: oklch(0.82 0.16 48);
+  --focus: oklch(0.91 0.075 91);
+  --on-primary: oklch(0.14 0.025 68);
+  --on-accent: oklch(0.14 0.025 68);
+  --danger: oklch(0.72 0.16 28);
+  --border: oklch(0.37 0.05 70);
+  --celestial-star: oklch(0.84 0.16 82);
+  --role-beat: oklch(0.76 0.15 51);
+  --role-bass: oklch(0.77 0.12 193);
+  --role-chords: oklch(0.84 0.13 92);
+  --role-melody: oklch(0.77 0.12 22);
+  --role-texture: oklch(0.74 0.1 236);
   --z-sticky: 20;
   --z-backdrop: 50;
   --z-sheet: 60;
@@ -412,12 +411,11 @@ p {
 }
 
 .asteroid-symbol {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--muted) 0 3px,
-    transparent 3px 6px
-  );
-  border: 1px solid var(--muted);
+  background:
+    radial-gradient(circle at 28% 30%, var(--muted) 0 15%, transparent 17%),
+    radial-gradient(circle at 70% 66%, var(--muted) 0 18%, transparent 20%),
+    color-mix(in oklch, var(--muted) 22%, var(--surface));
+  border: 1px solid color-mix(in oklch, var(--muted) 72%, var(--border));
 }
 
 .large-object-symbol.asteroid-symbol {

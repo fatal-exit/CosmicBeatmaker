@@ -514,6 +514,15 @@ button:disabled {
   }
 }
 
+/* The desktop shell can leave the scene narrower than the viewport suggests.
+   Keep the guided first-minute action clear of the camera cluster until the
+   wider three-column layout has enough scene width for both side by side. */
+@media (min-width: 791px) and (max-width: 1280px) {
+  .scene-panel:has(.coachmark) .scene-view-controls {
+    top: 94px;
+  }
+}
+
 @media (max-width: 790px) {
   .scene-view-controls {
     top: 10px;
@@ -631,4 +640,1798 @@ button:disabled {
 .app-shell[data-reduced-motion="true"]
   :where(button, .object-row):hover:not(:disabled) {
   transform: none;
+}
+
+/* -------------------------------------------------------------------------
+   Cinematic instrument shell
+
+   The renderer owns the stars and planets; this layer owns the instrument
+   around them. Each preset keeps the same semantic roles while changing one
+   restrained family of structural neutrals and luminous accents.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --chrome: oklch(0.105 0.018 72);
+  --chrome-strong: oklch(0.145 0.023 70);
+  --chrome-quiet: oklch(0.155 0.026 68);
+  --scene-line: oklch(0.35 0.05 72);
+  --knob-track: oklch(0.27 0.032 68);
+  --knob-core: oklch(0.12 0.02 70);
+  --companion-accent: transparent;
+  --onboarding-haze: oklch(0.66 0.14 52 / 0.24);
+}
+
+.app-shell[data-star-preset="radiant"] {
+  --bg: oklch(0.095 0.024 72);
+  --scene-bg: oklch(0.058 0.022 74);
+  --surface: oklch(0.17 0.034 72);
+  --surface-raised: oklch(0.22 0.044 70);
+  --surface-active: oklch(0.3 0.073 66);
+  --surface-selected: oklch(0.26 0.073 62);
+  --ink: oklch(0.95 0.025 88);
+  --muted: oklch(0.74 0.045 78);
+  --primary: oklch(0.8 0.18 74);
+  --primary-strong: oklch(0.59 0.16 68);
+  --primary-hover: oklch(0.68 0.18 65);
+  --accent: oklch(0.82 0.16 48);
+  --focus: oklch(0.91 0.075 91);
+  --on-primary: oklch(0.14 0.025 68);
+  --on-accent: oklch(0.14 0.025 68);
+  --danger: oklch(0.72 0.16 28);
+  --border: oklch(0.4 0.058 70);
+  --celestial-star: oklch(0.84 0.16 82);
+  --chrome: oklch(0.16 0.032 72);
+  --chrome-strong: oklch(0.215 0.043 70);
+  --chrome-quiet: oklch(0.23 0.048 68);
+  --scene-line: oklch(0.44 0.07 72);
+  --knob-track: oklch(0.32 0.046 68);
+  --knob-core: oklch(0.17 0.032 70);
+  --onboarding-haze: oklch(0.66 0.14 52 / 0.24);
+}
+
+.app-shell[data-star-preset="red-giant"] {
+  --bg: oklch(0.09 0.028 30);
+  --scene-bg: oklch(0.05 0.024 27);
+  --surface: oklch(0.165 0.04 30);
+  --surface-raised: oklch(0.215 0.052 30);
+  --surface-active: oklch(0.295 0.09 29);
+  --surface-selected: oklch(0.25 0.083 28);
+  --ink: oklch(0.94 0.03 53);
+  --muted: oklch(0.73 0.05 34);
+  --primary: oklch(0.74 0.19 35);
+  --primary-strong: oklch(0.55 0.18 31);
+  --primary-hover: oklch(0.65 0.2 32);
+  --accent: oklch(0.8 0.18 49);
+  --focus: oklch(0.9 0.06 55);
+  --on-primary: oklch(0.14 0.025 30);
+  --on-accent: oklch(0.14 0.025 30);
+  --danger: oklch(0.74 0.16 27);
+  --border: oklch(0.4 0.07 29);
+  --celestial-star: oklch(0.78 0.17 34);
+  --chrome: oklch(0.155 0.034 30);
+  --chrome-strong: oklch(0.21 0.047 30);
+  --chrome-quiet: oklch(0.225 0.054 30);
+  --scene-line: oklch(0.43 0.08 31);
+  --knob-track: oklch(0.31 0.052 30);
+  --knob-core: oklch(0.165 0.032 30);
+  --onboarding-haze: oklch(0.6 0.16 31 / 0.24);
+}
+
+.app-shell[data-star-preset="dwarf"] {
+  --bg: oklch(0.09 0.028 246);
+  --scene-bg: oklch(0.05 0.022 246);
+  --surface: oklch(0.165 0.038 244);
+  --surface-raised: oklch(0.215 0.05 238);
+  --surface-active: oklch(0.285 0.078 210);
+  --surface-selected: oklch(0.25 0.073 220);
+  --ink: oklch(0.94 0.03 205);
+  --muted: oklch(0.75 0.055 220);
+  --primary: oklch(0.8 0.17 191);
+  --primary-strong: oklch(0.57 0.16 196);
+  --primary-hover: oklch(0.67 0.18 190);
+  --accent: oklch(0.88 0.11 208);
+  --focus: oklch(0.92 0.05 202);
+  --on-primary: oklch(0.12 0.026 220);
+  --on-accent: oklch(0.12 0.026 220);
+  --danger: oklch(0.72 0.16 25);
+  --border: oklch(0.4 0.064 220);
+  --celestial-star: oklch(0.84 0.12 188);
+  --chrome: oklch(0.155 0.034 246);
+  --chrome-strong: oklch(0.21 0.047 242);
+  --chrome-quiet: oklch(0.225 0.052 240);
+  --scene-line: oklch(0.43 0.075 218);
+  --knob-track: oklch(0.31 0.05 236);
+  --knob-core: oklch(0.165 0.032 244);
+  --onboarding-haze: oklch(0.55 0.12 198 / 0.22);
+}
+
+.app-shell[data-star-preset="neutron"] {
+  --bg: oklch(0.085 0.03 278);
+  --scene-bg: oklch(0.048 0.023 282);
+  --surface: oklch(0.16 0.04 280);
+  --surface-raised: oklch(0.21 0.054 285);
+  --surface-active: oklch(0.285 0.09 295);
+  --surface-selected: oklch(0.245 0.085 289);
+  --ink: oklch(0.93 0.032 255);
+  --muted: oklch(0.72 0.06 275);
+  --primary: oklch(0.77 0.21 300);
+  --primary-strong: oklch(0.55 0.19 294);
+  --primary-hover: oklch(0.65 0.22 302);
+  --accent: oklch(0.89 0.1 232);
+  --focus: oklch(0.9 0.05 228);
+  --on-primary: oklch(0.12 0.026 282);
+  --on-accent: oklch(0.12 0.026 250);
+  --danger: oklch(0.74 0.16 23);
+  --border: oklch(0.4 0.07 286);
+  --celestial-star: oklch(0.8 0.17 294);
+  --chrome: oklch(0.15 0.036 280);
+  --chrome-strong: oklch(0.205 0.05 284);
+  --chrome-quiet: oklch(0.22 0.055 286);
+  --scene-line: oklch(0.43 0.08 286);
+  --knob-track: oklch(0.31 0.056 284);
+  --knob-core: oklch(0.155 0.033 280);
+  --onboarding-haze: oklch(0.52 0.16 300 / 0.2);
+}
+
+.app-shell[data-star-preset="void"] {
+  --bg: oklch(0.078 0.024 260);
+  --scene-bg: oklch(0.043 0.019 262);
+  --surface: oklch(0.15 0.034 263);
+  --surface-raised: oklch(0.2 0.046 267);
+  --surface-active: oklch(0.27 0.075 280);
+  --surface-selected: oklch(0.23 0.07 274);
+  --ink: oklch(0.91 0.04 264);
+  --muted: oklch(0.69 0.06 273);
+  --primary: oklch(0.72 0.15 286);
+  --primary-strong: oklch(0.52 0.15 279);
+  --primary-hover: oklch(0.62 0.17 286);
+  --accent: oklch(0.84 0.11 242);
+  --focus: oklch(0.87 0.06 244);
+  --on-primary: oklch(0.12 0.02 270);
+  --on-accent: oklch(0.11 0.02 255);
+  --danger: oklch(0.7 0.15 24);
+  --border: oklch(0.37 0.06 270);
+  --celestial-star: oklch(0.64 0.15 282);
+  --chrome: oklch(0.14 0.03 263);
+  --chrome-strong: oklch(0.195 0.043 266);
+  --chrome-quiet: oklch(0.21 0.049 268);
+  --scene-line: oklch(0.4 0.07 271);
+  --knob-track: oklch(0.29 0.05 268);
+  --knob-core: oklch(0.15 0.028 263);
+  --onboarding-haze: oklch(0.46 0.12 285 / 0.2);
+}
+
+.app-shell[data-star-preset="black-hole"] {
+  --bg: oklch(0.07 0.024 276);
+  --scene-bg: oklch(0.034 0.016 280);
+  --surface: oklch(0.14 0.03 278);
+  --surface-raised: oklch(0.19 0.044 278);
+  --surface-active: oklch(0.26 0.078 294);
+  --surface-selected: oklch(0.225 0.07 288);
+  --ink: oklch(0.93 0.03 89);
+  --muted: oklch(0.7 0.05 274);
+  --primary: oklch(0.79 0.18 74);
+  --primary-strong: oklch(0.54 0.16 68);
+  --primary-hover: oklch(0.65 0.18 70);
+  --accent: oklch(0.72 0.17 299);
+  --focus: oklch(0.89 0.06 250);
+  --on-primary: oklch(0.12 0.02 72);
+  --on-accent: oklch(0.95 0.02 250);
+  --danger: oklch(0.72 0.16 25);
+  --border: oklch(0.37 0.06 278);
+  --celestial-star: oklch(0.74 0.15 70);
+  --chrome: oklch(0.12 0.027 278);
+  --chrome-strong: oklch(0.18 0.042 280);
+  --chrome-quiet: oklch(0.2 0.048 281);
+  --scene-line: oklch(0.4 0.07 285);
+  --knob-track: oklch(0.29 0.047 280);
+  --knob-core: oklch(0.13 0.026 278);
+  --onboarding-haze: oklch(0.56 0.13 298 / 0.2);
+}
+
+/* Binary companions are deliberately a secondary chrome cue. The star
+   preset remains the primary visual identity, while this bounded accent
+   keeps a companion legible without creating a star × companion matrix. */
+.app-shell[data-companion-preset="radiant"] {
+  --companion-accent: oklch(0.82 0.16 76);
+}
+
+.app-shell[data-companion-preset="red-giant"] {
+  --companion-accent: oklch(0.74 0.19 35);
+}
+
+.app-shell[data-companion-preset="dwarf"] {
+  --companion-accent: oklch(0.8 0.17 191);
+}
+
+.app-shell[data-companion-preset="neutron"] {
+  --companion-accent: oklch(0.77 0.21 300);
+}
+
+.app-shell[data-companion-preset="void"] {
+  --companion-accent: oklch(0.72 0.15 286);
+}
+
+.app-shell[data-companion-preset]:not([data-companion-preset="none"]) .topbar {
+  border-bottom-color: color-mix(
+    in oklch,
+    var(--scene-line) 78%,
+    var(--companion-accent)
+  );
+}
+
+.app-shell[data-companion-preset]:not([data-companion-preset="none"])
+  .macro-bar {
+  border-top-color: color-mix(
+    in oklch,
+    var(--scene-line) 78%,
+    var(--companion-accent)
+  );
+}
+
+.app-shell {
+  color: var(--ink);
+  background: var(--bg);
+  isolation: isolate;
+}
+
+.topbar,
+.object-panel,
+.inspector,
+.macro-bar,
+.mobile-bottom-sheet {
+  background: var(--chrome);
+}
+
+.topbar {
+  min-height: 68px;
+  padding-block: 9px;
+  border-bottom-color: var(--scene-line);
+  box-shadow: inset 0 -1px 0
+    color-mix(in oklch, var(--primary) 10%, transparent);
+}
+
+.object-panel {
+  border-right-color: var(--scene-line);
+}
+
+.inspector {
+  border-left-color: var(--scene-line);
+}
+
+.product-mark,
+.panel-label {
+  color: var(--accent);
+  font-size: 0.7rem;
+  letter-spacing: 0.045em;
+  text-transform: none;
+}
+
+.mini-star {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px 3px 7px 3px;
+  background: var(--celestial-star);
+  clip-path: polygon(
+    50% 0,
+    63% 34%,
+    100% 50%,
+    63% 66%,
+    50% 100%,
+    37% 66%,
+    0 50%,
+    37% 34%
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--celestial-star) 52%, var(--border)),
+    0 0 12px color-mix(in oklch, var(--primary) 30%, transparent);
+}
+
+.project-name-input {
+  font-weight: 700;
+}
+
+.project-name-input:hover,
+.project-name-input:focus {
+  border-bottom-color: var(--primary);
+}
+
+.transport {
+  gap: 5px;
+}
+
+.transport > button,
+.topbar > button {
+  min-height: 44px;
+  padding-inline: 12px;
+  background: var(--chrome-strong);
+  border: 1px solid color-mix(in oklch, var(--border) 74%, transparent);
+  border-radius: 7px;
+  font-weight: 720;
+}
+
+.transport > button:hover:not(:disabled),
+.topbar > button:hover:not(:disabled) {
+  background: var(--surface-active);
+  border-color: color-mix(in oklch, var(--primary) 54%, var(--border));
+}
+
+.transport .play-button {
+  color: var(--on-primary);
+  background: var(--primary-strong);
+  border-color: color-mix(in oklch, var(--primary) 72%, var(--border));
+}
+
+.transport .play-button:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.transport .save-button {
+  border-color: color-mix(in oklch, var(--primary) 36%, var(--border));
+}
+
+.tempo-control {
+  background: var(--chrome-quiet);
+  border: 1px solid color-mix(in oklch, var(--border) 74%, transparent);
+  border-radius: 7px;
+}
+
+.tempo-control input,
+.belt-slider input,
+.expression-slider input,
+.ring-density-control input {
+  accent-color: var(--primary);
+}
+
+.audio-lock {
+  background: var(--chrome);
+  border-color: var(--scene-line);
+  border-radius: 5px;
+}
+
+.panel-heading-row > span,
+.binary-status,
+.scene-lock-state {
+  border-radius: 5px;
+}
+
+.object-list {
+  gap: 5px;
+}
+
+.object-row {
+  min-height: 46px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.object-row:hover {
+  background: var(--chrome-strong);
+  border-color: color-mix(in oklch, var(--border) 72%, transparent);
+}
+
+.object-row.selected {
+  background: var(--surface-selected);
+  border-color: color-mix(in oklch, var(--primary) 62%, var(--border));
+  outline: none;
+}
+
+.object-row.selected:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.object-row.selected .object-symbol {
+  box-shadow:
+    0 0 0 3px color-mix(in oklch, currentColor 15%, transparent),
+    0 0 14px color-mix(in oklch, currentColor 24%, transparent);
+}
+
+.scene-panel {
+  background:
+    radial-gradient(
+      circle at 50% 46%,
+      color-mix(in oklch, var(--primary) 13%, transparent) 0,
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 77% 18%,
+      color-mix(in oklch, var(--accent) 8%, transparent) 0,
+      transparent 32%
+    ),
+    var(--scene-bg);
+}
+
+.scene-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 1px solid color-mix(in oklch, var(--scene-line) 48%, transparent);
+  pointer-events: none;
+}
+
+.scene-status,
+.scene-view-controls,
+.scene-polish-overlay,
+.gate-placement-popover {
+  color: var(--ink);
+  background: color-mix(in oklch, var(--chrome) 94%, transparent);
+  border: 1px solid color-mix(in oklch, var(--scene-line) 84%, var(--border));
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--ink) 6%, transparent);
+}
+
+.scene-status {
+  padding: 7px 10px;
+}
+
+.scene-status > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.scene-status > span.playing {
+  background: var(--accent);
+}
+
+.scene-primary-actions {
+  gap: 7px;
+}
+
+.add-button,
+.surprise-system-button,
+.primary-action,
+.onboarding-surprise {
+  border-radius: 7px;
+}
+
+.add-button {
+  color: var(--on-primary);
+  background: var(--primary-strong);
+  border: 1px solid color-mix(in oklch, var(--primary) 70%, var(--border));
+  box-shadow: inset 0 1px 0 color-mix(in oklch, white 10%, transparent);
+}
+
+.surprise-system-button {
+  color: var(--ink);
+  background: var(--chrome-strong);
+  border-color: color-mix(in oklch, var(--primary) 48%, var(--border));
+}
+
+.add-button:hover,
+.surprise-system-button:hover,
+.primary-action:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.surprise-system-button small,
+.macro-heading > small {
+  color: color-mix(in oklch, var(--muted) 92%, var(--accent));
+}
+
+.coachmark {
+  background: var(--chrome-strong);
+  border-color: color-mix(in oklch, var(--primary) 42%, var(--border));
+  border-radius: 8px;
+}
+
+.coachmark button,
+.primary-panel-action,
+.user-sound-import form > button {
+  color: var(--on-primary);
+  background: var(--primary-strong);
+  border: 1px solid color-mix(in oklch, var(--primary) 68%, var(--border));
+  border-radius: 7px;
+}
+
+.coachmark button:hover:not(:disabled),
+.primary-panel-action:hover:not(:disabled),
+.user-sound-import form > button:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.selected-summary {
+  border-bottom-color: var(--scene-line);
+}
+
+.star-mood-control,
+.binary-companion-control,
+.belt-parameter-controls,
+.moon-controls,
+.sound-choice,
+.role-expression-controls {
+  border-color: var(--scene-line);
+}
+
+.star-mood-control select,
+.binary-companion-control select,
+.mood-option,
+.moon-control,
+.sound-choice > select,
+.user-sound-import input[type="text"],
+.user-sound-import select,
+.user-sound-import input[type="file"],
+.orbit-deeper-control select,
+.preferences select,
+.gate-rhythm-control select {
+  color: var(--ink);
+  background: var(--chrome-quiet);
+  border-color: color-mix(in oklch, var(--border) 84%, transparent);
+  border-radius: 6px;
+}
+
+.star-behavior-note,
+.planet-surprise-action,
+.gate-offset-control,
+.pattern-timing-summary,
+.gate-timing-feedback {
+  background: color-mix(in oklch, var(--primary) 8%, var(--chrome-strong));
+  border-color: color-mix(in oklch, var(--primary) 32%, var(--border));
+  border-radius: 7px;
+}
+
+.binary-summary,
+.orbit-current,
+.ring-density-control,
+.export-status,
+.pattern-timing-summary {
+  background: var(--chrome-strong);
+  border-radius: 6px;
+}
+
+.segmented-actions {
+  border-radius: 6px;
+}
+
+.segmented-actions button,
+.moon-control-actions button,
+.contour-options button,
+.orbit-options button,
+.repetition-options button,
+.gate-count-control button,
+.gate-offset-stepper button,
+.gate-offset-reset,
+.secondary-panel-action,
+.inspector-depth-toggle,
+.advanced-controls-toggle,
+.mobile-sheet-actions button,
+.structural-additions button {
+  border-radius: 6px;
+}
+
+.segmented-actions button[aria-pressed="true"],
+.moon-control-actions button[aria-pressed="true"],
+.contour-options button[aria-pressed="true"],
+.orbit-options button.active,
+.repetition-options button.active,
+.gate-count-control button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface-active);
+  border-color: var(--primary);
+}
+
+.primary-panel-action,
+.secondary-panel-action,
+.inspector-depth-toggle,
+.advanced-controls-toggle {
+  min-height: 44px;
+}
+
+.macro-bar {
+  min-height: 164px;
+  border-top-color: var(--scene-line);
+}
+
+.macro-knob-control {
+  width: 70px;
+  height: 70px;
+}
+
+.macro-knob-control input {
+  width: 70px;
+  height: 70px;
+}
+
+.macro-knob-face {
+  inset: 1px;
+  border: 0;
+  border-radius: 10px;
+  background: conic-gradient(
+    from 225deg,
+    var(--primary) 0deg var(--knob-sweep),
+    var(--knob-track) var(--knob-sweep) 270deg,
+    transparent 270deg 360deg
+  );
+  clip-path: polygon(
+    15% 0,
+    85% 0,
+    100% 15%,
+    100% 85%,
+    85% 100%,
+    15% 100%,
+    0 85%,
+    0 15%
+  );
+}
+
+.macro-knob-face::before {
+  inset: 10px;
+  border: 1px solid color-mix(in oklch, var(--border) 84%, transparent);
+  border-radius: 7px;
+  background: var(--knob-core);
+  clip-path: polygon(
+    14% 0,
+    86% 0,
+    100% 14%,
+    100% 86%,
+    86% 100%,
+    14% 100%,
+    0 86%,
+    0 14%
+  );
+}
+
+.macro-knob-face > span {
+  top: 10px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--focus);
+  transform-origin: 50% 24px;
+}
+
+.macro-knob-control input:focus-visible + .macro-knob-face {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.macro-knob > output {
+  color: var(--accent);
+  font-weight: 720;
+}
+
+.onboarding-layer {
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.onboarding-layer::before,
+.onboarding-layer::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.onboarding-enter {
+  position: relative;
+  z-index: 1;
+}
+
+.brand-orbit {
+  width: 138px;
+  height: 138px;
+  margin-bottom: 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 42%, var(--border));
+  border-radius: 50%;
+  transform: none;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--primary) 20%, transparent) 0 28%,
+    transparent 29%
+  );
+}
+
+.brand-orbit::before {
+  width: 58px;
+  height: 58px;
+  background: var(--primary);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 54%, var(--border)),
+    0 0 26px color-mix(in oklch, var(--primary) 36%, transparent);
+  border-radius: 50%;
+}
+
+.brand-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 20px 2px;
+  border: 1px solid color-mix(in oklch, var(--accent) 58%, transparent);
+  border-radius: 50%;
+  transform: rotate(28deg);
+}
+
+.brand-orbit span {
+  top: 9px;
+  right: 24px;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.onboarding-enter h1 {
+  max-width: 15ch;
+  margin-bottom: 13px;
+  font-size: 2.8rem;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
+}
+
+.onboarding-enter > p:not(.product-mark, .status-message) {
+  max-width: 44ch;
+  color: var(--muted);
+}
+
+.primary-action {
+  min-height: 54px;
+  color: var(--on-primary);
+  background: var(--primary-strong);
+  border: 1px solid color-mix(in oklch, var(--primary) 68%, var(--border));
+  box-shadow: inset 0 1px 0 color-mix(in oklch, white 10%, transparent);
+}
+
+.onboarding-surprise {
+  background: var(--chrome-strong);
+  border-color: color-mix(in oklch, var(--primary) 48%, var(--border));
+}
+
+.text-action {
+  color: color-mix(in oklch, var(--muted) 90%, var(--accent));
+}
+
+.mood-picker {
+  gap: 20px;
+}
+
+.mood-picker h2 {
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.mood-list {
+  gap: 9px;
+}
+
+.mood-option {
+  position: relative;
+  min-height: 158px;
+  padding: 15px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.mood-option > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mood-option:hover,
+.mood-option:focus-visible {
+  background: color-mix(in oklch, var(--mood-accent) 9%, var(--chrome-strong));
+  border-color: color-mix(in oklch, var(--mood-accent) 72%, var(--border));
+}
+
+.mood-option[data-mood-preset="radiant"] {
+  --mood-accent: oklch(0.82 0.16 76);
+}
+
+.mood-option[data-mood-preset="red-giant"] {
+  --mood-accent: oklch(0.7 0.17 35);
+}
+
+.mood-option[data-mood-preset="dwarf"] {
+  --mood-accent: oklch(0.8 0.13 194);
+}
+
+.mood-option[data-mood-preset="neutron"] {
+  --mood-accent: oklch(0.75 0.19 300);
+}
+
+.mood-option[data-mood-preset="void"] {
+  --mood-accent: oklch(0.69 0.13 286);
+}
+
+.mood-option[data-mood-preset="black-hole"] {
+  --mood-accent: oklch(0.74 0.16 74);
+  --mood-edge: oklch(0.66 0.14 299);
+}
+
+.mood-star {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mood-accent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--mood-accent) 58%, var(--border)),
+    0 0 18px color-mix(in oklch, var(--mood-accent) 27%, transparent);
+}
+
+.mood-option[data-mood-preset="black-hole"] .mood-star {
+  background: var(--mood-accent);
+}
+
+.mood-option strong {
+  font-size: 0.96rem;
+}
+
+.mood-option small {
+  color: var(--muted);
+}
+
+.sheet-backdrop {
+  background: oklch(0.015 0.012 270 / 0.78);
+}
+
+.side-sheet,
+.focus-view {
+  background: var(--chrome);
+  border-color: var(--scene-line);
+}
+
+.side-sheet {
+  border-left: 1px solid var(--scene-line);
+}
+
+.focus-view {
+  border: 0;
+}
+
+.linear-pattern button,
+.circular-pattern {
+  border-color: color-mix(in oklch, var(--scene-line) 78%, var(--border));
+}
+
+.linear-pattern button {
+  background: var(--chrome-strong);
+  border-radius: 6px;
+}
+
+.linear-pattern button.active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 790px) {
+  .topbar {
+    min-height: 64px;
+    padding-block: 8px;
+  }
+
+  .scene-primary-actions {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .macro-bar {
+    min-height: 158px;
+  }
+
+  .mobile-bottom-sheet {
+    border-top-color: var(--scene-line);
+  }
+
+  .onboarding-enter h1 {
+    font-size: 2.35rem;
+  }
+
+  .brand-orbit {
+    width: 116px;
+    height: 116px;
+  }
+
+  .brand-orbit::before {
+    width: 50px;
+    height: 50px;
+  }
+
+  .mood-option {
+    min-height: 78px;
+  }
+}
+
+/* Poster register is reserved for hierarchy, not for every interaction. */
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+
+.product-mark,
+.onboarding-enter h1,
+.mood-picker h2,
+.mood-option strong,
+.panel-heading-row h2,
+.inspector h2,
+.selected-summary h2,
+.macro-heading h2,
+.side-sheet > header h2,
+.focus-view > header h2,
+.binary-section-heading h3,
+.melody-gate-pitches h3,
+.structural-additions h3 {
+  font-family: var(--font-display);
+  font-stretch: 92%;
+  font-weight: 900;
+  text-wrap: balance;
+}
+
+.product-mark {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.onboarding-enter h1 {
+  width: 100%;
+  max-width: min(15ch, 100%);
+  font-size: clamp(2rem, 5.5vw, 2.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+}
+
+.mood-picker h2 {
+  max-width: min(28ch, 100%);
+  margin-inline: auto;
+  font-size: clamp(1.5rem, 4vw, 1.8rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.panel-heading-row h2,
+.inspector h2,
+.selected-summary h2,
+.macro-heading h2,
+.side-sheet > header h2,
+.focus-view > header h2 {
+  max-width: 100%;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.panel-heading-row h2,
+.inspector h2 {
+  font-size: 1.04rem;
+}
+
+.selected-summary h2 {
+  font-size: 1.02rem;
+}
+
+.macro-heading h2 {
+  font-size: 1rem;
+}
+
+.mood-option strong,
+.binary-section-heading h3,
+.melody-gate-pitches h3,
+.structural-additions h3 {
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+}
+
+.project-name-input {
+  font-family: var(--font-ui);
+  text-transform: none;
+}
+
+@media (max-width: 790px) {
+  .onboarding-enter h1 {
+    font-size: clamp(1.7rem, 9.3vw, 2.35rem);
+  }
+
+  .mood-picker h2 {
+    font-size: clamp(1.42rem, 7.5vw, 1.75rem);
+  }
+}
+
+/* First-run poster field --------------------------------------------------
+   The editor keeps its instrument-dark chrome, but onboarding needs a clear
+   emotional handoff. These fields borrow each star family's existing hue and
+   give the welcome and mood steps enough lightness to read as a scene. */
+.app-shell {
+  --onboard-field: oklch(0.48 0.2 26);
+  --onboard-field-deep: oklch(0.32 0.15 22);
+  --onboard-glow: oklch(0.72 0.2 46);
+  --onboard-sun: oklch(0.82 0.16 68);
+  --onboard-orbit: oklch(0.88 0.11 58);
+  --onboard-card: oklch(0.4 0.12 27);
+  --onboard-cream: oklch(0.95 0.035 88);
+  --onboard-button-cream: oklch(0.88 0.14 76);
+  --onboard-button-ink: oklch(0.17 0.035 28);
+  --onboard-button-dark: oklch(0.15 0.04 25);
+}
+
+.app-shell[data-star-preset="red-giant"] {
+  --onboard-field: oklch(0.45 0.19 31);
+  --onboard-field-deep: oklch(0.31 0.15 27);
+  --onboard-glow: oklch(0.72 0.2 48);
+  --onboard-sun: oklch(0.8 0.17 49);
+  --onboard-orbit: oklch(0.87 0.12 42);
+  --onboard-card: oklch(0.39 0.13 30);
+}
+
+.app-shell[data-star-preset="dwarf"] {
+  --onboard-field: oklch(0.26 0.14 220);
+  --onboard-field-deep: oklch(0.21 0.12 232);
+  --onboard-glow: oklch(0.68 0.17 194);
+  --onboard-sun: oklch(0.8 0.13 188);
+  --onboard-orbit: oklch(0.82 0.1 205);
+  --onboard-card: oklch(0.35 0.11 222);
+}
+
+.app-shell[data-star-preset="neutron"] {
+  --onboard-field: oklch(0.41 0.2 315);
+  --onboard-field-deep: oklch(0.3 0.15 295);
+  --onboard-glow: oklch(0.68 0.21 332);
+  --onboard-sun: oklch(0.8 0.18 325);
+  --onboard-orbit: oklch(0.84 0.13 302);
+  --onboard-card: oklch(0.37 0.14 310);
+}
+
+.app-shell[data-star-preset="void"] {
+  --onboard-field: oklch(0.32 0.15 275);
+  --onboard-field-deep: oklch(0.26 0.13 266);
+  --onboard-glow: oklch(0.63 0.18 286);
+  --onboard-sun: oklch(0.74 0.15 285);
+  --onboard-orbit: oklch(0.8 0.1 268);
+  --onboard-card: oklch(0.33 0.1 275);
+}
+
+.app-shell[data-star-preset="black-hole"] {
+  --onboard-field: oklch(0.35 0.16 298);
+  --onboard-field-deep: oklch(0.28 0.13 286);
+  --onboard-glow: oklch(0.66 0.19 316);
+  --onboard-sun: oklch(0.79 0.16 55);
+  --onboard-orbit: oklch(0.76 0.14 309);
+  --onboard-card: oklch(0.32 0.11 294);
+}
+
+.onboarding-layer {
+  color: var(--onboard-cream);
+  background:
+    radial-gradient(
+      circle at 76% 18%,
+      color-mix(in oklch, var(--onboard-glow) 42%, transparent) 0,
+      transparent 39%
+    ),
+    linear-gradient(
+      132deg,
+      var(--onboard-field-deep) 0%,
+      var(--onboard-field) 53%,
+      var(--onboard-field-deep) 100%
+    );
+}
+
+.mood-layer {
+  overflow-y: auto;
+}
+
+.onboarding-enter,
+.mood-picker {
+  z-index: 1;
+  color: var(--onboard-cream);
+}
+
+.onboarding-enter .product-mark,
+.mood-picker .product-mark {
+  color: var(--onboard-sun);
+}
+
+.onboarding-enter h1,
+.mood-picker h2 {
+  color: var(--onboard-cream);
+}
+
+.onboarding-enter > p:not(.product-mark, .status-message),
+.mood-picker > div:first-child > p:last-child {
+  color: var(--onboard-cream);
+}
+
+.brand-orbit {
+  border-color: color-mix(in oklch, var(--onboard-orbit) 84%, transparent);
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--onboard-sun) 28%, transparent) 0 29%,
+    transparent 30%
+  );
+}
+
+.brand-orbit::before {
+  background: var(--onboard-sun);
+  box-shadow: 0 0 0 1px var(--onboard-orbit);
+}
+
+.brand-orbit::after {
+  border-color: color-mix(in oklch, var(--onboard-orbit) 86%, transparent);
+}
+
+.brand-orbit span {
+  background: var(--onboard-cream);
+}
+
+.primary-action {
+  color: var(--onboard-button-ink);
+  background: var(--onboard-button-cream);
+  border: 2px solid
+    color-mix(in oklch, var(--onboard-button-cream) 72%, var(--onboard-sun));
+  box-shadow: none;
+}
+
+.primary-action:hover:not(:disabled) {
+  color: var(--onboard-button-ink);
+  background: var(--onboard-cream);
+}
+
+.onboarding-surprise {
+  color: var(--onboard-button-cream);
+  background: var(--onboard-button-dark);
+  border: 1px solid var(--onboard-button-cream);
+}
+
+.onboarding-surprise:hover:not(:disabled) {
+  color: var(--onboard-button-ink);
+  background: var(--onboard-button-cream);
+}
+
+.onboarding-surprise small {
+  color: color-mix(in oklch, var(--onboard-button-cream) 86%, white);
+}
+
+.text-action {
+  color: var(--onboard-cream);
+  text-decoration: underline;
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--onboard-cream) 60%,
+    transparent
+  );
+  text-underline-offset: 3px;
+}
+
+.mood-option {
+  --mood-card-mix: 64%;
+  --mood-card-accent: var(--mood-accent);
+  --mood-card-base: var(--onboard-card);
+  color: var(--onboard-cream);
+  background: color-mix(
+    in oklch,
+    var(--mood-card-accent) var(--mood-card-mix),
+    var(--mood-card-base)
+  );
+  border-color: color-mix(
+    in oklch,
+    var(--mood-accent) 58%,
+    var(--onboard-cream)
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--onboard-cream) 10%, transparent);
+}
+
+.mood-option:hover,
+.mood-option:focus-visible {
+  color: var(--onboard-cream);
+  background: color-mix(
+    in oklch,
+    var(--mood-card-accent) calc(var(--mood-card-mix) + 10%),
+    var(--mood-card-base)
+  );
+  border-color: var(--onboard-cream);
+}
+
+.mood-option[data-mood-preset="radiant"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.38 0.15 55);
+  --mood-card-base: oklch(0.25 0.1 34);
+}
+
+.mood-option[data-mood-preset="red-giant"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.38 0.16 35);
+  --mood-card-base: oklch(0.24 0.11 28);
+}
+
+.mood-option[data-mood-preset="dwarf"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.32 0.12 198);
+  --mood-card-base: oklch(0.2 0.1 215);
+}
+
+.mood-option[data-mood-preset="neutron"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.39 0.17 320);
+  --mood-card-base: oklch(0.24 0.12 305);
+}
+
+.mood-option[data-mood-preset="void"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.35 0.14 282);
+  --mood-card-base: oklch(0.23 0.09 270);
+}
+
+.mood-option[data-mood-preset="black-hole"] {
+  --mood-card-mix: 60%;
+  --mood-card-accent: oklch(0.39 0.15 58);
+  --mood-card-base: oklch(0.24 0.1 42);
+}
+
+.mood-option small {
+  color: color-mix(in oklch, var(--onboard-cream) 88%, var(--mood-accent));
+}
+
+/* Astronomical onboarding field -------------------------------------------
+   Keep the first-run screen vivid, but let the celestial cues stay small and
+   legible. The renderer supplies the elaborate solar-system scene after the
+   handoff; this layer should read as quiet deep space, not as an illustration
+   competing with the controls. */
+.app-shell {
+  --onboard-space-deep: oklch(0.12 0.08 25);
+  --onboard-space-mid: oklch(0.25 0.17 29);
+  --onboard-space-glow: oklch(0.67 0.18 45);
+  --onboard-space-dust: oklch(0.79 0.12 58);
+  --onboard-space-star: oklch(0.95 0.065 84);
+  --onboard-space-star-cool: oklch(0.86 0.08 206);
+  --onboard-space-card: oklch(0.17 0.065 280);
+}
+
+.app-shell[data-star-preset="radiant"] {
+  --onboard-space-deep: oklch(0.13 0.08 32);
+  --onboard-space-mid: oklch(0.27 0.18 36);
+  --onboard-space-glow: oklch(0.69 0.18 49);
+  --onboard-space-dust: oklch(0.82 0.12 63);
+  --onboard-space-star: oklch(0.95 0.065 84);
+  --onboard-space-star-cool: oklch(0.87 0.08 204);
+  --onboard-space-card: oklch(0.2 0.07 34);
+}
+
+.app-shell[data-star-preset="red-giant"] {
+  --onboard-space-deep: oklch(0.065 0.04 28);
+  --onboard-space-mid: oklch(0.135 0.08 31);
+  --onboard-space-glow: oklch(0.6 0.16 40);
+  --onboard-space-dust: oklch(0.74 0.1 48);
+  --onboard-space-star: oklch(0.94 0.06 68);
+  --onboard-space-star-cool: oklch(0.86 0.075 207);
+  --onboard-space-card: oklch(0.18 0.07 28);
+}
+
+.app-shell[data-star-preset="dwarf"] {
+  --onboard-space-deep: oklch(0.045 0.03 238);
+  --onboard-space-mid: oklch(0.105 0.06 222);
+  --onboard-space-glow: oklch(0.58 0.13 195);
+  --onboard-space-dust: oklch(0.72 0.09 199);
+  --onboard-space-star: oklch(0.94 0.06 190);
+  --onboard-space-star-cool: oklch(0.87 0.08 235);
+  --onboard-space-card: oklch(0.15 0.06 220);
+}
+
+.app-shell[data-star-preset="neutron"] {
+  --onboard-space-deep: oklch(0.05 0.035 286);
+  --onboard-space-mid: oklch(0.115 0.07 306);
+  --onboard-space-glow: oklch(0.6 0.16 320);
+  --onboard-space-dust: oklch(0.73 0.1 320);
+  --onboard-space-star: oklch(0.95 0.06 325);
+  --onboard-space-star-cool: oklch(0.87 0.08 220);
+  --onboard-space-card: oklch(0.17 0.07 302);
+}
+
+.app-shell[data-star-preset="void"] {
+  --onboard-space-deep: oklch(0.04 0.024 266);
+  --onboard-space-mid: oklch(0.09 0.05 274);
+  --onboard-space-glow: oklch(0.52 0.11 285);
+  --onboard-space-dust: oklch(0.65 0.08 278);
+  --onboard-space-star: oklch(0.9 0.055 282);
+  --onboard-space-star-cool: oklch(0.82 0.075 220);
+  --onboard-space-card: oklch(0.13 0.05 270);
+}
+
+.app-shell[data-star-preset="black-hole"] {
+  --onboard-space-deep: oklch(0.035 0.025 278);
+  --onboard-space-mid: oklch(0.09 0.055 296);
+  --onboard-space-glow: oklch(0.56 0.14 314);
+  --onboard-space-dust: oklch(0.68 0.09 310);
+  --onboard-space-star: oklch(0.95 0.06 70);
+  --onboard-space-star-cool: oklch(0.86 0.08 225);
+  --onboard-space-card: oklch(0.13 0.055 288);
+}
+
+.onboarding-layer {
+  color: var(--onboard-cream);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: linear-gradient(
+    138deg,
+    var(--onboard-space-deep) 0%,
+    var(--onboard-space-mid) 56%,
+    var(--onboard-space-deep) 100%
+  );
+}
+
+.onboarding-layer::before,
+.onboarding-layer::after {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  aspect-ratio: auto;
+  z-index: 0;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  filter: none;
+  opacity: 1;
+  clip-path: none;
+}
+
+/* Pin-prick stars plus two narrow diagonal dust lanes. Explicit points keep
+   the field crisp at mobile widths and avoid the soft, repetitive texture of
+   a broad repeated gradient. */
+.onboarding-layer::before {
+  background:
+    radial-gradient(
+      circle at 9% 16%,
+      var(--onboard-space-star) 0 1px,
+      transparent 1.6px
+    ),
+    radial-gradient(
+      circle at 18% 78%,
+      var(--onboard-space-star-cool) 0 0.8px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 28% 28%,
+      var(--onboard-space-star) 0 0.75px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 34% 86%,
+      var(--onboard-space-star-cool) 0 1px,
+      transparent 1.6px
+    ),
+    radial-gradient(
+      circle at 43% 13%,
+      var(--onboard-space-star) 0 0.8px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 53% 76%,
+      var(--onboard-space-star-cool) 0 0.75px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 63% 33%,
+      var(--onboard-space-star) 0 1px,
+      transparent 1.6px
+    ),
+    radial-gradient(
+      circle at 71% 84%,
+      var(--onboard-space-star-cool) 0 0.8px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 87% 55%,
+      var(--onboard-space-star) 0 0.75px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 94% 27%,
+      var(--onboard-space-star-cool) 0 1px,
+      transparent 1.6px
+    ),
+    linear-gradient(
+      139deg,
+      transparent 0 42.6%,
+      color-mix(in oklch, var(--onboard-space-dust) 12%, transparent) 42.8%
+        43.15%,
+      transparent 43.35% 100%
+    ),
+    linear-gradient(
+      139deg,
+      transparent 0 47.8%,
+      color-mix(in oklch, var(--onboard-space-dust) 8%, transparent) 48% 48.22%,
+      transparent 48.42% 100%
+    );
+  pointer-events: none;
+}
+
+/* A compact elliptical galaxy in the upper right and a dim, irregular cloud
+   made from three small stellar concentrations. No conic fallback or large
+   amorphous silhouette is used. */
+.onboarding-layer::after {
+  background:
+    radial-gradient(
+      ellipse 17% 5.5% at 79% 20%,
+      color-mix(in oklch, var(--onboard-space-star) 62%, transparent) 0 8%,
+      color-mix(in oklch, var(--onboard-space-glow) 30%, transparent) 16% 31%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 11% 2.3% at 79% 20%,
+      color-mix(in oklch, var(--onboard-space-dust) 34%, transparent) 0 34%,
+      transparent 74%
+    ),
+    radial-gradient(
+      ellipse 8% 4.5% at 16% 73%,
+      color-mix(in oklch, var(--onboard-space-glow) 14%, transparent) 0 46%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 5% 2.8% at 22% 69%,
+      color-mix(in oklch, var(--onboard-space-dust) 11%, transparent) 0 42%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 4% 2.4% at 10% 78%,
+      color-mix(in oklch, var(--onboard-space-glow) 9%, transparent) 0 40%,
+      transparent 78%
+    ),
+    linear-gradient(
+      139deg,
+      transparent 0 43.5%,
+      color-mix(in oklch, var(--onboard-space-glow) 6%, transparent) 43.7% 44.1%,
+      transparent 44.3% 100%
+    );
+  pointer-events: none;
+}
+
+.onboarding-enter,
+.mood-picker {
+  z-index: 1;
+  color: var(--onboard-cream);
+}
+
+.brand-orbit {
+  width: 124px;
+  height: 124px;
+  margin-bottom: 20px;
+  border-color: color-mix(in oklch, var(--onboard-orbit) 82%, transparent);
+  border-radius: 50%;
+  transform: none;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--onboard-sun) 20%, transparent) 0 25%,
+    transparent 26%
+  );
+}
+
+.brand-orbit::before {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--onboard-sun);
+  box-shadow: 0 0 0 1px var(--onboard-orbit);
+  clip-path: none;
+}
+
+.brand-orbit::after {
+  inset: 15px;
+  border-color: color-mix(in oklch, var(--onboard-orbit) 72%, transparent);
+  border-radius: 50%;
+  transform: none;
+}
+
+.brand-orbit span {
+  top: 12px;
+  right: 23px;
+  width: 11px;
+  height: 11px;
+  border: 1px solid color-mix(in oklch, var(--onboard-cream) 75%, transparent);
+  border-radius: 50%;
+  background: var(--onboard-cream);
+  clip-path: none;
+}
+
+.mood-option {
+  --mood-card-base: var(--onboard-space-card);
+  background: color-mix(
+    in oklch,
+    var(--mood-card-accent) 54%,
+    var(--mood-card-base)
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--onboard-cream) 8%, transparent);
+}
+
+.mood-option::before {
+  display: none;
+}
+
+.mood-star,
+.mood-option[data-mood-preset="black-hole"] .mood-star {
+  width: 34px;
+  height: 34px;
+  border: 1px solid
+    color-mix(in oklch, var(--mood-accent) 64%, var(--onboard-cream));
+  border-radius: 50%;
+  background: var(--mood-accent);
+  box-shadow: 0 0 12px color-mix(in oklch, var(--mood-accent) 22%, transparent);
+  clip-path: none;
+}
+
+@media (max-width: 790px) {
+  .onboarding-layer::before,
+  .onboarding-layer::after {
+    inset: 0;
+  }
+
+  .brand-orbit {
+    width: 108px;
+    height: 108px;
+  }
+
+  .brand-orbit::before {
+    width: 42px;
+    height: 42px;
+  }
+
+  .brand-orbit::after {
+    inset: 13px;
+  }
+}
+
+@media (max-height: 620px) {
+  .onboarding-layer {
+    align-content: start;
+    padding-block: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-layer::before,
+  .onboarding-layer::after,
+  .brand-orbit,
+  .mood-star {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   VIS-UI-02 · Reference-inspired instrument shell
+
+   These are projection-only refinements. The scene and composition remain
+   authoritative; the shell borrows the selected planet's role color for a
+   small, readable state lane while preset accents continue to own primary
+   actions and playback.
+   ------------------------------------------------------------------------- */
+
+.app-shell {
+  --selection-accent: var(--primary);
+  --selection-soft: color-mix(
+    in oklch,
+    var(--selection-accent) 12%,
+    var(--chrome-strong)
+  );
+  --selection-border: color-mix(
+    in oklch,
+    var(--selection-accent) 62%,
+    var(--scene-line)
+  );
+}
+
+.app-shell[data-selected-role="beat"] {
+  --selection-accent: var(--role-beat);
+}
+
+.app-shell[data-selected-role="bass"] {
+  --selection-accent: var(--role-bass);
+}
+
+.app-shell[data-selected-role="chords"] {
+  --selection-accent: var(--role-chords);
+}
+
+.app-shell[data-selected-role="melody"] {
+  --selection-accent: var(--role-melody);
+}
+
+.app-shell[data-selected-role="texture"] {
+  --selection-accent: var(--role-texture);
+}
+
+/* Preset identity stays in the accent lane; these neutral metal values keep
+   the frame quiet, especially for the warm Radiant scene. */
+.app-shell[data-star-preset="radiant"] {
+  --chrome: oklch(0.12 0.014 72);
+  --chrome-strong: oklch(0.155 0.019 72);
+  --chrome-quiet: oklch(0.17 0.023 72);
+  --scene-line: oklch(0.34 0.045 72);
+  --border: oklch(0.31 0.036 72);
+}
+
+.app-shell[data-star-preset="red-giant"] {
+  --chrome: oklch(0.12 0.019 30);
+  --chrome-strong: oklch(0.155 0.027 30);
+  --chrome-quiet: oklch(0.17 0.032 30);
+  --scene-line: oklch(0.35 0.052 30);
+  --border: oklch(0.31 0.043 30);
+}
+
+.app-shell[data-star-preset="dwarf"] {
+  --chrome: oklch(0.12 0.018 244);
+  --chrome-strong: oklch(0.155 0.026 244);
+  --chrome-quiet: oklch(0.17 0.031 244);
+  --scene-line: oklch(0.35 0.05 220);
+  --border: oklch(0.31 0.042 224);
+}
+
+.app-shell[data-star-preset="neutron"] {
+  --chrome: oklch(0.115 0.02 280);
+  --chrome-strong: oklch(0.15 0.03 280);
+  --chrome-quiet: oklch(0.165 0.035 280);
+  --scene-line: oklch(0.35 0.055 286);
+  --border: oklch(0.31 0.046 286);
+}
+
+.app-shell[data-star-preset="void"] {
+  --chrome: oklch(0.105 0.016 263);
+  --chrome-strong: oklch(0.145 0.025 263);
+  --chrome-quiet: oklch(0.16 0.03 263);
+  --scene-line: oklch(0.33 0.045 270);
+  --border: oklch(0.29 0.038 270);
+}
+
+.app-shell[data-star-preset="black-hole"] {
+  --chrome: oklch(0.105 0.016 278);
+  --chrome-strong: oklch(0.14 0.025 278);
+  --chrome-quiet: oklch(0.155 0.03 278);
+  --scene-line: oklch(0.34 0.05 285);
+  --border: oklch(0.3 0.041 280);
+}
+
+.topbar,
+.object-panel,
+.scene-panel,
+.inspector,
+.macro-bar,
+.mobile-bottom-sheet {
+  border-color: color-mix(in oklch, var(--scene-line) 88%, var(--border));
+}
+
+.scene-panel {
+  border: 1px solid color-mix(in oklch, var(--scene-line) 88%, var(--border));
+}
+
+.scene-panel::after {
+  border: 0;
+}
+
+.topbar,
+.object-panel,
+.inspector,
+.macro-bar,
+.mobile-bottom-sheet {
+  box-shadow: inset 0 1px 0 color-mix(in oklch, white 4%, transparent);
+}
+
+.object-row.selected {
+  color: var(--ink);
+  background: var(--selection-soft);
+  border-color: var(--selection-border);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--selection-accent) 24%, transparent);
+}
+
+.object-row.selected .object-symbol {
+  box-shadow:
+    0 0 0 2px color-mix(in oklch, var(--selection-accent) 76%, transparent),
+    0 0 12px color-mix(in oklch, var(--selection-accent) 30%, transparent);
+}
+
+.app-shell[data-selected-kind="planet"] .inspector {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--selection-accent) 60%, transparent),
+    inset 0 0 0 1px
+      color-mix(in oklch, var(--selection-accent) 20%, transparent);
+}
+
+.app-shell[data-selected-kind="planet"] .selected-summary {
+  margin: -2px -2px 12px;
+  padding: 10px;
+  border: 1px solid var(--selection-border);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--selection-accent) 7%, var(--chrome));
+}
+
+.app-shell[data-selected-kind="planet"] .selected-summary .large-object-symbol {
+  box-shadow:
+    0 0 0 2px color-mix(in oklch, var(--selection-accent) 76%, transparent),
+    0 0 16px color-mix(in oklch, var(--selection-accent) 26%, transparent);
+}
+
+.app-shell[data-selected-kind="planet"] .planet-surprise-action {
+  background: color-mix(
+    in oklch,
+    var(--selection-accent) 10%,
+    var(--chrome-strong)
+  );
+  border-color: var(--selection-border);
+}
+
+.app-shell[data-selected-kind="planet"] .scene-polish-overlay {
+  --material-color: var(--selection-accent);
+  border-color: var(--selection-border);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, white 6%, transparent),
+    inset 0 0 0 1px
+      color-mix(in oklch, var(--selection-accent) 18%, transparent);
+}
+
+.app-shell[data-selected-kind="planet"] .macro-bar {
+  border-top-color: color-mix(
+    in oklch,
+    var(--selection-accent) 48%,
+    var(--scene-line)
+  );
+}
+
+.app-shell[data-selected-kind="planet"] .macro-heading .panel-label {
+  color: color-mix(in oklch, var(--selection-accent) 82%, var(--ink));
+}
+
+.app-shell[data-selected-kind="planet"]
+  :where(.inspector button, .inspector select, .inspector input):focus-visible {
+  outline-color: var(--selection-accent);
+}
+
+.segmented-actions button[aria-pressed="true"],
+.orbit-options button.active,
+.gate-count-control button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--selection-accent);
+}
+
+@media (min-width: 791px) {
+  .topbar {
+    margin: 6px 6px 0;
+    border: 1px solid color-mix(in oklch, var(--scene-line) 88%, var(--border));
+    border-radius: 10px 10px 5px 5px;
+  }
+
+  .workspace {
+    margin-inline: 6px;
+    gap: 6px;
+  }
+
+  .object-panel {
+    border: 1px solid color-mix(in oklch, var(--scene-line) 88%, var(--border));
+    border-radius: 10px 0 0 10px;
+  }
+
+  .inspector {
+    border: 1px solid color-mix(in oklch, var(--scene-line) 88%, var(--border));
+    border-radius: 0 10px 10px 0;
+  }
+
+  .macro-bar {
+    margin: 6px 6px 6px;
+    border: 1px solid color-mix(in oklch, var(--scene-line) 88%, var(--border));
+    border-radius: 5px 5px 10px 10px;
+  }
+}
+
+@media (max-width: 790px) {
+  .scene-panel {
+    border: 0;
+    border-block: 1px solid
+      color-mix(in oklch, var(--scene-line) 88%, var(--border));
+  }
+
+  .selected-summary {
+    max-width: 100%;
+  }
 }

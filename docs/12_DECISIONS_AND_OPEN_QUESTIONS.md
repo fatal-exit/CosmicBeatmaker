@@ -188,11 +188,11 @@ Only explicit pause, stop, disposal, or health failure may terminate sounding no
 
 ### D-027 — Quality-tiered deep space and desktop High compositor
 
-**Decision:** Upgrade the existing renderer-only High quality profile into an optional desktop presentation tier. Auto resolves to High from a wide desktop viewport, including high-DPI desktop displays, while narrow desktop/tablet remains Balanced and phone viewports remain Low. The user can still choose any profile explicitly.
+**Decision:** Upgrade the existing renderer-only High quality profile into an optional desktop presentation tier. Auto resolves to High at 1440 CSS pixels and wider, while narrower desktop/tablet viewports remain Balanced and phone viewports remain Low. The user can still choose any profile explicitly.
 
-High uses denser planet and star geometry, high-frequency role-specific procedural surface normals layered over the existing seeded vertex displacement, and incident planet lighting colored from the active star preset. It adds one Three.js `EffectComposer` chain with `RenderPass`, restrained `UnrealBloomPass`, and `OutputPass`, plus a seed- and star-palette-derived inverted sky shader containing multi-scale warped nebula filaments, dark dust lanes, compact knots, sparse star layers, and two spiral-galaxy profiles.
+High uses denser planet and star geometry, high-frequency role-specific procedural surface normals layered over the existing seeded vertex displacement, and incident planet lighting colored from the active star preset. It adds one Three.js `EffectComposer` chain with `RenderPass`, restrained `UnrealBloomPass`, and `OutputPass`, plus a seed- and star-palette-derived inverted sky shader containing multi-scale warped nebula filaments, dark dust lanes, compact knots, sparse star layers, and two spiral-galaxy profiles. Shared signals and a three-octave FBM bound the detailed background to roughly six runtime value-noise evaluations per fragment.
 
-Low and Balanced keep direct `WebGLRenderer` output and bind a separate inexpensive material to the same bounded sky sphere. That shader uses three value-noise samples for broad seeded wisps and one sparse star layer; it has no FBM loop, galaxy profile, detailed filament/dust work, or post-processing target. Switching out of High disposes the compositor targets and swaps to this simpler material. Reduced-effects mode attenuates both backdrop tiers and existing transient effects, but retains the central star model and its compact corona.
+Low and Balanced keep direct `WebGLRenderer` output and bind a separate inexpensive material to the same bounded sky sphere. That shader reuses two value-noise samples across narrow seeded bands and several sparse analytic star strata; it has no FBM loop, galaxy profile, detailed filament/dust work, or post-processing target. Switching out of High disposes the compositor targets and swaps to this simpler material. Reduced-effects mode attenuates both backdrop tiers and existing transient effects, but retains the central star model and its compact corona.
 
 All quality-tier state is ephemeral scene state. No geometry tier, bloom state, background time, render target, normal sample, or stellar-light runtime value enters composition state, undo, save/share, audio scheduling, or export. Visual quality may reduce or fail independently without changing the authoritative audio clock. The implementation uses Three.js post-processing modules already shipped by the existing `three` dependency and adds no package.
 
@@ -331,6 +331,81 @@ two-star behavior visibly causal, deterministic, undoable, and exportable. One
 companion and one global effects rack add distinctive creative depth without the
 voice multiplication, schema sprawl, or mobile cost of unrestricted multi-star
 systems and per-track DSP graphs.
+
+### D-036 — Mood-coordinated vivid low-poly visual direction
+
+**Decision:** Supersede D-028's single magenta-violet palette with six bounded
+visual lanes derived from the active stellar preset. Radiant uses
+apricot/coral/amber, Red Giant uses oxblood/ember, Dwarf uses cyan/azure,
+Neutron uses cobalt/violet, Void uses indigo/lavender, and Black Hole uses
+carmine/plum/amber. Each lane coordinates the Three.js atmosphere, incident
+light, stellar treatment, planets, gates, rings, selection accents, and semantic
+DOM chrome without changing musical role colors or relying on color alone for
+state. Binary companions contribute a bounded secondary influence so the scene
+stays cohesive instead of averaging into gray.
+
+Render broad colored cloud fields with dark silhouette pockets rather than an
+empty black starfield. Planets keep the role-derived classes from D-030 and add
+bounded, deterministic low-poly terrain identity: cratered and faulted beat
+worlds, oblate banded bass giants, stepped chord strata, sharper crystalline
+melody planes, and eroded irregular texture worlds. Surface displacement,
+palette variation, and atmosphere remain renderer-only projections of existing
+role, preset, quality, and visual-seed data; they add no composition fields or
+audio behavior. Low and Balanced profiles reduce shader detail and transient
+effects while retaining the authored palette and readable filled silhouettes.
+
+The DOM interface uses the same preset lane through CSS custom properties.
+Tinted instrument-metal surfaces frame the colorful scene without returning to
+pure-black chrome. A dependency-free heavy condensed system-font stack is
+reserved for the brand and major headings; controls, project names, labels, and
+body copy stay on the readable UI sans stack. This decision preserves D-012's
+responsive semantic DOM architecture and supersedes only D-028's palette
+direction.
+
+**Reason:** One dark magenta shell and outline-led rendering made different
+stellar moods feel interchangeable and caused planets to disappear at wider
+camera views. Coordinating a limited high-chroma family per scene creates the
+requested vivid cinematic identity while keeping musical causes legible.
+Role-specific terrain gives each planet a recognizable physical form without a
+new schema, dependency, asset pipeline, or rendering authority over sound.
+
+### D-037 — Complementary foregrounds and living astronomical depth
+
+**Decision:** Refine D-036 by separating every stellar lane into an authored
+backdrop family and a complementary foreground family. Nebula colors no longer
+become planet albedo by default, and binary companions do not average their
+foregrounds into gray. Planet roles remain within a restrained two-to-three-hue
+foreground family, using bounded value, saturation, terrain, and silhouette
+differences for identity. Deterministic checks guard both foreground-to-nebula
+separation and useful role-to-role separation.
+
+Replace full-frame cloud-noise webs and large empty black pockets with a
+chromatic deep-space base carrying distributed near/far stars and fine dust.
+Low and Balanced use inexpensive directional bands and star layers. High adds
+localized warped filaments, dark dust cuts, compact peak sparkles, galaxy
+profiles, and small irregular Magellanic-cloud cues. These structures must read
+as discrete astronomical depth, not a single viewport-sized fluid blob.
+
+Decorative sky drift, star glints, galaxy parallax, and deterministic instanced
+asteroid drift use an ephemeral renderer-only visual clock so the field remains
+alive while musical transport is stopped. Musical planet positions and event
+feedback remain transport-driven. Reduced-motion mode freezes decorative
+motion. Unchanged asteroid descriptors reuse their instanced mesh and update
+palette material values in place instead of rebuilding the belt during every
+composition reconciliation.
+
+The first-run screen uses the same rule in CSS: a vivid crimson/coral poster
+field with pin stars, narrow dust lanes, a compact galaxy, and small cloud cues.
+The earlier conic polygon burst, irregular blob overlays, and oversized orbit
+ellipse are removed; semantic onboarding structure, heavy poster typography,
+contrast, and mobile scrolling remain intact.
+
+**Reason:** Reusing nebula colors on every body made foreground objects vanish,
+while increasing broad procedural noise produced static wispy blobs rather than
+a convincing space scene. Explicit palette roles and recognizable layered
+structures preserve the requested vivid limited-color identity. A separate
+comfort-aware visual clock supplies motion and depth without allowing rendering
+time to influence audio scheduling, composition state, saves, or exports.
 
 ### Current implementation note for D-014
 

@@ -13,7 +13,15 @@ export interface PlanetVisualProfile {
   ringGap: number;
   ringFragmentScale: number;
   ringTilt: number;
+  /** Maximum seeded CPU terrain displacement as a fraction of body radius. */
+  terrainAmplitude: number;
 }
+
+/** Permanent renderer enlargement used to keep overview bodies legible. */
+export const PLANET_RENDER_SCALE = 1.08;
+
+/** Temporary selection emphasis applied to the complete planet subtree. */
+const PLANET_SELECTION_SCALE = 1.08;
 
 /**
  * Musical roles already own distinct procedural surfaces. These profiles make
@@ -30,6 +38,7 @@ export const PLANET_VISUAL_PROFILES = {
     ringGap: 0.1,
     ringFragmentScale: 0.82,
     ringTilt: 0.13,
+    terrainAmplitude: 0.16,
   },
   bass: {
     kind: "gas-giant",
@@ -41,6 +50,7 @@ export const PLANET_VISUAL_PROFILES = {
     ringGap: 0.14,
     ringFragmentScale: 1.28,
     ringTilt: 0.2,
+    terrainAmplitude: 0.065,
   },
   chords: {
     kind: "super-earth",
@@ -52,6 +62,7 @@ export const PLANET_VISUAL_PROFILES = {
     ringGap: 0.12,
     ringFragmentScale: 1.1,
     ringTilt: 0.28,
+    terrainAmplitude: 0.12,
   },
   melody: {
     kind: "ice-world",
@@ -63,6 +74,7 @@ export const PLANET_VISUAL_PROFILES = {
     ringGap: 0.11,
     ringFragmentScale: 0.94,
     ringTilt: -0.22,
+    terrainAmplitude: 0.18,
   },
   texture: {
     kind: "dwarf-world",
@@ -74,6 +86,7 @@ export const PLANET_VISUAL_PROFILES = {
     ringGap: 0.09,
     ringFragmentScale: 0.74,
     ringTilt: 0.34,
+    terrainAmplitude: 0.14,
   },
 } as const satisfies Record<PlanetRole, PlanetVisualProfile>;
 
@@ -127,7 +140,11 @@ export function planetVisualMetrics(
 ): PlanetVisualMetrics {
   const profile = PLANET_VISUAL_PROFILES[role];
   const bodyRadius = planetBodyRadius(role, appearanceSize);
-  const bodyExtent = bodyRadius * Math.max(...profile.bodyScale);
+  const bodyExtent =
+    bodyRadius *
+    Math.max(...profile.bodyScale) *
+    (1 + profile.terrainAmplitude) *
+    PLANET_RENDER_SCALE;
   const gateRadius = Math.max(0.4, bodyExtent * 1.14);
   const fragmentRadialSize = clamp(
     bodyRadius * 0.22 * profile.ringFragmentScale,
@@ -176,7 +193,7 @@ export function planetVisualMetrics(
     moonOrbitRadius,
     ring,
     // Selection grows the whole planet subtree by eight percent.
-    visualExtent: visualExtent * 1.08,
+    visualExtent: visualExtent * PLANET_SELECTION_SCALE,
   };
 }
 

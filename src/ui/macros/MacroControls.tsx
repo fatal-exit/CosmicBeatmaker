@@ -79,6 +79,7 @@ function MacroKnob({
         style={
           {
             "--knob-angle": `${-135 + value * 270}deg`,
+            "--knob-sweep": `${value * 270}deg`,
           } as CSSProperties
         }
       >

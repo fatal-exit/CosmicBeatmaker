@@ -270,6 +270,14 @@ export function App() {
     composition.asteroidBelt?.id === ui.selectedObjectId
       ? composition.asteroidBelt
       : undefined;
+  const selectedKind = selectedPlanet
+    ? "planet"
+    : selectedStar
+      ? "star"
+      : selectedBelt
+        ? "asteroid-belt"
+        : "none";
+  const selectedRole = selectedPlanet?.role ?? "none";
   const selectedPlanetStarPresetId = selectedPlanet
     ? starPresetIdForAffinity(
         composition,
@@ -1321,7 +1329,14 @@ export function App() {
   };
 
   return (
-    <main className="app-shell" data-reduced-motion={ui.reducedEffects}>
+    <main
+      className="app-shell"
+      data-reduced-motion={ui.reducedEffects}
+      data-star-preset={composition.star.presetId}
+      data-companion-preset={composition.star.companion?.presetId ?? "none"}
+      data-selected-kind={selectedKind}
+      data-selected-role={selectedRole}
+    >
       <TransportBar
         name={composition.name}
         bpm={composition.bpm}

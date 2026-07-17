@@ -14,12 +14,40 @@ Do not require WebGPU.
 
 Recommended renderer configuration:
 
-- Transparent or controlled dark background
+- Controlled, preset-coordinated colored atmosphere with dark silhouette pockets
 - `powerPreference: "high-performance"` where appropriate
 - Antialiasing conditional by quality profile
 - Capped device pixel ratio
 - Color management configured explicitly
 - Shadows disabled by default on low and balanced profiles
+
+## Visual art direction
+
+- Treat the scene as a vivid low-poly space tableau, not an empty black void or
+  a wireframe HUD.
+- Coordinate one limited palette across atmosphere, stars, planets, orbit
+  accents, and surrounding DOM chrome for each stellar preset. Derive the
+  foreground bodies from a complementary family instead of reusing the
+  backdrop colors, and preserve role separation through bounded hue, value,
+  terrain, and silhouette changes.
+- Keep the unlit sky chromatic rather than black. Distribute fine star and dust
+  texture across the field, then place narrow nebula lanes, compact galaxies,
+  and small irregular satellite clouds as recognizable local structures. Do
+  not cover the viewport with undifferentiated FBM, fluid-noise webs, or large
+  empty dark blobs.
+- Run decorative sky drift, glints, and asteroid motion from a renderer-only
+  visual clock so the space remains alive while transport is stopped. The
+  audio clock remains authoritative for musical positions and events, and
+  reduced-motion mode freezes decorative motion.
+- Keep planet bodies filled and readable before outlines, bloom, or tiny surface
+  detail. Selection and event feedback remain separate value/shape cues.
+- Give each musical role deterministic terrain identity: cratered beat worlds,
+  banded bass giants, stepped chord strata, crystalline melody planes, and
+  eroded texture worlds.
+- Retain the palette and principal silhouettes on Low and Balanced quality;
+  remove frequency, particles, and post-processing before removing identity.
+- Keep all atmospheric, terrain, palette, and typography choices outside the
+  authoritative audio clock and serializable composition model.
 
 ## Camera
 
@@ -146,6 +174,10 @@ Use instanced meshes.
 - Small library of low-poly shapes
 - Per-instance scale and rotation
 - Seeded distribution matching musical events
+- Deterministic renderer-only orbital drift and low-poly spin, with stable
+  instance parameters and no per-frame allocation
+- Freeze decorative drift under reduced motion while preserving event-caused
+  flashes and the authored belt silhouette
 - Lower counts on mobile quality profiles
 
 ### Pattern nodes and particles
@@ -162,7 +194,10 @@ Avoid creating and destroying objects every beat. Reuse pools.
 - No shadows
 - Minimal particles
 - Simple additive pulses
-- One lightweight seeded sky shader with broad nebula wisps and a sparse star layer; no FBM, galaxies, dust knots, or post-processing targets
+- One lightweight seeded sky shader with a chromatic base, distributed near/far
+  stars, narrow directional dust bands, and inexpensive continuous drift. Its
+  structured field is bounded to two value-noise samples per fragment, with no
+  FBM, analytic galaxies, dust knots, or post-processing targets
 - The central star retains its surface, silhouette, and an attenuated compact corona; quality reduction must never remove the model itself
 
 ### Balanced
@@ -170,13 +205,18 @@ Avoid creating and destroying objects every beat. Reuse pools.
 - Lightweight selective bloom or glow alternative
 - Limited particles
 - No dynamic shadows or one very cheap shadow source
-- The same lightweight seeded nebula and star backdrop at a slightly stronger presentation level
+- The same lightweight structured backdrop with denser star strata and a
+  slightly stronger presentation level
 
 ### High
 
 - A restrained HDR bloom compositor using the existing Three.js post-processing modules
 - Higher particle counts
-- A seeded procedural deep-space shader with star layers, warped nebula filaments, dust lanes, and compact galaxy profiles
+- A seeded procedural deep-space shader with distributed star layers and
+  glints, localized warped nebula filaments, dust lanes, compact galaxy
+  profiles, and small irregular Magellanic-cloud cues
+- Slow whole-field warp and parallax use the renderer-only visual clock rather
+  than musical transport; reduced motion pins that clock
 - Star-preset-colored incident light on planet surfaces
 - Higher celestial geometry and procedural normal detail
 - Optional soft shadows
@@ -200,7 +240,12 @@ Auto mode may consider:
 - Recent average frame time
 - WebGL context capabilities
 
-The current automatic policy uses the browser viewport rather than the narrower center-canvas width: wide desktop windows resolve to High even on high-DPI PC and Mac displays, intermediate widths resolve to Balanced, and phone widths resolve to Low. Explicit user selection still wins.
+The current automatic policy uses the browser viewport rather than the narrower
+center-canvas width. Phone widths resolve to Low, viewports below 1440 CSS pixels
+resolve to Balanced, and viewports at 1440 CSS pixels or wider resolve to High.
+This preserves audio and interaction headroom on common 1280/1366-class laptop
+windows while retaining the complete High presentation on wide desktops.
+Explicit user selection still wins at every width.
 
 Adapt gradually and avoid oscillating between profiles.
 

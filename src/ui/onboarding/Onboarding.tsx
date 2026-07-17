@@ -122,6 +122,7 @@ export function Onboarding({
                 type="button"
                 className="mood-option"
                 data-mood-color={mood.color}
+                data-mood-preset={mood.presetId}
                 key={mood.presetId}
                 onClick={() => onMood(mood.presetId)}
               >

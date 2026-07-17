@@ -15,6 +15,10 @@ import {
   normalizeVisualSeed,
 } from "../src/scene/materials/profiles";
 import {
+  advanceDecorativeVisualTime,
+  asteroidBalancedParityForFrame,
+  asteroidInstanceMotionParameters,
+  asteroidOuterPlanetRadius,
   SCENE_CAMERA_TILT_DEFAULT,
   SCENE_CAMERA_TILT_MAX,
   SCENE_CAMERA_TILT_MIN,
@@ -38,6 +42,7 @@ import {
   sceneTiltFromDrag,
   sceneZoomFromPinch,
   sceneZoomFromWheel,
+  shouldResetAsteroidMotion,
   transientPulseFrame,
 } from "../src/scene/SceneController";
 import { compositionToSceneDescriptor } from "../src/scene/descriptors";
@@ -63,6 +68,47 @@ import {
 } from "../src/scene/planetVisuals";
 
 describe("scene contracts", () => {
+  it("advances decorative sky time independently and freezes it for reduced motion", () => {
+    expect(advanceDecorativeVisualTime(1.5, 240, false)).toBeCloseTo(1.6);
+    expect(advanceDecorativeVisualTime(1.5, 240, true)).toBe(0);
+    expect(advanceDecorativeVisualTime(1.5, Number.NaN, false)).toBe(1.5);
+    expect(advanceDecorativeVisualTime(1.5, 400, false)).toBeCloseTo(1.6);
+  });
+
+  it("alternates balanced asteroid update parity deterministically", () => {
+    expect(asteroidBalancedParityForFrame(0)).toBe(0);
+    expect(asteroidBalancedParityForFrame(1)).toBe(1);
+    expect(asteroidBalancedParityForFrame(2)).toBe(0);
+    expect(asteroidBalancedParityForFrame(Number.NaN)).toBe(0);
+  });
+
+  it("samples deterministic clustered asteroid phases around their event", () => {
+    const sample = (index: number) =>
+      asteroidInstanceMotionParameters(42, index, 0.25, 6, 0.72, 0.5);
+    const first = Array.from({ length: 8 }, (_, index) => sample(index));
+    const second = Array.from({ length: 8 }, (_, index) => sample(index));
+    const circularDistance = (a: number, b: number) =>
+      Math.min(Math.abs(a - b), 1 - Math.abs(a - b));
+
+    expect(first).toEqual(second);
+    expect(
+      new Set(first.map((parameters) => parameters.phase)).size,
+    ).toBeGreaterThan(1);
+    expect(
+      first.every(
+        (parameters) => circularDistance(parameters.phase, 0.25) < 0.12,
+      ),
+    ).toBe(true);
+    expect(first.every((parameters) => parameters.radius >= 6.88)).toBe(true);
+  });
+
+  it("only requests an asteroid reset when reduced motion is enabled", () => {
+    expect(shouldResetAsteroidMotion(false, true)).toBe(true);
+    expect(shouldResetAsteroidMotion(true, true)).toBe(false);
+    expect(shouldResetAsteroidMotion(true, false)).toBe(false);
+    expect(shouldResetAsteroidMotion(false, false)).toBe(false);
+  });
+
   it("defines stable visual material identities for every celestial type", () => {
     expect(Object.keys(PLANET_MATERIAL_PROFILES)).toEqual([
       "beat",
@@ -141,6 +187,9 @@ describe("scene contracts", () => {
     expect(firstRuntime.glow.visible).toBe(true);
     expect(firstRuntime.group.position.toArray()).toEqual([0, 0, 0]);
     expect(firstRuntime.body.frustumCulled).toBe(false);
+    expect(firstRuntime.glow.scale.x).toBeCloseTo(1.24);
+    expect(firstRuntime.glow.scale.y).toBeCloseTo(1.24);
+    expect(firstRuntime.glow.scale.z).toBeCloseTo(1.24);
 
     scene.remove(firstRuntime.group);
     firstRuntime.dispose();
@@ -151,6 +200,194 @@ describe("scene contracts", () => {
     expect(recreatedRuntime).not.toBe(firstRuntime);
     expect(recreatedRuntime?.group.parent).toBe(scene);
     recreatedRuntime?.dispose();
+  });
+
+  it("keeps planet runtime identity when only the stellar palette changes", () => {
+    const descriptor = compositionToSceneDescriptor(
+      createStarterComposition("palette-refresh-runtime"),
+    );
+    const controller = new SceneController({ readTransportTicks: () => 0 });
+    type RuntimePlanetProbe = {
+      group: THREE.Group;
+      body: THREE.Mesh;
+      dispose: () => void;
+    };
+    const internals = controller as unknown as {
+      scene: THREE.Scene | null;
+      planets: Map<string, RuntimePlanetProbe>;
+      star: { dispose: () => void } | null;
+      asteroidBelt: THREE.InstancedMesh | null;
+    };
+    internals.scene = new THREE.Scene();
+
+    controller.reconcile(descriptor);
+    const firstRuntime = internals.planets.get(descriptor.planets[0].id);
+    expect(firstRuntime).toBeDefined();
+    const firstGeometry = firstRuntime!.body.geometry;
+    const firstMaterial = firstRuntime!.body.material;
+
+    controller.reconcile({
+      ...descriptor,
+      star: {
+        ...descriptor.star,
+        intensity: Math.min(1.5, descriptor.star.intensity + 0.1),
+      },
+    });
+
+    const refreshedRuntime = internals.planets.get(descriptor.planets[0].id);
+    expect(refreshedRuntime).toBe(firstRuntime);
+    expect(refreshedRuntime?.body.geometry).toBe(firstGeometry);
+    expect(refreshedRuntime?.body.material).toBe(firstMaterial);
+    for (const runtime of internals.planets.values()) runtime.dispose();
+    internals.star?.dispose();
+    if (internals.asteroidBelt) disposeObject(internals.asteroidBelt);
+  });
+
+  it("rebuilds the asteroid belt when the planet envelope changes", () => {
+    const descriptor = compositionToSceneDescriptor(
+      generateCompleteSystem("asteroid-envelope-runtime"),
+    );
+    expect(descriptor.asteroidBelt).toBeDefined();
+    const controller = new SceneController({ readTransportTicks: () => 0 });
+    const internals = controller as unknown as {
+      scene: THREE.Scene | null;
+      qualityProfile: "low" | "balanced" | "high";
+      preferences: {
+        quality: "auto" | "low" | "balanced" | "high";
+        reducedMotion: boolean;
+        reducedParticles: boolean;
+        reducedFlash: boolean;
+      };
+      asteroidBelt: THREE.InstancedMesh | null;
+      reconcileAsteroids: (
+        descriptor: ReturnType<typeof compositionToSceneDescriptor>,
+      ) => void;
+    };
+    internals.scene = new THREE.Scene();
+    internals.qualityProfile = "high";
+    internals.preferences = {
+      quality: "high",
+      reducedMotion: false,
+      reducedParticles: false,
+      reducedFlash: false,
+    };
+
+    internals.reconcileAsteroids(descriptor);
+    const firstBelt = internals.asteroidBelt!;
+    const firstRadius = (
+      firstBelt.userData.motionParameters as Array<{
+        parameters: { radius: number };
+      }>
+    )[0].parameters.radius;
+    const unchangedDescriptor = {
+      ...descriptor,
+      planets: descriptor.planets.map((planet) => ({ ...planet })),
+    };
+    internals.reconcileAsteroids(unchangedDescriptor);
+    expect(internals.asteroidBelt).toBe(firstBelt);
+
+    const previousEnvelope = asteroidOuterPlanetRadius(descriptor.planets);
+    const changedPlanets = descriptor.planets.map((planet, index) =>
+      index === descriptor.planets.length - 1
+        ? {
+            ...planet,
+            orbitRadius: planet.orbitRadius + 2.5,
+            visualExtent: planet.visualExtent + 0.5,
+          }
+        : planet,
+    );
+    const changedDescriptor = { ...descriptor, planets: changedPlanets };
+    const nextEnvelope = asteroidOuterPlanetRadius(changedPlanets);
+    expect(nextEnvelope).toBeGreaterThan(previousEnvelope);
+
+    internals.reconcileAsteroids(changedDescriptor);
+    const rebuiltBelt = internals.asteroidBelt!;
+    const rebuiltRadius = (
+      rebuiltBelt.userData.motionParameters as Array<{
+        parameters: { radius: number };
+      }>
+    )[0].parameters.radius;
+    expect(rebuiltBelt).not.toBe(firstBelt);
+    expect(rebuiltRadius - firstRadius).toBeCloseTo(
+      nextEnvelope - previousEnvelope,
+    );
+    disposeObject(rebuiltBelt);
+  });
+
+  it("resets asteroid matrices once when reduced motion is enabled", () => {
+    const descriptor = compositionToSceneDescriptor(
+      generateCompleteSystem("asteroid-reduced-motion-runtime"),
+    );
+    expect(descriptor.asteroidBelt).toBeDefined();
+    const controller = new SceneController({ readTransportTicks: () => 0 });
+    const internals = controller as unknown as {
+      scene: THREE.Scene | null;
+      descriptor: ReturnType<typeof compositionToSceneDescriptor> | null;
+      qualityProfile: "low" | "balanced" | "high";
+      preferences: {
+        quality: "auto" | "low" | "balanced" | "high";
+        reducedMotion: boolean;
+        reducedParticles: boolean;
+        reducedFlash: boolean;
+      };
+      asteroidBelt: THREE.InstancedMesh | null;
+      asteroidMotionFrozen: boolean;
+      reconcileAsteroids: (
+        descriptor: ReturnType<typeof compositionToSceneDescriptor>,
+      ) => void;
+      writeAsteroidInstanceMatrix: (
+        index: number,
+        parameters: {
+          radius: number;
+          phase: number;
+          speed: number;
+          tilt: number;
+          spin: readonly [number, number, number];
+          scale: number;
+          y: number;
+        },
+        elapsedSeconds: number,
+      ) => void;
+    };
+    internals.scene = new THREE.Scene();
+    internals.descriptor = descriptor;
+    internals.qualityProfile = "high";
+    internals.preferences = {
+      quality: "high",
+      reducedMotion: false,
+      reducedParticles: false,
+      reducedFlash: false,
+    };
+
+    internals.reconcileAsteroids(descriptor);
+    const belt = internals.asteroidBelt!;
+    const parameters = (
+      belt.userData.motionParameters as Array<{
+        parameters: {
+          radius: number;
+          phase: number;
+          speed: number;
+          tilt: number;
+          spin: readonly [number, number, number];
+          scale: number;
+          y: number;
+        };
+      }>
+    )[0].parameters;
+    internals.writeAsteroidInstanceMatrix(0, parameters, 12);
+    belt.instanceMatrix.needsUpdate = true;
+    const animatedMatrices = belt.instanceMatrix.array.slice();
+
+    controller.setVisualPreferences({ reducedMotion: true });
+    const frozenMatrices = belt.instanceMatrix.array.slice();
+    expect(frozenMatrices).not.toEqual(animatedMatrices);
+    expect(internals.asteroidMotionFrozen).toBe(true);
+
+    controller.setVisualPreferences({ reducedMotion: true });
+    expect(Array.from(belt.instanceMatrix.array)).toEqual(
+      Array.from(frozenMatrices),
+    );
+    disposeObject(belt);
   });
 
   it("derives orbit phase from authoritative ticks", () => {
@@ -679,6 +916,8 @@ describe("scene contracts", () => {
   it("resolves conservative automatic mobile quality", () => {
     expect(resolveQualityProfile("auto", 390, 3)).toBe("low");
     expect(resolveQualityProfile("auto", 900, 2)).toBe("balanced");
+    expect(resolveQualityProfile("auto", 1366, 2)).toBe("balanced");
+    expect(resolveQualityProfile("auto", 1439, 2)).toBe("balanced");
     expect(resolveQualityProfile("auto", 1440, 2)).toBe("high");
     expect(resolveQualityProfile("high", 390, 3)).toBe("high");
     expect(QUALITY_SHADER_DETAIL.low).toBeLessThan(QUALITY_SHADER_DETAIL.high);

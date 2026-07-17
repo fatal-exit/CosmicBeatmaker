@@ -4,7 +4,11 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
-import { LOOP_BAR_RATES, type LoopBars } from "../domain/composition";
+import {
+  LOOP_BAR_RATES,
+  type LoopBars,
+  type PlanetRole,
+} from "../domain/composition";
 import type {
   MoonSceneDescriptor,
   PlanetSceneDescriptor,
@@ -41,8 +45,9 @@ import {
   createSimpleDeepSpaceMaterial,
   updateDeepSpaceMaterial,
 } from "./materials/deepSpaceMaterial";
-import { starMaterialProfile } from "./materials/profiles";
+import { scenePaletteForStar, type ScenePalette } from "./materials/profiles";
 import { orbitPhaseAtTick } from "./phase";
+import { PLANET_RENDER_SCALE, PLANET_VISUAL_PROFILES } from "./planetVisuals";
 import {
   QUALITY_DPR_CAP,
   QUALITY_BLOOM_SETTINGS,
@@ -104,6 +109,11 @@ interface RuntimeStar {
 interface RuntimeDeepSpaceMaterials {
   simple: THREE.ShaderMaterial;
   detailed: THREE.ShaderMaterial;
+}
+
+interface RuntimeAsteroidInstance {
+  parameters: AsteroidInstanceMotionParameters;
+  baseAngle: number;
 }
 
 export type PlanetDragMode = "radial" | "tangential";
@@ -200,7 +210,9 @@ const CAMERA_ROTATION_STEP = Math.PI / 12;
 const CAMERA_TILT_STEP = Math.PI / 18;
 const CAMERA_DRAG_PIXELS_PER_TURN = 960;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
-const STAR_GLOW_BASE_SCALE = 1.42;
+// Keep the ordinary corona close enough to the body that it reads as light,
+// not as a second spherical shield. The glow shader supplies the soft reach.
+const STAR_GLOW_BASE_SCALE = 1.24;
 const STAR_SCALE_PULSE_AMPLITUDE = 0.1;
 const STAR_GLOW_PULSE_AMPLITUDE = 0.12;
 const STAR_SURFACE_INTENSITY_PULSE = 0.22;
@@ -259,6 +271,110 @@ export function asteroidInstanceCountForQuality(
     safeCount,
     Math.max(1, Math.round(safeCount * qualityMultiplier * comfortMultiplier)),
   );
+}
+
+/** Outer envelope used by both asteroid placement and the camera fit. */
+export function asteroidOuterPlanetRadius(
+  planets: ReadonlyArray<
+    Pick<PlanetSceneDescriptor, "orbitRadius" | "visualExtent">
+  >,
+): number {
+  return Math.max(
+    5.8,
+    ...planets.map((planet) => planet.orbitRadius + planet.visualExtent),
+  );
+}
+
+/** Alternates the Balanced asteroid update parity without allocating. */
+export function asteroidBalancedParityForFrame(frame: number): 0 | 1 {
+  const safeFrame = Number.isFinite(frame) ? Math.trunc(frame) : 0;
+  return (Math.abs(safeFrame) % 2) as 0 | 1;
+}
+
+/** A reduced-motion transition requires one deterministic zero-time reset. */
+export function shouldResetAsteroidMotion(
+  previousReducedMotion: boolean,
+  nextReducedMotion: boolean,
+): boolean {
+  return !previousReducedMotion && nextReducedMotion;
+}
+
+export interface AsteroidInstanceMotionParameters {
+  phase: number;
+  radius: number;
+  speed: number;
+  tilt: number;
+  spin: readonly [number, number, number];
+  scale: number;
+  y: number;
+}
+
+/**
+ * Deterministic renderer-only asteroid placement and motion. The event phase
+ * remains the visible cause while the additional drift fields keep the belt
+ * from reading as a rebuilt static ring. No transport or audio state enters
+ * this projection.
+ */
+export function asteroidInstanceMotionParameters(
+  visualSeed: number,
+  index: number,
+  eventPhase: number,
+  outerPlanetRadius: number,
+  clustering: number,
+  turbulence: number,
+): AsteroidInstanceMotionParameters {
+  const safeVisualSeed = Number.isFinite(visualSeed) ? visualSeed : 0;
+  let state =
+    ((Math.trunc(safeVisualSeed) >>> 0) +
+      Math.imul(Math.max(0, Math.trunc(index)), 0x9e3779b9)) >>>
+    0;
+  const random = () => {
+    state = Math.imul(1664525, state) + 1013904223;
+    return (state >>> 0) / 0x1_0000_0000;
+  };
+  const safeClustering = clamp(
+    Number.isFinite(clustering) ? clustering : 0,
+    0,
+    1,
+  );
+  const safeTurbulence = clamp(
+    Number.isFinite(turbulence) ? turbulence : 0,
+    0,
+    1,
+  );
+  const safeOuterRadius = Math.max(
+    5.8,
+    Number.isFinite(outerPlanetRadius) ? outerPlanetRadius : 5.8,
+  );
+  const safeEventPhase = Number.isFinite(eventPhase) ? eventPhase : random();
+  const spread = (1 - safeClustering) * 0.25 + safeTurbulence * 0.08;
+  const angle =
+    safeEventPhase * Math.PI * 2 +
+    (random() - 0.5) * spread * Math.PI * 2 +
+    Math.sin(index * 1.7 + safeVisualSeed) * safeTurbulence * 0.035;
+  const radius =
+    safeOuterRadius +
+    0.88 +
+    random() * (0.56 + safeTurbulence * 0.34) +
+    Math.sin(angle * 3 + safeVisualSeed) * safeTurbulence * 0.06;
+  const y =
+    (random() - 0.5) * (0.18 + safeTurbulence * 0.34) +
+    Math.sin(angle * 2) * safeTurbulence * 0.08;
+  const scale = 0.62 + random() * 0.9;
+  const sampledPhase = (((angle / (Math.PI * 2)) % 1) + 1) % 1;
+  return {
+    phase: sampledPhase,
+    radius,
+    speed: 0.026 + random() * 0.052 + safeTurbulence * 0.025,
+    tilt: (random() - 0.5) * (0.12 + safeTurbulence * 0.22),
+    spin: [
+      (random() - 0.5) * 1.6,
+      (random() - 0.5) * 1.8,
+      (random() - 0.5) * 1.4,
+    ],
+    scale,
+    y,
+  };
 }
 
 export const SCENE_CAMERA_ZOOM_MIN = 0.6;
@@ -332,6 +448,24 @@ export function transientPulseFrame(
     strength: (1 - progress) ** 3,
     progress,
   };
+}
+
+/**
+ * Advance the renderer-only decorative clock. It is deliberately independent
+ * of transport ticks so stopped compositions still have a living sky; reduced
+ * motion pins the clock to zero for deterministic snapshots and comfort.
+ */
+export function advanceDecorativeVisualTime(
+  previousSeconds: number,
+  elapsedMilliseconds: number,
+  reducedMotion: boolean,
+): number {
+  if (reducedMotion) return 0;
+  const previous = Number.isFinite(previousSeconds) ? previousSeconds : 0;
+  const elapsed = Number.isFinite(elapsedMilliseconds)
+    ? clamp(elapsedMilliseconds / 1_000, 0, 0.1)
+    : 0;
+  return previous + elapsed;
 }
 
 /**
@@ -523,10 +657,102 @@ export function pitchStepsFromRadialDrag(
   return clamp(Math.round(radialDistance / pixelsPerStep), -7, 7);
 }
 
-function colorFromHue(hue: number, lightness = 0.62): THREE.Color {
-  const color = new THREE.Color();
-  color.setHSL((((hue % 360) + 360) % 360) / 360, 0.62, lightness);
-  return color;
+function paletteColor(value: THREE.ColorRepresentation): THREE.Color {
+  return new THREE.Color(value);
+}
+
+function setPaletteMaterialColor(
+  material: THREE.Material,
+  color: THREE.ColorRepresentation,
+): void {
+  const candidate = material as THREE.Material & { color?: unknown };
+  if (candidate.color instanceof THREE.Color) candidate.color.set(color);
+}
+
+function facetedIcosahedronGeometry(
+  radius: number,
+  detail: number,
+): THREE.BufferGeometry {
+  const indexed = new THREE.IcosahedronGeometry(radius, detail);
+  // Non-indexed vertices preserve a separate normal per triangular face. This
+  // is what makes the low-poly silhouette survive the normal camera fit.
+  const faceted = indexed.index ? indexed.toNonIndexed() : indexed;
+  if (faceted !== indexed) indexed.dispose();
+  faceted.computeVertexNormals();
+  return faceted;
+}
+
+function seededTerrainSignal(
+  direction: THREE.Vector3,
+  role: PlanetRole,
+  visualSeed: number,
+): number {
+  const seed = Number.isFinite(visualSeed) ? visualSeed : 0;
+  const broad = Math.sin(
+    direction.x * 2.8 + direction.y * 3.6 - direction.z * 2.9 + seed * 0.031,
+  );
+  const secondary = Math.sin(
+    direction.x * 3.8 - direction.y * 2.4 + direction.z * 3.2 - seed * 0.047,
+  );
+  const ridge = Math.abs(
+    Math.sin(
+      direction.x * 4.2 + direction.y * 3.2 - direction.z * 3.8 + seed * 0.6,
+    ),
+  );
+  switch (role) {
+    case "beat": {
+      // A few broad craters and fault plates keep the rocky silhouette
+      // readable without repeated high-frequency spikes.
+      const fault = Math.max(0, ridge - 0.62) * 1.4;
+      const crater = Math.max(0, 0.52 - Math.abs(broad)) * 0.8;
+      return broad * 0.22 + fault * 0.28 - crater * 0.2;
+    }
+    case "bass":
+      // Large tidal bands deform gently so the oblate body remains broad.
+      return broad * 0.1 + Math.sin(direction.y * 4.2 + secondary) * 0.14;
+    case "chords": {
+      // Quantized plateaus and a diagonal ridge suggest stepped mineral slabs.
+      const plateau = Math.sign(
+        Math.sin(direction.y * 4.2 + broad * 1.2 + seed * 0.021),
+      );
+      return plateau * 0.2 + ridge * 0.16 + secondary * 0.06;
+    }
+    case "melody": {
+      // A handful of large crystal planes create a deliberately faceted
+      // ice-world edge instead of a glittering contour.
+      const crystal = Math.pow(ridge, 2.2);
+      return crystal * 0.42 + broad * 0.16 - 0.12;
+    }
+    case "texture":
+      // Broad lumpy erosion keeps the dwarf irregular without glitter noise.
+      return broad * 0.28 + secondary * 0.16 + ridge * 0.1;
+  }
+}
+
+function createPlanetTerrainGeometry(
+  role: PlanetRole,
+  radius: number,
+  detail: number,
+  visualSeed: number,
+): THREE.BufferGeometry {
+  const geometry = facetedIcosahedronGeometry(radius, detail);
+  const positions = geometry.getAttribute("position");
+  const amplitude = PLANET_VISUAL_PROFILES[role].terrainAmplitude;
+  const direction = new THREE.Vector3();
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const signal = seededTerrainSignal(direction, role, visualSeed);
+    const scale = 1 + amplitude * THREE.MathUtils.clamp(signal, -1, 1);
+    positions.setXYZ(
+      index,
+      direction.x * radius * scale,
+      direction.y * radius * scale,
+      direction.z * radius * scale,
+    );
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function attachGateRipple(
@@ -547,6 +773,7 @@ function attachGateRipple(
   ripple.name = "gate-passage-ripple";
   ripple.renderOrder = 4;
   ripple.visible = false;
+  ripple.userData.scenePaletteRole = "highlight";
   ripple.scale.setScalar(1.08);
   gate.add(ripple);
   gate.userData.passageRipple = ripple;
@@ -599,11 +826,29 @@ export class SceneController {
   > | null = null;
   private deepSpaceMaterials: RuntimeDeepSpaceMaterials | null = null;
   private starLight: THREE.PointLight | null = null;
+  private ambientLight: THREE.AmbientLight | null = null;
+  private fillLight: THREE.HemisphereLight | null = null;
+  private scenePalette: ScenePalette = scenePaletteForStar({
+    presetId: "radiant",
+    visualSeed: 0,
+    intensity: 0.8,
+  });
   private descriptor: SceneDescriptor | null = null;
   private star: RuntimeStar | null = null;
   private planets = new Map<string, RuntimePlanet>();
   private asteroidBelt: THREE.InstancedMesh | null = null;
+  private asteroidInstances: RuntimeAsteroidInstance[] = [];
+  private asteroidDescriptorSignature = "";
+  private asteroidBalancedFrame = 0;
+  private asteroidMotionFrozen = false;
+  private readonly asteroidMatrix = new THREE.Matrix4();
+  private readonly asteroidPosition = new THREE.Vector3();
+  private readonly asteroidQuaternion = new THREE.Quaternion();
+  private readonly asteroidEuler = new THREE.Euler();
+  private readonly asteroidScale = new THREE.Vector3();
   private frame = 0;
+  private visualTimeSeconds = 0;
+  private lastVisualFrameAt = 0;
   private selectedId: string | null = null;
   private gateEditingEnabled = false;
   private preferences = defaultPreferences;
@@ -632,6 +877,8 @@ export class SceneController {
   mount(canvas: HTMLCanvasElement): void {
     if (this.renderer) return;
     this.canvas = canvas;
+    this.visualTimeSeconds = 0;
+    this.lastVisualFrameAt = 0;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
@@ -640,13 +887,32 @@ export class SceneController {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1;
+    this.renderer.toneMappingExposure = 1.14;
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x080808, 0.025);
+    this.scene.background = new THREE.Color(this.scenePalette.backgroundColor);
+    this.scene.fog = new THREE.FogExp2(
+      this.scenePalette.backgroundColor,
+      0.025,
+    );
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 180);
     this.updateCameraTransform();
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.58));
-    this.starLight = new THREE.PointLight(0xff9b58, 36, 24, 1.35);
+    this.ambientLight = new THREE.AmbientLight(
+      this.scenePalette.secondaryColor,
+      0.3,
+    );
+    this.scene.add(this.ambientLight);
+    this.fillLight = new THREE.HemisphereLight(
+      this.scenePalette.highlightColor,
+      this.scenePalette.shadowColor,
+      0.18,
+    );
+    this.scene.add(this.fillLight);
+    this.starLight = new THREE.PointLight(
+      this.scenePalette.starLightColor,
+      32,
+      24,
+      1.35,
+    );
     this.starLight.position.set(0, 0.3, 0);
     this.scene.add(this.starLight);
     this.deepSpaceMaterials = {
@@ -763,10 +1029,18 @@ export class SceneController {
   }
 
   setVisualPreferences(preferences: Partial<VisualPreferences>): void {
+    const previousReducedMotion = this.preferences.reducedMotion;
+    const nextReducedMotion =
+      preferences.reducedMotion ?? previousReducedMotion;
     const reducedParticlesChanged =
       preferences.reducedParticles !== undefined &&
       preferences.reducedParticles !== this.preferences.reducedParticles;
     this.preferences = { ...this.preferences, ...preferences };
+    if (shouldResetAsteroidMotion(previousReducedMotion, nextReducedMotion)) {
+      this.resetAsteroidMotion();
+    } else if (previousReducedMotion && !nextReducedMotion) {
+      this.asteroidMotionFrozen = false;
+    }
     if (reducedParticlesChanged && this.descriptor) {
       this.reconcileAsteroids(this.descriptor);
     }
@@ -1072,7 +1346,7 @@ export class SceneController {
     this.pinchGesture = null;
     this.activePointers.clear();
     this.star?.dispose();
-    if (this.asteroidBelt) disposeObject(this.asteroidBelt);
+    this.disposeAsteroidBelt();
     this.deepSpace?.geometry.dispose();
     this.deepSpaceMaterials?.simple.dispose();
     this.deepSpaceMaterials?.detailed.dispose();
@@ -1084,6 +1358,10 @@ export class SceneController {
     this.deepSpace = null;
     this.deepSpaceMaterials = null;
     this.starLight = null;
+    this.ambientLight = null;
+    this.fillLight = null;
+    this.visualTimeSeconds = 0;
+    this.lastVisualFrameAt = 0;
     this.canvas = null;
   }
 
@@ -1094,11 +1372,13 @@ export class SceneController {
       visualSeed: number;
       intensity: number;
       hue: number;
+      palette: ScenePalette;
+      companion?: boolean;
     },
     anchor: THREE.Group,
     selectionId: string,
   ): RuntimeStandardStarBody {
-    const geometry = new THREE.IcosahedronGeometry(
+    const geometry = facetedIcosahedronGeometry(
       0.78,
       QUALITY_STAR_GEOMETRY_DETAIL[this.qualityProfile],
     );
@@ -1113,9 +1393,13 @@ export class SceneController {
     const outline = new THREE.Mesh(
       geometry,
       createCelestialOutlineMaterial(
-        colorFromHue(descriptor.hue, 0.9),
+        this.scenePalette.outlineColor,
         0.075,
-        0.9,
+        // Ordinary stars use the layered surface + additive corona as their
+        // silhouette. A full inverted-hull outline reads as a hard shield
+        // sphere at system zoom, so keep the runtime mesh for selection
+        // compatibility but make it optically transparent.
+        0,
       ),
     );
     body.renderOrder = 2;
@@ -1137,6 +1421,7 @@ export class SceneController {
 
   private reconcileStar(descriptor: SceneDescriptor): void {
     if (!this.scene) return;
+    this.scenePalette = scenePaletteForStar(descriptor.star);
     const sameDescriptor =
       this.star?.descriptor.id === descriptor.star.id &&
       JSON.stringify(this.star.descriptor) === JSON.stringify(descriptor.star);
@@ -1184,9 +1469,9 @@ export class SceneController {
       outline = new THREE.Mesh(
         blackHoleModel.eventHorizon.geometry,
         createCelestialOutlineMaterial(
-          colorFromHue(descriptor.star.hue, 0.9),
+          this.scenePalette.outlineColor,
           0.065,
-          0.9,
+          0.72,
         ),
       );
       outline.renderOrder = 8;
@@ -1206,6 +1491,8 @@ export class SceneController {
           visualSeed: descriptor.star.visualSeed,
           intensity: descriptor.star.intensity,
           hue: descriptor.star.hue,
+          palette: this.scenePalette,
+          companion: false,
         },
         primaryAnchor,
         descriptor.star.id,
@@ -1223,6 +1510,8 @@ export class SceneController {
           visualSeed: descriptor.star.companion.visualSeed,
           intensity: descriptor.star.companion.intensity,
           hue: descriptor.star.companion.hue,
+          palette: this.scenePalette,
+          companion: true,
         },
         companionAnchor,
         descriptor.star.id,
@@ -1270,37 +1559,52 @@ export class SceneController {
     });
     const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
     const orbitMaterial = new THREE.LineBasicMaterial({
-      color: colorFromHue(descriptor.hue, 0.58),
+      color: this.scenePalette.orbitColor,
       transparent: true,
-      opacity: descriptor.muted ? 0.1 : 0.3,
+      // Orbit lanes need to remain legible over the chromatic sky, but stay
+      // below filled planet bodies, gates, and stellar highlights in the
+      // visual hierarchy.
+      opacity: descriptor.muted ? 0.18 : 0.5,
     });
     const orbit = new THREE.LineLoop(orbitGeometry, orbitMaterial);
     orbit.userData.entityId = descriptor.id;
     orbit.userData.orbitControl = true;
+    orbit.userData.scenePaletteRole = "orbit";
     group.add(orbit);
 
-    const bodyGeometry = new THREE.IcosahedronGeometry(
+    const bodyGeometry = createPlanetTerrainGeometry(
+      descriptor.role,
       descriptor.size,
       QUALITY_PLANET_GEOMETRY_DETAIL[this.qualityProfile],
+      descriptor.visualSeed,
     );
-    bodyGeometry.scale(...descriptor.bodyScale);
+    bodyGeometry.scale(
+      descriptor.bodyScale[0] * PLANET_RENDER_SCALE,
+      descriptor.bodyScale[1] * PLANET_RENDER_SCALE,
+      descriptor.bodyScale[2] * PLANET_RENDER_SCALE,
+    );
+    bodyGeometry.computeVertexNormals();
     const bodyMaterial = createPlanetSurfaceMaterial(
-      descriptor,
+      { ...descriptor, palette: this.scenePalette },
       this.shaderDetail(),
     );
-    updatePlanetSurfaceMaterial(bodyMaterial, this.planetStellarLighting());
+    updatePlanetSurfaceMaterial(bodyMaterial, {
+      ...this.planetStellarLighting(),
+      palette: this.scenePalette,
+    });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     const outline = new THREE.Mesh(
       bodyGeometry,
       createCelestialOutlineMaterial(
-        colorFromHue(descriptor.hue + 18, 0.88),
+        this.scenePalette.outlineColor,
         Math.max(0.026, descriptor.size * 0.11),
-        0.88,
+        0.46,
       ),
     );
     body.userData.entityId = descriptor.id;
     outline.renderOrder = 3;
     outline.userData.entityId = descriptor.id;
+    outline.userData.scenePaletteRole = "outline";
     setOrbitPosition(
       body,
       spawnPhaseAtTick(
@@ -1338,19 +1642,19 @@ export class SceneController {
     const gateSlotMaterials = {
       active: {
         beat: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 30, 0.86),
+          color: this.scenePalette.gateColor,
           transparent: true,
           opacity: descriptor.muted ? 0.24 : 0.88,
           depthWrite: false,
         }),
         offbeat: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 24, 0.76),
+          color: this.scenePalette.gateColor,
           transparent: true,
           opacity: descriptor.muted ? 0.2 : 0.7,
           depthWrite: false,
         }),
         subdivision: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 20, 0.68),
+          color: this.scenePalette.secondaryColor,
           transparent: true,
           opacity: descriptor.muted ? 0.16 : 0.52,
           depthWrite: false,
@@ -1358,19 +1662,19 @@ export class SceneController {
       },
       inactive: {
         beat: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 28, 0.64),
+          color: this.scenePalette.secondaryColor,
           transparent: true,
           opacity: descriptor.muted ? 0.06 : 0.24,
           depthWrite: false,
         }),
         offbeat: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 22, 0.55),
+          color: this.scenePalette.secondaryColor,
           transparent: true,
           opacity: descriptor.muted ? 0.035 : 0.11,
           depthWrite: false,
         }),
         subdivision: new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue + 18, 0.46),
+          color: this.scenePalette.shadowColor,
           transparent: true,
           opacity: descriptor.muted ? 0.015 : 0.035,
           depthWrite: false,
@@ -1408,6 +1712,8 @@ export class SceneController {
       orientAcrossOrbit(slotNode, slot.gatePhase);
       slotNode.userData.entityId = descriptor.id;
       slotNode.userData.planetGateSlot = true;
+      slotNode.userData.scenePaletteRole = "gate-slot";
+      slotNode.userData.gateActive = slot.active;
       slotNode.userData.gateStep = slot.step;
       slotNode.userData.gateEmphasis = slot.emphasis;
       slotNode.userData.pitchEventId = slot.pitchEventId;
@@ -1432,9 +1738,9 @@ export class SceneController {
       );
       for (const event of descriptor.events) {
         const nodeMaterial = new THREE.MeshBasicMaterial({
-          color: colorFromHue(descriptor.hue, 0.77),
+          color: this.scenePalette.gateColor,
           transparent: true,
-          opacity: descriptor.muted ? 0.18 : 0.52,
+          opacity: descriptor.muted ? 0.24 : 0.68,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         });
@@ -1449,6 +1755,7 @@ export class SceneController {
         node.userData.entityId = descriptor.id;
         node.userData.eventId = event.eventId;
         node.userData.orbitGate = true;
+        node.userData.scenePaletteRole = "gate";
         const canonicalSlot = descriptor.gateSlots.find(
           (slot) => slot.step === event.step && slot.active,
         );
@@ -1464,11 +1771,7 @@ export class SceneController {
                 : 1;
           node.scale.setScalar(emphasisScale);
         }
-        attachGateRipple(
-          node,
-          nodeGeometry,
-          colorFromHue(descriptor.hue + 30, 0.9),
-        );
+        attachGateRipple(node, nodeGeometry, this.scenePalette.highlightColor);
         eventNodes.set(event.eventId, node);
         group.add(node);
       }
@@ -1484,7 +1787,7 @@ export class SceneController {
             24,
           ),
           new THREE.MeshBasicMaterial({
-            color: colorFromHue(descriptor.hue + 38, 0.84),
+            color: this.scenePalette.highlightColor,
             transparent: true,
             opacity: 0.84,
             blending: THREE.AdditiveBlending,
@@ -1507,13 +1810,16 @@ export class SceneController {
       orientAcrossOrbit(spawnMarker, spawnPhase);
       spawnMarker.renderOrder = 3;
       spawnMarker.userData.spawnMarker = true;
+      spawnMarker.userData.scenePaletteRole = "highlight";
       group.add(spawnMarker);
     }
 
     if (descriptor.moons.length > 0) {
       const moonGeometry = new THREE.SphereGeometry(0.11, 10, 8);
       const moonMaterial = new THREE.MeshStandardMaterial({
-        color: colorFromHue(descriptor.hue + 25, 0.7),
+        color: this.scenePalette.secondaryColor,
+        roughness: 0.82,
+        metalness: 0.06,
       });
       const moonGateGeometry = new THREE.TorusGeometry(0.16, 0.022, 6, 16);
       descriptor.moons.forEach((moonDescriptor) => {
@@ -1530,6 +1836,7 @@ export class SceneController {
           moonOrbitRadius,
         );
         // The inspector edits planets; moon hits intentionally select the parent.
+        moon.userData.scenePaletteRole = "moon";
         moon.userData.entityId = moonDescriptor.selectionTargetId;
         moon.userData.sourceEntityId = moonDescriptor.id;
         moons.push({
@@ -1540,9 +1847,9 @@ export class SceneController {
         body.add(moon);
         for (const event of moonDescriptor.events) {
           const gateMaterial = new THREE.MeshBasicMaterial({
-            color: colorFromHue(descriptor.hue + 48, 0.74),
+            color: this.scenePalette.gateColor,
             transparent: true,
-            opacity: descriptor.muted ? 0.18 : 0.5,
+            opacity: descriptor.muted ? 0.24 : 0.64,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
           });
@@ -1554,13 +1861,14 @@ export class SceneController {
           gate.userData.sourceEntityId = moonDescriptor.id;
           gate.userData.eventId = event.eventId;
           gate.userData.moonOrbitGate = true;
+          gate.userData.scenePaletteRole = "gate";
           gate.userData.moonPhase = moonDescriptor.phase;
           gate.userData.orbitRatio = moonDescriptor.orbitRatio;
           gate.userData.moonOrbitRadius = moonOrbitRadius;
           attachGateRipple(
             gate,
             moonGateGeometry,
-            colorFromHue(descriptor.hue + 62, 0.88),
+            this.scenePalette.highlightColor,
           );
           eventNodes.set(event.eventId, gate);
           body.add(gate);
@@ -1583,10 +1891,12 @@ export class SceneController {
         const angle = segment.phase * Math.PI * 2;
         const material = segment.active
           ? (activeMaterial ??= new THREE.MeshBasicMaterial({
-              color: colorFromHue(descriptor.hue + 50, 0.76),
+              color: this.scenePalette.ringColor,
             }))
           : (inactiveMaterial ??= new THREE.MeshBasicMaterial({
-              color: colorFromHue(descriptor.hue + 50, 0.32),
+              color: this.scenePalette.secondaryColor,
+              transparent: true,
+              opacity: 0.5,
             }));
         const fragment = new THREE.Mesh(ringGeometry, material);
         fragment.position.set(
@@ -1598,6 +1908,9 @@ export class SceneController {
         fragment.userData.entityId = descriptor.id;
         fragment.userData.sourceEntityId = segment.sourceEntityId;
         fragment.userData.eventId = segment.eventId;
+        fragment.userData.scenePaletteRole = segment.active
+          ? "ring-active"
+          : "ring-inactive";
         eventNodes.set(segment.eventId, fragment);
         ringGroup.add(fragment);
       });
@@ -1620,45 +1933,76 @@ export class SceneController {
     };
   }
 
+  private disposeAsteroidBelt(): void {
+    if (!this.asteroidBelt) {
+      this.asteroidInstances = [];
+      this.asteroidDescriptorSignature = "";
+      this.asteroidBalancedFrame = 0;
+      this.asteroidMotionFrozen = false;
+      return;
+    }
+    for (const eventId of (this.asteroidBelt.userData.eventIds as
+      string[] | undefined) ?? []) {
+      this.eventPulseWindows.delete(eventId);
+    }
+    this.scene?.remove(this.asteroidBelt);
+    disposeObject(this.asteroidBelt);
+    this.asteroidBelt = null;
+    this.asteroidInstances = [];
+    this.asteroidDescriptorSignature = "";
+    this.asteroidBalancedFrame = 0;
+    this.asteroidMotionFrozen = false;
+  }
+
   private reconcileAsteroids(descriptor: SceneDescriptor): void {
     if (!this.scene) return;
-    if (this.asteroidBelt) {
-      for (const eventId of (this.asteroidBelt.userData.eventIds as
-        string[] | undefined) ?? []) {
-        this.eventPulseWindows.delete(eventId);
-      }
-      this.scene.remove(this.asteroidBelt);
-      disposeObject(this.asteroidBelt);
-      this.asteroidBelt = null;
+    const asteroidDescriptor = descriptor.asteroidBelt;
+    if (!asteroidDescriptor) {
+      this.disposeAsteroidBelt();
+      return;
     }
-    if (!descriptor.asteroidBelt) return;
+    const outerPlanetRadius = asteroidOuterPlanetRadius(descriptor.planets);
     const instanceCount = Math.max(
-      Math.min(6, descriptor.asteroidBelt.count),
+      Math.min(6, asteroidDescriptor.count),
       asteroidInstanceCountForQuality(
-        descriptor.asteroidBelt.count,
+        asteroidDescriptor.count,
         this.qualityProfile,
         this.preferences.reducedParticles,
       ),
     );
-    let state = descriptor.asteroidBelt.visualSeed >>> 0;
-    const random = () => {
-      state = Math.imul(1664525, state) + 1013904223;
-      return (state >>> 0) / 0x1_0000_0000;
-    };
-    const outerPlanetRadius = Math.max(
-      5.8,
-      ...descriptor.planets.map(
-        (planet) => planet.orbitRadius + planet.visualExtent,
-      ),
-    );
-    const events = descriptor.asteroidBelt.events;
-    const clustering = clamp(descriptor.asteroidBelt.clustering, 0, 1);
-    const turbulence = clamp(descriptor.asteroidBelt.turbulence, 0, 1);
-    const beltColor = colorFromHue(
-      21 + ((descriptor.asteroidBelt.materialPresetId.length * 17) % 82),
-      0.58,
-    );
-    const geometry = new THREE.IcosahedronGeometry(
+    const signature = JSON.stringify({
+      id: asteroidDescriptor.id,
+      count: asteroidDescriptor.count,
+      population: asteroidDescriptor.population,
+      clustering: asteroidDescriptor.clustering,
+      turbulence: asteroidDescriptor.turbulence,
+      materialPresetId: asteroidDescriptor.materialPresetId,
+      visualSeed: asteroidDescriptor.visualSeed,
+      events: asteroidDescriptor.events,
+      instanceCount,
+      outerPlanetRadius,
+      quality: this.qualityProfile,
+      reducedParticles: this.preferences.reducedParticles,
+    });
+    if (this.asteroidBelt && this.asteroidDescriptorSignature === signature) {
+      const beltMaterial = this.asteroidBelt
+        .material as THREE.MeshStandardMaterial;
+      const beltColor = paletteColor(
+        this.scenePalette.foregroundSecondaryColor,
+      );
+      beltMaterial.color.copy(beltColor);
+      beltMaterial.emissive.copy(beltColor);
+      this.asteroidBelt.visible = true;
+      if (this.asteroidBelt.parent !== this.scene)
+        this.scene.add(this.asteroidBelt);
+      return;
+    }
+    this.disposeAsteroidBelt();
+    const events = asteroidDescriptor.events;
+    const clustering = clamp(asteroidDescriptor.clustering, 0, 1);
+    const turbulence = clamp(asteroidDescriptor.turbulence, 0, 1);
+    const beltColor = paletteColor(this.scenePalette.foregroundSecondaryColor);
+    const geometry = facetedIcosahedronGeometry(
       this.qualityProfile === "low" ? 0.052 : 0.064,
       0,
     );
@@ -1676,78 +2020,127 @@ export class SceneController {
       material,
       instanceCount,
     );
-    const matrix = new THREE.Matrix4();
-    const rotation = new THREE.Euler();
-    const scale = new THREE.Vector3();
     const eventPhases: number[] = [];
     for (let index = 0; index < instanceCount; index += 1) {
       const event =
         events.length > 0 ? events[index % events.length] : undefined;
-      const eventPhase = event?.phase ?? random();
-      eventPhases.push(eventPhase);
-      const spread = (1 - clustering) * 0.25 + turbulence * 0.08;
-      const angle =
-        eventPhase * Math.PI * 2 +
-        (random() - 0.5) * spread * Math.PI * 2 +
-        Math.sin(index * 1.7 + descriptor.asteroidBelt.visualSeed) *
-          turbulence *
-          0.035;
-      const radius =
-        outerPlanetRadius +
-        0.88 +
-        random() * (0.56 + turbulence * 0.34) +
-        Math.sin(angle * 3.0 + descriptor.asteroidBelt.visualSeed) *
-          turbulence *
-          0.06;
-      const y =
-        (random() - 0.5) * (0.18 + turbulence * 0.34) +
-        Math.sin(angle * 2.0) * turbulence * 0.08;
-      rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
-      const asteroidScale = 0.62 + random() * 0.9;
-      scale.setScalar(asteroidScale);
-      matrix.compose(
-        new THREE.Vector3(
-          Math.cos(angle) * radius,
-          y,
-          Math.sin(angle) * radius,
-        ),
-        new THREE.Quaternion().setFromEuler(rotation),
-        scale,
+      const parameters = asteroidInstanceMotionParameters(
+        asteroidDescriptor.visualSeed,
+        index,
+        event?.phase ?? Number.NaN,
+        outerPlanetRadius,
+        clustering,
+        turbulence,
       );
-      this.asteroidBelt.setMatrixAt(index, matrix);
+      const eventPhase = parameters.phase;
+      this.asteroidInstances.push({
+        parameters,
+        baseAngle: eventPhase * Math.PI * 2,
+      });
+      eventPhases.push(eventPhase);
+      this.writeAsteroidInstanceMatrix(index, parameters, 0);
     }
     this.asteroidBelt.instanceMatrix.needsUpdate = true;
     this.asteroidBelt.userData.eventPhases = eventPhases;
     this.asteroidBelt.userData.eventIds = events.map((event) => event.eventId);
     this.asteroidBelt.userData.instanceCount = instanceCount;
-    this.asteroidBelt.userData.descriptorCount = descriptor.asteroidBelt.count;
-    this.asteroidBelt.userData.population = descriptor.asteroidBelt.population;
+    this.asteroidBelt.userData.descriptorCount = asteroidDescriptor.count;
+    this.asteroidBelt.userData.population = asteroidDescriptor.population;
     this.asteroidBelt.userData.clustering = clustering;
     this.asteroidBelt.userData.turbulence = turbulence;
-    this.asteroidBelt.userData.entityId = descriptor.asteroidBelt.id;
+    this.asteroidBelt.userData.entityId = asteroidDescriptor.id;
+    this.asteroidBelt.userData.motionParameters = this.asteroidInstances;
+    this.asteroidDescriptorSignature = signature;
+    this.asteroidMotionFrozen = this.preferences.reducedMotion;
     this.scene.add(this.asteroidBelt);
+  }
+
+  private writeAsteroidInstanceMatrix(
+    index: number,
+    parameters: AsteroidInstanceMotionParameters,
+    elapsedSeconds: number,
+  ): void {
+    if (!this.asteroidBelt) return;
+    const angle =
+      parameters.phase * Math.PI * 2 + parameters.speed * elapsedSeconds;
+    this.asteroidPosition.set(
+      Math.cos(angle) * parameters.radius,
+      parameters.y + Math.sin(angle * 2 + parameters.tilt) * 0.035,
+      Math.sin(angle) * parameters.radius,
+    );
+    this.asteroidEuler.set(
+      parameters.spin[0] * elapsedSeconds,
+      parameters.spin[1] * elapsedSeconds,
+      parameters.spin[2] * elapsedSeconds,
+    );
+    this.asteroidQuaternion.setFromEuler(this.asteroidEuler);
+    this.asteroidScale.setScalar(parameters.scale);
+    this.asteroidMatrix.compose(
+      this.asteroidPosition,
+      this.asteroidQuaternion,
+      this.asteroidScale,
+    );
+    this.asteroidBelt.setMatrixAt(index, this.asteroidMatrix);
+  }
+
+  private resetAsteroidMotion(): void {
+    if (!this.asteroidBelt) {
+      this.asteroidMotionFrozen = true;
+      return;
+    }
+    this.asteroidBelt.rotation.y = 0;
+    for (let index = 0; index < this.asteroidInstances.length; index += 1) {
+      this.writeAsteroidInstanceMatrix(
+        index,
+        this.asteroidInstances[index].parameters,
+        0,
+      );
+    }
+    this.asteroidBelt.instanceMatrix.needsUpdate = true;
+    this.asteroidMotionFrozen = true;
+  }
+
+  private updateAsteroidMotion(elapsedSeconds: number): void {
+    if (!this.asteroidBelt || this.asteroidInstances.length === 0) return;
+    if (this.preferences.reducedMotion) {
+      if (!this.asteroidMotionFrozen) this.resetAsteroidMotion();
+      return;
+    }
+    this.asteroidMotionFrozen = false;
+    const quality = this.qualityProfile;
+    if (quality === "low") {
+      this.asteroidBelt.rotation.y = elapsedSeconds * 0.008;
+      return;
+    }
+    this.asteroidBelt.rotation.y =
+      quality === "balanced" ? elapsedSeconds * 0.004 : 0;
+    const stride = quality === "balanced" ? 2 : 1;
+    const startIndex =
+      quality === "balanced"
+        ? asteroidBalancedParityForFrame(this.asteroidBalancedFrame)
+        : 0;
+    if (quality === "balanced") this.asteroidBalancedFrame += 1;
+    for (
+      let index = startIndex;
+      index < this.asteroidInstances.length;
+      index += stride
+    ) {
+      this.writeAsteroidInstanceMatrix(
+        index,
+        this.asteroidInstances[index].parameters,
+        elapsedSeconds,
+      );
+    }
+    this.asteroidBelt.instanceMatrix.needsUpdate = true;
   }
 
   private starLightColor(
     star: SceneDescriptor["star"] | undefined = this.descriptor?.star,
   ): THREE.Color {
-    if (!star) return new THREE.Color(0xffffff);
-    const profile = starMaterialProfile(star.presetId);
-    const primaryColor = new THREE.Color(profile.coreColor).lerp(
-      new THREE.Color(profile.hotColor),
-      0.34,
-    );
-    if (!star.companion) return primaryColor;
-    const companionProfile = starMaterialProfile(star.companion.presetId);
-    const companionColor = new THREE.Color(companionProfile.coreColor).lerp(
-      new THREE.Color(companionProfile.hotColor),
-      0.34,
-    );
-    const primaryWeight = Math.max(0.05, star.intensity);
-    const companionWeight = Math.max(0.05, star.companion.intensity);
-    return primaryColor.lerp(
-      companionColor,
-      companionWeight / (primaryWeight + companionWeight),
+    return paletteColor(
+      star
+        ? scenePaletteForStar(star).starLightColor
+        : this.scenePalette.starLightColor,
     );
   }
 
@@ -1766,38 +2159,113 @@ export class SceneController {
     };
   }
 
+  /**
+   * Recolors renderer-only planet adornments in place when the stellar mood
+   * changes. Bodies keep their procedural shader instance and pulse windows;
+   * this bounded traversal only touches the small set of tagged materials
+   * whose colors are authored by the active scene palette.
+   */
+  private refreshPlanetPalette(runtime: RuntimePlanet): void {
+    runtime.group.traverse((child) => {
+      const role = child.userData.scenePaletteRole as
+        | "orbit"
+        | "outline"
+        | "gate-slot"
+        | "gate"
+        | "highlight"
+        | "moon"
+        | "ring-active"
+        | "ring-inactive"
+        | undefined;
+      if (!role) return;
+
+      if (role === "outline") {
+        if (
+          child instanceof THREE.Mesh &&
+          child.material instanceof THREE.ShaderMaterial
+        ) {
+          updateCelestialOutlineMaterial(child.material, {
+            color: this.scenePalette.outlineColor,
+          });
+        }
+        return;
+      }
+
+      const renderable =
+        child instanceof THREE.Mesh || child instanceof THREE.Line
+          ? child
+          : null;
+      if (!renderable) return;
+      const materialValue = renderable.material as
+        THREE.Material | THREE.Material[];
+      const materials: THREE.Material[] = Array.isArray(materialValue)
+        ? materialValue
+        : [materialValue];
+      let color: THREE.ColorRepresentation = this.scenePalette.secondaryColor;
+      switch (role) {
+        case "orbit":
+          color = this.scenePalette.orbitColor;
+          break;
+        case "gate-slot": {
+          const active = child.userData.gateActive === true;
+          const subdivision = child.userData.gateEmphasis === "subdivision";
+          color = active
+            ? subdivision
+              ? this.scenePalette.secondaryColor
+              : this.scenePalette.gateColor
+            : subdivision
+              ? this.scenePalette.shadowColor
+              : this.scenePalette.secondaryColor;
+          break;
+        }
+        case "gate":
+          color = this.scenePalette.gateColor;
+          break;
+        case "highlight":
+          color = this.scenePalette.highlightColor;
+          break;
+        case "moon":
+          color = this.scenePalette.secondaryColor;
+          break;
+        case "ring-active":
+          color = this.scenePalette.ringColor;
+          break;
+        case "ring-inactive":
+          color = this.scenePalette.secondaryColor;
+          break;
+      }
+      materials.forEach((material) => setPaletteMaterialColor(material, color));
+    });
+  }
+
   private updateStellarLighting(star: SceneDescriptor["star"]): void {
-    const profile = starMaterialProfile(star.presetId);
+    this.scenePalette = scenePaletteForStar(star);
     const lightColor = this.starLightColor(star);
+    if (this.scene) {
+      this.scene.background = paletteColor(this.scenePalette.backgroundColor);
+    }
+    if (this.scene?.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.set(this.scenePalette.backgroundColor);
+    }
     if (this.starLight) {
       this.starLight.color.copy(lightColor);
       this.starLight.intensity = Math.min(
-        62,
-        28 + (star.intensity + (star.companion?.intensity ?? 0) * 0.62) * 18,
+        56,
+        24 + (star.intensity + (star.companion?.intensity ?? 0) * 0.62) * 17,
       );
     }
+    this.ambientLight?.color.set(this.scenePalette.secondaryColor);
+    if (this.ambientLight) {
+      this.ambientLight.intensity =
+        0.26 + this.scenePalette.companionWeight * 0.08;
+    }
+    this.fillLight?.color.set(this.scenePalette.highlightColor);
+    this.fillLight?.groundColor.set(this.scenePalette.shadowColor);
+    if (this.fillLight) {
+      this.fillLight.intensity =
+        0.16 + this.scenePalette.companionWeight * 0.06;
+    }
     if (this.deepSpaceMaterials) {
-      const paletteProfile = star.companion
-        ? {
-            glowColor: new THREE.Color(profile.glowColor).lerp(
-              new THREE.Color(
-                starMaterialProfile(star.companion.presetId).glowColor,
-              ),
-              0.42,
-            ),
-            edgeColor: new THREE.Color(profile.edgeColor).lerp(
-              new THREE.Color(
-                starMaterialProfile(star.companion.presetId).edgeColor,
-              ),
-              0.42,
-            ),
-          }
-        : {
-            glowColor: new THREE.Color(profile.glowColor),
-            edgeColor: new THREE.Color(profile.edgeColor),
-          };
-      const nebulaA = paletteProfile.glowColor.offsetHSL(0.12, 0.04, -0.24);
-      const nebulaB = paletteProfile.edgeColor.offsetHSL(-0.16, 0.08, 0.08);
       for (const material of [
         this.deepSpaceMaterials.simple,
         this.deepSpaceMaterials.detailed,
@@ -1805,14 +2273,20 @@ export class SceneController {
         updateDeepSpaceMaterial(material, {
           visualSeed: star.visualSeed,
           intensity: this.deepSpaceStrength(),
-          nebulaColorA: nebulaA,
-          nebulaColorB: nebulaB,
+          nebulaColorA: this.scenePalette.nebulaColorA,
+          nebulaColorB: this.scenePalette.nebulaColorB,
+          backgroundColor: this.scenePalette.backgroundColor,
+          starfieldColor: this.scenePalette.starfieldColor,
         });
       }
     }
     const lighting = this.planetStellarLighting();
     for (const runtime of this.planets.values()) {
-      updatePlanetSurfaceMaterial(runtime.body.material, lighting);
+      updatePlanetSurfaceMaterial(runtime.body.material, {
+        ...lighting,
+        palette: this.scenePalette,
+      });
+      this.refreshPlanetPalette(runtime);
     }
   }
 
@@ -1915,6 +2389,7 @@ export class SceneController {
       updatePlanetSurfaceMaterial(runtime.body.material, {
         detail,
         ...lighting,
+        palette: this.scenePalette,
       });
     }
     if (this.deepSpace && this.deepSpaceMaterials) {
@@ -1924,7 +2399,14 @@ export class SceneController {
           ? this.deepSpaceMaterials.detailed
           : this.deepSpaceMaterials.simple;
       this.deepSpace.visible = strength > 0;
-      updateDeepSpaceMaterial(this.deepSpace.material, { intensity: strength });
+      updateDeepSpaceMaterial(this.deepSpace.material, {
+        intensity: strength,
+        visualSeed: this.descriptor?.star.visualSeed,
+        nebulaColorA: this.scenePalette.nebulaColorA,
+        nebulaColorB: this.scenePalette.nebulaColorB,
+        backgroundColor: this.scenePalette.backgroundColor,
+        starfieldColor: this.scenePalette.starfieldColor,
+      });
     }
     this.ensureStarRuntime();
     if (this.star) {
@@ -2497,6 +2979,14 @@ export class SceneController {
     if (!this.renderer || !this.scene || !this.camera) return;
     const ticks = this.options.readTransportTicks();
     const now = performance.now();
+    const elapsedMilliseconds =
+      this.lastVisualFrameAt > 0 ? now - this.lastVisualFrameAt : 0;
+    this.lastVisualFrameAt = now;
+    this.visualTimeSeconds = advanceDecorativeVisualTime(
+      this.visualTimeSeconds,
+      elapsedMilliseconds,
+      this.preferences.reducedMotion,
+    );
     for (const [id, runtime] of this.planets) {
       const activeGesture =
         this.gesture?.planet === runtime ? this.gesture : undefined;
@@ -2666,6 +3156,7 @@ export class SceneController {
       }
     }
     if (this.asteroidBelt && this.descriptor?.asteroidBelt) {
+      this.updateAsteroidMotion(this.visualTimeSeconds);
       let beltPulse = 0;
       for (const event of this.descriptor.asteroidBelt.events) {
         const window = this.activePulseWindow(
@@ -2791,7 +3282,7 @@ export class SceneController {
     }
     if (this.deepSpace?.visible) {
       updateDeepSpaceMaterial(this.deepSpace.material, {
-        time: this.preferences.reducedMotion ? 0 : ticks / 1_920,
+        time: this.visualTimeSeconds,
       });
     }
     if (this.composer && this.qualityProfile === "high") {

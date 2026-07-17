@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import type { SceneDescriptor } from "../contracts";
-import { normalizeVisualSeed, starMaterialProfile } from "./profiles";
+import { normalizeVisualSeed, scenePaletteForStar } from "./profiles";
 
 const MATERIAL_KIND = "cosmicBeatmakerBlackHoleMaterial";
 
@@ -263,7 +263,7 @@ export function createBlackHoleModel(
   detail: number,
 ): BlackHoleModel {
   const normalizedDetail = clampDetail(detail);
-  const profile = starMaterialProfile("black-hole");
+  const palette = scenePaletteForStar(descriptor);
   const seed = normalizeVisualSeed(descriptor.visualSeed);
   const intensity = clamp01(descriptor.intensity, 0.8);
   const entityId = descriptor.id ?? "black-hole";
@@ -276,8 +276,8 @@ export function createBlackHoleModel(
   const horizonMaterial = material(
     "black-hole-event-horizon",
     {
-      uColor: { value: new THREE.Color(profile.coreColor) },
-      uRimColor: { value: new THREE.Color(profile.edgeColor) },
+      uColor: { value: new THREE.Color(palette.shadowColor) },
+      uRimColor: { value: new THREE.Color(palette.secondaryColor) },
       uPulse: { value: 0 },
       uSelected: { value: 0 },
       uIntensity: { value: intensity },
@@ -306,8 +306,8 @@ export function createBlackHoleModel(
   const photonMaterial = material(
     "black-hole-photon-ring",
     {
-      uHotColor: { value: new THREE.Color(profile.hotColor) },
-      uCoolColor: { value: new THREE.Color(profile.glowColor) },
+      uHotColor: { value: new THREE.Color(palette.highlightColor) },
+      uCoolColor: { value: new THREE.Color(palette.secondaryColor) },
       uTick: { value: 0 },
       uPulse: { value: 0 },
       uSelected: { value: 0 },
@@ -340,14 +340,14 @@ export function createBlackHoleModel(
   const diskMaterial = material(
     "black-hole-accretion-disk",
     {
-      uHotColor: { value: new THREE.Color(profile.hotColor) },
+      uHotColor: { value: new THREE.Color(palette.highlightColor) },
       uWarmColor: {
-        value: new THREE.Color(profile.coreColor).lerp(
-          new THREE.Color(profile.hotColor),
+        value: new THREE.Color(palette.primaryColor).lerp(
+          new THREE.Color(palette.highlightColor),
           0.62,
         ),
       },
-      uCoolColor: { value: new THREE.Color(profile.glowColor) },
+      uCoolColor: { value: new THREE.Color(palette.secondaryColor) },
       uSeed: { value: seed },
       uTick: { value: 0 },
       uPulse: { value: 0 },
@@ -387,7 +387,7 @@ export function createBlackHoleModel(
   const arcMaterial = material(
     "black-hole-lensing-arc",
     {
-      uColor: { value: new THREE.Color(profile.glowColor) },
+      uColor: { value: new THREE.Color(palette.secondaryColor) },
       uPulse: { value: 0 },
       uSelected: { value: 0 },
       uIntensity: { value: intensity },
